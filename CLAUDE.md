@@ -57,8 +57,9 @@ sketch, the lessons airp paid for, and the roadmap.
   is a role there, reached as a theme variable (`$muted`); no view names a colour of its own.
   A debugger starts it as `python -m lustjinn_tui`, never `-m lustjinn_tui.app` (a second copy of
   the module; the screens' `isinstance` checks fail). `./scripts/install-tui.ps1` installs or
-  updates the owner's `lustjinn-tui` command (tests first, a frozen `uv tool` copy); the owner runs
-  it when they judge the code safe.
+  updates the owner's `lustjinn-tui` command (tests first, a frozen `uv tool` copy);
+  `./scripts/install-tui.sh` is its Linux/WSL twin, and refuses a checkout under `/mnt`. The owner
+  runs either when they judge the code safe.
 - **Debugging is in `.vscode/launch.json`** (Web · local/staging API, Terminal · local/staging API,
   Test · this file). The web entries set `API_PROXY`: the dev server forwards `/api-proxy` to that
   API, so no API's CORS list names localhost. Pass only URLs through the environment — Git Bash
