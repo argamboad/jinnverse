@@ -45,14 +45,19 @@ an installed command that stays as it is until you update it:
 
 ```
 ./scripts/install-tui.ps1                   # runs its tests, installs or updates `lustjinn-tui`
+./scripts/install-tui.sh                    # the same on Linux or WSL (--skip-tests to skip them)
 lustjinn-tui --server https://lustjinn-staging.onrender.com
 ```
 
-Its settings are `%LOCALAPPDATA%\lustjinn\config.toml` (written on first run, commented), its token
-sits beside it, and `installed.txt` says which commit the command was built from. It trusts the
-public certificate authorities only, never the machine's own store, so a proxy that decrypts HTTPS
-(a company's iBoss, say) is refused and named rather than trusted; `proxy = "none"` in the config
-connects directly instead of through `HTTPS_PROXY`.
+Its settings are `config.toml` (written on first run, commented) in `%LOCALAPPDATA%\lustjinn` on
+Windows and `~/.config/lustjinn` on Linux, its token sits beside it, and `installed.txt` says which
+commit the command was built from. On WSL, clone the repo inside WSL (`~/…`), not through
+`/mnt/c`: the tests' `uv run` there would put a Linux environment in the Windows checkout's
+`.venv`, so the script refuses. WSL keeps its own settings and sign-in, apart from Windows'.
+
+It trusts the public certificate authorities only, never the machine's own store, so a proxy that
+decrypts HTTPS (a company's iBoss, say) is refused and named rather than trusted;
+`proxy = "none"` in the config connects directly instead of through `HTTPS_PROXY`.
 
 Sign in with `POST /auth/sign-in`; every other endpoint needs the token it returns. On `/docs`,
 press **Authorize** and paste it. The docs are served only when `LUSTJINN_DOCS=true` (it is, in
