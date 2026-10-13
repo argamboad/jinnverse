@@ -43,6 +43,13 @@ AT_MOST_PER_SUMMARY = 40
 LEAST_COMPRESSION = 60
 """A summary shorter than one sixtieth of what it replaces cannot have kept it: refused."""
 LEAST_SUMMARY_TOKENS = 20
+LONGEST_QUERY = 500
+"""A reader's turn longer than this is a document they pasted, not a question put to the memory,
+and it is not used as a query. In the story that showed it, 97% of the reader's turns were
+remarks under 340 characters and the rest were pasted posts over 3,000, with nothing between
+1,500 and 3,000. A post resembles every other post as a whole, so whatever part of it is used,
+the nearest turns are the earlier posts and the reactions to them: five thousand tokens of other
+videos beside the one being answered."""
 ROOM_FOR_THE_REPLY = 200
 """Slack on top of the reply ceiling when deciding what fits."""
 
@@ -247,6 +254,15 @@ async def recall(
     return found
 
 
+def recall_query(recent: Sequence[Message]) -> str | None:
+    """What to ask the memory: the reader's last turn among the recent ones. None when there is
+    none, or when it is longer than `LONGEST_QUERY`: a pasted document is not a question."""
+    query = next((turn.text for turn in reversed(recent) if turn.role is Role.USER), None)
+    if query is None or tokens.count(query) > LONGEST_QUERY:
+        return None
+    return query
+
+
 async def memories_for(
     session: AsyncSession,
     openrouter: OpenRouter,
@@ -259,7 +275,7 @@ async def memories_for(
     — the embedding host down, a wrong dimension — costs the reader nothing but the memories."""
     if covered <= 0 or not retrieval_on(settings):
         return []
-    query = next((turn.text for turn in reversed(recent) if turn.role is Role.USER), None)
+    query = recall_query(recent)
     if query is None:
         return []
     try:
@@ -273,7 +289,7 @@ async def memories_for(
 def _recall_estimate(settings: Settings, covered: int, recent: Sequence[Message]) -> int:
     """Room to keep for the memories retrieval will add after the batch is decided: as many
     turns as may be recalled, each about the size of a recent turn, within the recall share."""
-    if covered <= 0 or not retrieval_on(settings) or not recent:
+    if covered <= 0 or not retrieval_on(settings) or recall_query(recent) is None:
         return 0
     mean = sum(tokens.for_message(turn.text) for turn in recent) // len(recent)
     cap = settings.context_budget * settings.recall_percent // 100
