@@ -189,6 +189,16 @@ length — a test proves it with a three-number vector.
   story meeting retrieval for the first time catches up over a few turns.
 - **The query is the reader's last message** among the recent turns. What they just said is the
   best signal of what they are reaching back for.
+- **Unless it is a pasted document** (more than `LONGEST_QUERY`, 500 tokens). One story had a
+  reader who pasted a video post every few dozen turns: a thumbnail, a background essay, the
+  lyrics, the staging. Every post resembles every other post as a whole, so *whatever part* of one
+  was used as the query (the whole of it, the last 1,500 characters, the part the reader had never
+  written before) the four nearest turns were the earlier posts and the crowd's reactions to
+  them, five thousand tokens of other videos beside the one being answered, and the character
+  replied about the wrong video. The reader's turns fell into two groups with nothing between
+  1,500 and 3,000 characters: remarks (the median was 122) and pasted posts (all over 3,000). A
+  turn in the second group asks the memory nothing, so it is not asked, and no room is set aside
+  for memories that turn.
 - **At most `recall_count` turns** (4), most relevant first. Then chapter 5's builder applies the
   real limit — the recall *share* of the budget — and puts the survivors back in story order.
 - **Any failure costs the reader nothing but the memories.** The embedding host down, a wrong

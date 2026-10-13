@@ -12,8 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lustjinn import tokens
 from lustjinn.context import MEMORIES_FRAME
-from lustjinn.memory import BACKFILL_AT_MOST
+from lustjinn.memory import BACKFILL_AT_MOST, LONGEST_QUERY, recall_query
 from lustjinn.models import Embedding, Message, Role, SpendKind, Story, Summary
 from lustjinn.settings import Settings
 from tests.factories import a_message, a_story
@@ -153,6 +154,60 @@ async def test_the_question_asked_is_the_readers_last_message(
     assert memories is not None
     assert "Silver on the dock." in memories
     assert "Ferrin" not in memories
+
+
+def a_turn_of_at_most(limit: int, start: str) -> str:
+    """`start` followed by as many plain sentences as keep the turn within `limit` tokens."""
+    text = start
+    while tokens.count(text + PLAIN) <= limit:
+        text += PLAIN
+    return text
+
+
+async def test_a_turn_at_the_limit_is_still_the_question(
+    client: httpx2.AsyncClient, session: AsyncSession, model: ScriptedModel
+) -> None:
+    story = await a_compressed_story(session, ["I set the knife on the table.", PLAIN])
+    asked = a_turn_of_at_most(LONGEST_QUERY, "Where is the knife? ")
+    model.says("Hm.")
+
+    await send(client, story.id, asked)
+
+    assert model.embedding_calls[-1] == [asked.strip()]  # the API stores the turn trimmed
+    memories = memories_sent(model)
+    assert memories is not None
+    assert "I set the knife on the table." in memories
+
+
+async def test_a_pasted_document_is_not_put_to_the_memory(
+    client: httpx2.AsyncClient, session: AsyncSession, model: ScriptedModel
+) -> None:
+    """Posts that resemble one another recall one another, whatever they are about (#151)."""
+    story = await a_compressed_story(session, ["I set the knife on the table.", PLAIN])
+    pasted = a_turn_of_at_most(LONGEST_QUERY, "Where is the knife? ") + PLAIN
+    model.says("Hm.")
+
+    streamed = await send(client, story.id, pasted)
+
+    assert streamed.done["reply"]["text"] == "Hm."
+    assert model.embedding_calls == []  # not asked, and nothing embedded for it either
+    assert memories_sent(model) is None
+
+
+def test_there_is_no_question_without_a_reader_turn() -> None:
+    turns = [Message(sequence=1, role=Role.ASSISTANT, text="The fog came in.")]
+
+    assert recall_query(turns) is None
+    assert recall_query([]) is None
+
+
+def test_the_question_is_the_readers_last_turn_whoever_spoke_after() -> None:
+    turns = [
+        Message(sequence=1, role=Role.USER, text="The knife?"),
+        Message(sequence=2, role=Role.ASSISTANT, text="On the table."),
+    ]
+
+    assert recall_query(turns) == "The knife?"
 
 
 async def test_an_embedding_endpoint_that_is_down_does_not_cost_the_reader_a_reply(
