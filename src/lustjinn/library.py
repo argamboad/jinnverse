@@ -91,7 +91,7 @@ Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Body = Annotated[str, StringConstraints(min_length=1)]
 
 
-def _check_name(name: str) -> str:
+def check_name(name: str) -> str:
     if RESERVED_IN_NAMES & set(name) or any(c.isprintable() is False for c in name):
         raise ValueError('a name cannot contain any of < > : " / \\ | ? * or control characters')
     return name
@@ -106,7 +106,7 @@ class NewEntry(BaseModel):
     @field_validator("name")
     @classmethod
     def _usable(cls, name: str) -> str:
-        return _check_name(name)
+        return check_name(name)
 
 
 class EntryChanges(BaseModel):
@@ -122,7 +122,7 @@ class EntryChanges(BaseModel):
     @field_validator("name")
     @classmethod
     def _usable(cls, name: str | None) -> str | None:
-        return None if name is None else _check_name(name)
+        return None if name is None else check_name(name)
 
 
 class EntrySummary(BaseModel):
@@ -334,15 +334,28 @@ async def create_entry(shelf: OnShelf, new: NewEntry, session: Session) -> Entry
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"A {shelf.kind} has no opening."
         )
-    if await _taken(session, shelf, new.name):
+    entry = await add_entry(session, shelf, new.name, new.text, new.opening)
+    return _out(shelf, entry, [])
+
+
+async def add_entry(
+    session: AsyncSession,
+    shelf: Shelf[Any],
+    name: str,
+    text: str,
+    opening: str | None = None,
+) -> LibraryEntry:
+    """Adds an entry and its first history row. A name already on the shelf, in any case, is
+    refused with 409: adding never becomes replacing."""
+    if await _taken(session, shelf, name):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"A {shelf.kind} called '{new.name}' already exists. Edit it, or pick another name.",
+            f"A {shelf.kind} called '{name}' already exists. Edit it, or pick another name.",
         )
-    entry: LibraryEntry = shelf.model(name=new.name)
-    shelf.set_text(entry, new.text)
+    entry: LibraryEntry = shelf.model(name=name)
+    shelf.set_text(entry, text)
     if isinstance(entry, Character):
-        entry.opening = _opening(new.opening)
+        entry.opening = _opening(opening)
     session.add(entry)
     await session.flush()  # gives it its id, for the history row
     session.add(_remembered(shelf, entry, version=1))
@@ -350,7 +363,7 @@ async def create_entry(shelf: OnShelf, new: NewEntry, session: Session) -> Entry
     # The database filled in updated_at; read it back, explicitly, since a lazy load is not
     # something async code can do by itself.
     await session.refresh(entry)
-    return _out(shelf, entry, [])
+    return entry
 
 
 @router.get("/{shelf}/{entry_id}")
