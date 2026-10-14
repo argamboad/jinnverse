@@ -20,7 +20,7 @@ import re
 import ssl
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
 
@@ -130,7 +130,7 @@ class StoryWithMessages(Story):
     messages: list[Message]
 
 
-Shelf = Literal["characters", "personas", "snippets"]
+Shelf = Literal["characters", "personas", "snippets", "pieces"]
 
 
 class Entry(BaseModel):
@@ -142,6 +142,8 @@ class Entry(BaseModel):
     version: int
     updated_at: datetime
     preview: str
+    description: str | None = None
+    """The owner's short note; shown in place of the preview when there is one."""
 
 
 class EntryFull(Entry):
@@ -153,6 +155,22 @@ class EntryFull(Entry):
 class Defaults(BaseModel):
     default_persona_id: uuid.UUID | None = None
     default_persona_name: str | None = None
+
+
+class Hidden(BaseModel):
+    characters: int = 0
+    personas: int = 0
+    snippets: int = 0
+
+
+class Counts(BaseModel):
+    """How many entries each shelf holds, as its list shows them; the pieces are counted too."""
+
+    characters: int = 0
+    personas: int = 0
+    snippets: int = 0
+    pieces: int = 0
+    hidden: Hidden = Field(default_factory=Hidden)
 
 
 Voice = Literal["he", "she", "they", "any"]
@@ -176,7 +194,9 @@ class Piece(BaseModel):
     name: str
     text: str
     short: str | None = None
+    description: str | None = None
     version: int = 1
+    updated_at: datetime | None = None
 
 
 class Preview(BaseModel):
@@ -190,6 +210,35 @@ class Built(BaseModel):
     id: uuid.UUID
     name: str
     text: str
+
+
+class PieceEntry(EntryFull):
+    """A persona piece as the library screen shows it: an entry whose name says its slot and its
+    voice, so the shelf reads grouped by slot and two pieces of one name stay apart."""
+
+    slot: str = ""
+    slot_label: str = ""
+    voice: Voice = "he"
+    short: str | None = None
+    piece_name: str = ""
+    """The piece's own name, which is what a rename changes."""
+
+
+def piece_entry(piece: Piece, label: str) -> PieceEntry:
+    return PieceEntry(
+        id=piece.id,
+        name=f"{label} · {piece.name} ({piece.voice})",
+        version=piece.version,
+        updated_at=piece.updated_at or datetime.now(UTC),
+        preview=piece.text[:200],
+        description=piece.description,
+        text=piece.text,
+        slot=piece.slot,
+        slot_label=label,
+        voice=piece.voice,
+        short=piece.short,
+        piece_name=piece.name,
+    )
 
 
 class Cut(BaseModel):
@@ -639,10 +688,51 @@ class Api:
     # -- the library ---------------------------------------------------------------------------
 
     async def entries(self, shelf: Shelf) -> list[Entry]:
+        if shelf == "pieces":
+            return list(await self._piece_entries())
         return _entries.validate_python(await self._request("GET", f"/library/{shelf}"))
 
     async def entry(self, shelf: Shelf, entry_id: uuid.UUID) -> EntryFull:
+        if shelf == "pieces":
+            found = next((e for e in await self._piece_entries() if e.id == entry_id), None)
+            if found is None:
+                raise ApiError(404, "There is no piece with that id.")
+            return found
         return EntryFull.model_validate(await self._request("GET", f"/library/{shelf}/{entry_id}"))
+
+    async def _piece_entries(self) -> list[PieceEntry]:
+        """The pool as library entries, in the persona's slot order and then by name."""
+        slots = await self.piece_slots()
+        labels = {slot.key: slot.label for slot in slots}
+        order = {slot.key: i for i, slot in enumerate(slots)}
+        pieces = sorted(
+            await self.pieces(), key=lambda p: (order.get(p.slot, len(order)), p.name.lower())
+        )
+        return [piece_entry(p, labels.get(p.slot, p.slot)) for p in pieces]
+
+    async def _piece_saved(self, piece: Piece) -> PieceEntry:
+        labels = {slot.key: slot.label for slot in await self.piece_slots()}
+        return piece_entry(piece, labels.get(piece.slot, piece.slot))
+
+    async def save_piece(
+        self,
+        piece_id: uuid.UUID,
+        version: int,
+        *,
+        voice: Voice | None = None,
+        short: str | None = None,
+    ) -> PieceEntry:
+        """Changes a piece's voice or short form over ``version``; a stale save raises
+        ``ConflictError`` with the piece as it is now."""
+        body: dict[str, object] = {"version": version}
+        if voice is not None:
+            body["voice"] = voice
+        if short is not None:
+            body["short"] = short
+        piece = Piece.model_validate(
+            await self._request("PATCH", f"/persona-pieces/{piece_id}", json=body)
+        )
+        return await self._piece_saved(piece)
 
     async def defaults(self) -> Defaults:
         return Defaults.model_validate(await self._request("GET", "/library/settings"))
@@ -651,12 +741,22 @@ class Api:
         body = {"default_persona_id": None if persona_id is None else str(persona_id)}
         return Defaults.model_validate(await self._request("PUT", "/library/settings", json=body))
 
+    async def counts(self) -> Counts:
+        return Counts.model_validate(await self._request("GET", "/library/counts"))
+
     async def create_entry(
-        self, shelf: Shelf, name: str, text: str, opening: str | None = None
+        self,
+        shelf: Shelf,
+        name: str,
+        text: str,
+        opening: str | None = None,
+        description: str | None = None,
     ) -> EntryFull:
         body: dict[str, object] = {"name": name, "text": text}
         if opening is not None:
             body["opening"] = opening
+        if description is not None:
+            body["description"] = description
         return EntryFull.model_validate(await self._request("POST", f"/library/{shelf}", json=body))
 
     async def save_entry(
@@ -669,6 +769,8 @@ class Api:
         text: str | None = None,
         opening: str | None = None,
         clear_opening: bool = False,
+        description: str | None = None,
+        clear_description: bool = False,
     ) -> EntryFull:
         """Saves what is given over ``version``; a save over a newer one raises
         ``ConflictError`` with the entry as it is now."""
@@ -679,11 +781,21 @@ class Api:
             body["text"] = text
         if opening is not None or clear_opening:
             body["opening"] = opening
+        if description is not None or clear_description:
+            body["description"] = description
+        if shelf == "pieces":
+            piece = Piece.model_validate(
+                await self._request("PATCH", f"/persona-pieces/{entry_id}", json=body)
+            )
+            return await self._piece_saved(piece)
         return EntryFull.model_validate(
             await self._request("PATCH", f"/library/{shelf}/{entry_id}", json=body)
         )
 
     async def delete_entry(self, shelf: Shelf, entry_id: uuid.UUID) -> None:
+        if shelf == "pieces":
+            await self._request("DELETE", f"/persona-pieces/{entry_id}")
+            return
         await self._request("DELETE", f"/library/{shelf}/{entry_id}")
 
     # -- persona pieces -------------------------------------------------------------------------
@@ -786,7 +898,9 @@ def _current(response: httpx2.Response) -> EntryFull | None:
     if not isinstance(current, dict):
         return None
     try:
-        return EntryFull.model_validate(current)
+        # A piece's conflict carries no preview, which a list entry needs: it is the text's start.
+        text = str(cast(dict[str, object], current).get("text", ""))
+        return EntryFull.model_validate({"preview": text[:200], **current})
     except ValueError:
         return None
 

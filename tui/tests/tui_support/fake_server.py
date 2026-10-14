@@ -63,14 +63,17 @@ def story(
     }
 
 
-def entry(name: str, text: str, opening: str | None = None) -> dict[str, Any]:
+def entry(
+    name: str, text: str, opening: str | None = None, description: str | None = None
+) -> dict[str, Any]:
     return {
         "id": str(uuid.uuid4()),
         "name": name,
-        "hidden": False,
+        "hidden": name.startswith("_"),
         "version": 1,
         "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
         "preview": text[:200],
+        "description": description,
         "text": text,
         "opening": opening,
         "used_by": [],
@@ -262,14 +265,25 @@ class FakeServer:
         return added
 
     def shelve(
-        self, shelf: str, name: str, text: str, opening: str | None = None
+        self,
+        shelf: str,
+        name: str,
+        text: str,
+        opening: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        added = entry(name, text, opening)
+        added = entry(name, text, opening, description)
         self.library[shelf].append(added)
         return added
 
     def piece(
-        self, slot: str, name: str, text: str, voice: str = "he", short: str | None = None
+        self,
+        slot: str,
+        name: str,
+        text: str,
+        voice: str = "he",
+        short: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
         """A persona piece in the pool, as the API serves it."""
         added = {
@@ -279,6 +293,7 @@ class FakeServer:
             "name": name,
             "text": text,
             "short": short,
+            "description": description,
             "version": 1,
             "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
         }
@@ -503,6 +518,8 @@ class FakeServer:
                     "default_persona_name": None if default is None else default["name"],
                 },
             )
+        if parts[1:] == ["counts"]:
+            return self._counts()
         shelf = self.library.get(parts[1]) if len(parts) > 1 else None
         if shelf is None:
             return httpx2.Response(404, json={"detail": "There is no such shelf."})
@@ -523,7 +540,9 @@ class FakeServer:
                         "or pick another name."
                     },
                 )
-            created = self.shelve(parts[1], body["name"], body["text"], body.get("opening"))
+            created = self.shelve(
+                parts[1], body["name"], body["text"], body.get("opening"), body.get("description")
+            )
             return httpx2.Response(201, json=created)
         found = next((e for e in shelf if e["id"] == parts[2]), None) if len(parts) > 2 else None
         if found is None:
@@ -551,7 +570,7 @@ class FakeServer:
                     },
                 )
             changed = False
-            for field in ("name", "text", "opening"):
+            for field in ("name", "text", "opening", "description"):
                 if field in body and body[field] != found.get(field):
                     found[field] = body[field]
                     changed = True
@@ -577,6 +596,20 @@ class FakeServer:
             shelf.remove(found)
             return httpx2.Response(204)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _counts(self) -> httpx2.Response:
+        """The shelves as lists show them: names starting with an underscore are counted apart."""
+        shown = {
+            k: [e for e in v if not e["name"].startswith("_")] for k, v in self.library.items()
+        }
+        return httpx2.Response(
+            200,
+            json={
+                **{k: len(v) for k, v in shown.items()},
+                "pieces": len(self.pieces),
+                "hidden": {k: len(self.library[k]) - len(v) for k, v in shown.items()},
+            },
+        )
 
     # The slots and the paragraphs they write, as the API's own list has them.
     _SLOTS: ClassVar[list[tuple[str, str, int | None]]] = [
@@ -623,7 +656,46 @@ class FakeServer:
             return httpx2.Response(201, json=made)
         if parts[1:] in (["preview"], ["build"]) and request.method == "POST":
             return self._join_a_pick(json.loads(request.content), build=parts[1] == "build")
+        found = (
+            next((p for p in self.pieces if p["id"] == parts[1]), None) if len(parts) == 2 else None
+        )
+        if found is not None and request.method == "DELETE":
+            self.pieces.remove(found)
+            return httpx2.Response(204)
+        if found is not None and request.method == "PATCH":
+            return self._save_piece(found, json.loads(request.content))
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _save_piece(self, found: dict[str, Any], body: dict[str, Any]) -> httpx2.Response:
+        if body["version"] != found["version"]:
+            return httpx2.Response(
+                409,
+                json={
+                    "detail": {
+                        "message": "This piece changed somewhere else since you opened it. "
+                        "Nothing was saved. Here is what it says now; save again to replace it.",
+                        "current": found,
+                    }
+                },
+            )
+        voice = body.get("voice", found["voice"])
+        name = body.get("name", found["name"])
+        if (voice, name.lower()) != (found["voice"], found["name"].lower()) and any(
+            (p["slot"], p["voice"], p["name"].lower()) == (found["slot"], voice, name.lower())
+            for p in self.pieces
+            if p is not found
+        ):
+            return httpx2.Response(
+                409, json={"detail": f"A {found['slot']} piece called '{name}' already exists."}
+            )
+        changed = False
+        for field in ("name", "voice", "text", "short", "description"):
+            if field in body and body[field] != found.get(field):
+                found[field] = body[field]
+                changed = True
+        if changed:
+            found["version"] += 1
+        return httpx2.Response(200, json=found)
 
     def _join_a_pick(self, body: dict[str, Any], *, build: bool) -> httpx2.Response:
         def refuse(detail: str) -> httpx2.Response:

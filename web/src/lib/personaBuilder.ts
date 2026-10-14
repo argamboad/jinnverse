@@ -10,6 +10,13 @@ export const VOICES: { id: Voice; label: string }[] = [
 	{ id: 'they', label: 'They' }
 ];
 
+/** The voices a piece may be written in: the three a persona has, and `any` for a piece with no
+ * pronouns in it, which a persona of any voice may use. */
+export const PIECE_VOICES: { id: Voice; label: string }[] = [
+	...VOICES,
+	{ id: 'any', label: 'Any' }
+];
+
 /** The slots a persona is not made without, as the screens ask (the API itself only needs one
  * piece): every persona opens with its name and its look, and a piece that writes the name needs
  * a name piece. Every other slot is optional. */

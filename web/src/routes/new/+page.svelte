@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import { api, ApiError, type Defaults, type Entry } from '#lib/api.ts';
+	import { blurb } from '#lib/library.ts';
 	import { stories } from '#lib/stories.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
@@ -17,6 +18,12 @@
 
 	const character = $derived(characters?.find((c) => c.id === characterId) ?? null);
 	const ready = $derived(characterId !== null && name.trim().length > 0 && !busy);
+	/** The note of the persona that will play: the picked one, or the default when none is. */
+	const personaNote = $derived(
+		(
+			personas.find((p) => p.id === (personaId || defaults?.default_persona_id))?.description ?? ''
+		).trim()
+	);
 
 	onMount(async () => {
 		try {
@@ -90,7 +97,7 @@
 							<span class="who">{entry.name.charAt(0).toUpperCase()}</span>
 							<span class="text">
 								<b>{entry.name}</b>
-								<small class="prose">{entry.preview}</small>
+								<small class:prose={!blurb(entry).note}>{blurb(entry).text}</small>
 							</span>
 						</button>
 					{/each}
@@ -112,6 +119,7 @@
 					{/each}
 				</select>
 			</label>
+			{#if personaNote}<p class="muted note">{personaNote}</p>{/if}
 			<a class="build" href="/library/personas/from-pieces?then=new"
 				>Build a new persona from pieces</a
 			>

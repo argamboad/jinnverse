@@ -12,6 +12,7 @@
 		type Slot,
 		type Voice
 	} from '#lib/api.ts';
+	import { pieceBlurb } from '#lib/library.ts';
 	import {
 		VOICES,
 		count,
@@ -56,9 +57,42 @@
 			: pieceName.trim().length > 0 && pieceText.trim().length > 0
 	);
 
+	/** The pick survives a trip to the piece editor and back: kept for this tab only. */
+	const REMEMBERED = 'lustjinn-builder';
+
+	function remember(pick: Picks, as: Voice) {
+		try {
+			sessionStorage.setItem(REMEMBERED, JSON.stringify({ voice: as, picks: pick }));
+		} catch {
+			/* a convenience only */
+		}
+	}
+
+	function forget() {
+		try {
+			sessionStorage.removeItem(REMEMBERED);
+		} catch {
+			/* a convenience only */
+		}
+	}
+
 	onMount(async () => {
 		try {
+			const kept = JSON.parse(sessionStorage.getItem(REMEMBERED) ?? 'null') as {
+				voice: Voice;
+				picks: Picks;
+			} | null;
+			if (kept) {
+				voice = kept.voice;
+				picks = kept.picks;
+			}
+		} catch {
+			/* a convenience only */
+		}
+		try {
 			[slots, pool] = await Promise.all([api.pieceSlots(), api.pieces(voice)]);
+			// A piece deleted meanwhile, or written in another voice, is put back.
+			picks = keeping(picks, new Set(pool.map((p) => p.id)));
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -77,6 +111,7 @@
 		const now = $state.snapshot(picks);
 		const as = voice;
 		const mine = ++asked;
+		remember(now, as);
 		if (!hasText(now)) {
 			preview = null;
 			previewError = null;
@@ -216,6 +251,7 @@
 				`${built.name} is on the shelf`,
 				'An ordinary persona now: edit it like any other.'
 			);
+			forget();
 			await goto(then === 'new' ? `/new?persona=${built.id}` : `/library/personas/${built.id}`);
 		} catch (error) {
 			toasts.show('danger', 'Not made', error instanceof Error ? error.message : undefined, 8000);
@@ -291,19 +327,23 @@
 						<div class="options" role="group" aria-label="{slot.label} pieces">
 							{#each options as piece (piece.id)}
 								{@const on = chosen.includes(piece.id)}
-								<button
-									type="button"
-									class="opt"
-									role="checkbox"
-									aria-checked={on}
-									onclick={() => toggle(slot.key, piece.id)}
-								>
-									<span class="dot" aria-hidden="true"></span>
-									<span class="what">
-										<b>{piece.name}</b>
-										<small class="prose">{piece.text}</small>
-									</span>
-								</button>
+								{@const shown = pieceBlurb(piece)}
+								<div class="optrow">
+									<button
+										type="button"
+										class="opt"
+										role="checkbox"
+										aria-checked={on}
+										onclick={() => toggle(slot.key, piece.id)}
+									>
+										<span class="dot" aria-hidden="true"></span>
+										<span class="what">
+											<b>{piece.name}</b>
+											<small class:prose={!shown.note}>{shown.text}</small>
+										</span>
+									</button>
+									<a class="editlink" href="/library/pieces/{piece.id}?back=builder">Edit</a>
+								</div>
 							{/each}
 							{#if !options.length}
 								<p class="muted">Nothing here yet.</p>
@@ -507,6 +547,27 @@
 	.options {
 		display: grid;
 		gap: 6px;
+	}
+	.optrow {
+		display: flex;
+		gap: 6px;
+		align-items: stretch;
+	}
+	.optrow .opt {
+		flex: 1;
+		min-width: 0;
+	}
+	.editlink {
+		display: grid;
+		place-items: center;
+		padding: 0 10px;
+		border-radius: var(--r-s);
+		border: 1px solid var(--line);
+		background: var(--bg);
+		color: var(--gold-text);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-decoration: none;
 	}
 	.opt {
 		appearance: none;

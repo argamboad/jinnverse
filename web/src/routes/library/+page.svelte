@@ -1,41 +1,80 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import Tabs from '#lib/Tabs.svelte';
-	import { api, type Defaults, type Entry, type Shelf } from '#lib/api.ts';
+	import {
+		api,
+		type Counts,
+		type Defaults,
+		type Entry,
+		type Piece,
+		type Shelf,
+		type Slot
+	} from '#lib/api.ts';
+	import { blurb, hiddenCount, pieceBlurb } from '#lib/library.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
-	const shelves: { id: Shelf; label: string; one: string }[] = [
+	/** The three shelves of the library proper, and the pool of persona pieces beside them. */
+	type LibraryShelf = Shelf | 'pieces';
+
+	const shelves: { id: LibraryShelf; label: string; one: string }[] = [
 		{ id: 'characters', label: 'Characters', one: 'character' },
 		{ id: 'personas', label: 'Personas', one: 'persona' },
-		{ id: 'snippets', label: 'Snippets', one: 'snippet' }
+		{ id: 'snippets', label: 'Snippets', one: 'snippet' },
+		{ id: 'pieces', label: 'Pieces', one: 'piece' }
 	];
 
-	let shelf = $state<Shelf>('characters');
+	let shelf = $state<LibraryShelf>('characters');
 	let hidden = $state(false);
 	let entries = $state<Entry[] | null>(null);
+	let pieces = $state<Piece[] | null>(null);
+	let slots = $state<Slot[]>([]);
 	let defaults = $state<Defaults | null>(null);
+	let counts = $state<Counts | null>(null);
 
 	const current = $derived(shelves.find((s) => s.id === shelf)!);
+	const hiddenHere = $derived(shelf === 'pieces' ? 0 : (counts?.hidden[shelf] ?? 0));
+	/** The pool by slot, in the persona's own order; an empty slot is shown, so the gaps are seen. */
+	const groups = $derived(
+		slots.map((slot) => ({ slot, items: (pieces ?? []).filter((p) => p.slot === slot.key) }))
+	);
 
 	onMount(() => {
 		try {
 			const saved = localStorage.getItem('lustjinn-shelf');
-			if (saved === 'personas' || saved === 'snippets') shelf = saved;
+			if (saved === 'personas' || saved === 'snippets' || saved === 'pieces') shelf = saved;
 		} catch {
 			/* a convenience only */
 		}
 		void load();
+		void loadCounts();
+		void showSelectedTab();
 		api
 			.defaults()
 			.then((d) => (defaults = d))
 			.catch(() => undefined);
 	});
 
+	/** The tabs' numbers: all the shelves in one call; without them the tabs show no number. */
+	async function loadCounts() {
+		try {
+			counts = await api.counts();
+			void showSelectedTab(); // the numbers widen the tabs
+		} catch {
+			/* a convenience only */
+		}
+	}
+
 	async function load() {
 		entries = null;
+		pieces = null;
 		try {
-			entries = await api.entries(shelf, hidden);
+			if (shelf === 'pieces') {
+				[slots, pieces] = await Promise.all([api.pieceSlots(), api.pieces()]);
+			} else {
+				entries = await api.entries(shelf, hidden);
+			}
+			void loadCounts();
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -43,11 +82,21 @@
 				error instanceof Error ? error.message : undefined
 			);
 			entries = [];
+			pieces = [];
 		}
 	}
 
-	function pick(next: Shelf) {
+	/** On a narrow phone the tab strip scrolls sideways: the shelf in use is brought into view. */
+	async function showSelectedTab() {
+		await tick();
+		document
+			.querySelector('.seg [aria-selected="true"]')
+			?.scrollIntoView({ inline: 'center', block: 'nearest' });
+	}
+
+	function pick(next: LibraryShelf) {
 		shelf = next;
+		void showSelectedTab();
 		try {
 			localStorage.setItem('lustjinn-shelf', next);
 		} catch {
@@ -77,9 +126,6 @@
 <div class="screen">
 	<AppBar title="Library" mark>
 		{#snippet actions()}
-			{#if shelf === 'personas'}
-				<a class="btn ghost small" href="/library/personas/from-pieces">Build from pieces</a>
-			{/if}
 			<a class="btn primary small" href="/library/{shelf}/new">New {current.one}</a>
 		{/snippet}
 	</AppBar>
@@ -87,20 +133,53 @@
 		<div class="seg" role="tablist" aria-label="Shelf">
 			{#each shelves as s (s.id)}
 				<button type="button" role="tab" aria-selected={shelf === s.id} onclick={() => pick(s.id)}
-					>{s.label}</button
+					>{s.label}{#if counts}<span class="n">{counts[s.id]}</span>{/if}</button
 				>
 			{/each}
 		</div>
-		<label
-			class="hidden-toggle"
-			title="Entries whose name starts with _ (a template, working notes) are kept but not listed"
-		>
-			<input type="checkbox" bind:checked={hidden} onchange={load} />
-			<span>Show hidden <code>_name</code></span>
-		</label>
+		{#if shelf !== 'pieces'}
+			<label
+				class="hidden-toggle"
+				title="Entries whose name starts with _ (a template, working notes) are kept but not listed"
+			>
+				<input type="checkbox" bind:checked={hidden} onchange={load} />
+				<span>Show hidden <code>_name</code>{hiddenCount(hiddenHere)}</span>
+			</label>
+		{/if}
+		{#if shelf === 'personas'}
+			<a class="btn ghost small build" href="/library/personas/from-pieces">Build from pieces</a>
+		{/if}
 	</div>
 	<main class="list">
-		{#if entries === null}
+		{#if shelf === 'pieces'}
+			{#if pieces === null}
+				<p class="muted center">Reading the shelf…</p>
+			{:else if pieces.length === 0}
+				<div class="empty">
+					<p class="muted">
+						No pieces yet. A piece is one paragraph of a persona — a look, a home, a pet — and a
+						persona is built by picking one for each.
+					</p>
+					<a class="btn primary" href="/library/pieces/new">Write the first piece</a>
+				</div>
+			{:else}
+				{#each groups as group (group.slot.key)}
+					<div class="slot">
+						<h2>{group.slot.label} <span>{group.items.length}</span></h2>
+						{#each group.items as piece (piece.id)}
+							{@const shown = pieceBlurb(piece)}
+							<a class="row" href="/library/pieces/{piece.id}">
+								<span class="text">
+									<span class="name">{piece.name}</span>
+									<span class="preview" class:prose={!shown.note}>{shown.text}</span>
+								</span>
+								<span class="voice">{piece.voice}</span>
+							</a>
+						{/each}
+					</div>
+				{/each}
+			{/if}
+		{:else if entries === null}
 			<p class="muted center">Reading the shelf…</p>
 		{:else if entries.length === 0}
 			<div class="empty">
@@ -120,6 +199,7 @@
 			</div>
 		{:else}
 			{#each entries as entry (entry.id)}
+				{@const shown = blurb(entry)}
 				<a class="entry" href="/library/{shelf}/{entry.id}">
 					<span class="who">{initial(entry)}</span>
 					<span class="text">
@@ -130,7 +210,7 @@
 								<span class="chip gold">default</span>
 							{/if}
 						</span>
-						<span class="preview prose">{entry.preview}</span>
+						<span class="preview" class:prose={!shown.note}>{shown.text}</span>
 						<span class="meta"
 							>v{entry.version} · {new Date(entry.updated_at).toLocaleDateString()}</span
 						>
@@ -163,6 +243,7 @@
 		padding: 6px 14px;
 		font-size: 0.85rem;
 		text-decoration: none;
+		white-space: nowrap;
 		box-shadow: none;
 	}
 	.toolbar {
@@ -175,6 +256,8 @@
 	}
 	.seg {
 		display: inline-flex;
+		max-width: 100%;
+		overflow-x: auto;
 		padding: 3px;
 		gap: 2px;
 		border-radius: var(--r-pill);
@@ -182,6 +265,7 @@
 		border: 1px solid var(--line);
 	}
 	.seg button {
+		white-space: nowrap;
 		appearance: none;
 		border: 0;
 		background: transparent;
@@ -191,6 +275,11 @@
 		padding: 6px 12px;
 		min-height: 34px;
 		border-radius: var(--r-pill);
+	}
+	.seg .n {
+		margin-left: 6px;
+		font-weight: 400;
+		opacity: 0.7;
 	}
 	.seg button[aria-selected='true'] {
 		background: var(--gold);
@@ -288,5 +377,43 @@
 		font-size: 0.78rem;
 		padding: 8px;
 		min-height: 36px;
+	}
+	.slot {
+		display: grid;
+		gap: 6px;
+		margin-top: 6px;
+	}
+	.slot h2 {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.72rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--gold-text);
+		padding: 0 4px;
+	}
+	.slot h2 span {
+		color: var(--muted);
+		letter-spacing: 0;
+	}
+	.row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 12px;
+		border-radius: var(--r-s);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		text-decoration: none;
+		color: inherit;
+	}
+	.row .name {
+		font-weight: 500;
+	}
+	.voice {
+		font-size: 0.72rem;
+		color: var(--muted);
+		white-space: nowrap;
 	}
 </style>

@@ -306,6 +306,42 @@ them, and a piece that writes the name needs a name piece. A slot with nothing p
 missing instead of failing. Keeping the rule out of the server is deliberate: anything else that
 uses the API is not bound by what these two screens think a persona should have.
 
+## Reading and editing the pool
+
+The first version of the pieces could be picked, written in the builder and deleted through the
+API, but not read whole or changed: the builder showed a piece as a few lines of its text, and
+the API's save had no client. The owner had thirty-six pieces and nowhere to see them. The
+second pass gave them a shelf and an editor in each client, and a description like the other
+shelves'.
+
+**The shelf.** The library gains a fourth tab, *Pieces*, with its count. The pool is listed in the
+persona's own slot order, then by name; a row is the name, the voice, and the description when
+there is one, falling back to the start of the text. A piece has no history (a persona built from
+it keeps its own text, so an old version of a piece is not lost the way an old persona is), and
+the slot cannot change: moving a piece to another slot would change what it means.
+
+**The editor.** It shows the whole text with `{name}` and `{short}` as written (and two buttons
+that insert them), the voice, the description with a counter, and for a name piece the full name
+and the short form. A save carries the version it started from, and a save over a change made
+elsewhere shows the piece as the server has it now and lets the owner replace it or take it —
+the same conflict as the other shelves, because the API's 409 carries `current` for pieces too.
+Deleting asks first and says that personas already built keep their copy.
+
+**The terminal client's trick.** The library screen is written for entries: a name, a text, a
+version. Rather than teach it a second kind of thing, the API client maps a piece *onto* an entry
+(`PieceEntry`, an `EntryFull` with the slot and voice beside it, named "Home · Penthouse (he)") and
+routes `entries`, `save_entry` and `delete_entry` to `/persona-pieces` when the shelf is
+`pieces`. The screen then needs only the pieces' own keys — `V` for the voice, `S` for a name
+piece's short form, `N` asking for a slot and a name. It is the adapter pattern: the screen keeps
+one model and the client does the translation. There is also no endpoint for one piece, only the
+pool, so the list carries each piece's whole text and the shelf makes no call per row.
+
+**The web client's trick** is smaller. Leaving the builder for the editor would lose the pick,
+which lives in the page's memory. The builder writes its pick to `sessionStorage` on every
+change (for this tab only), reads it back when it mounts — putting back any piece that was
+deleted or is in another voice meanwhile — and forgets it once the persona is made. An editor
+opened from the builder carries `?back=builder`, and Back returns there.
+
 ## Testing it
 
 - **The joiner is tested as a function:** order, an empty slot, the home paragraph, more than one
@@ -337,5 +373,6 @@ appear.
   ones that already work, with the persona still plain text.
 - A way to turn existing personas into pieces that proves, for each, that nothing was lost.
 - A picker in each client, with one rule — a name and a look — that lives in the screens.
+- A shelf and an editor for the pieces themselves, with a description, in both clients.
 - Two decisions to note. The slot list is closed on purpose, and the voice is a tag on a piece,
   not a substitution in the text.

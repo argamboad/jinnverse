@@ -25,7 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
 
 from lustjinn.deps import Session
-from lustjinn.library import SHELVES, Name, add_entry, alphabetical, check_name
+from lustjinn.library import (
+    SHELVES,
+    Name,
+    add_entry,
+    alphabetical,
+    check_description,
+    check_name,
+)
 from lustjinn.models import Persona, PersonaPiece, PieceSlot, Voice
 
 router = APIRouter(prefix="/persona-pieces", tags=["persona-pieces"])
@@ -159,6 +166,13 @@ class NewPiece(BaseModel):
     text: Text
     short: Short | None = None
     """A name piece only: its short form."""
+    description: str | None = None
+    """A short note for lists, never part of a persona. Blank is the same as none."""
+
+    @field_validator("description")
+    @classmethod
+    def _short_note(cls, description: str | None) -> str | None:
+        return check_description(description)
 
     @model_validator(mode="after")
     def _short_belongs_to_names(self) -> NewPiece:
@@ -175,6 +189,13 @@ class PieceChanges(BaseModel):
     voice: Voice | None = None
     text: Text | None = None
     short: Short | None = None
+    description: str | None = None
+    """Given as null or blank, it clears the description; left out, it is not touched."""
+
+    @field_validator("description")
+    @classmethod
+    def _short_note(cls, description: str | None) -> str | None:
+        return check_description(description)
 
 
 class PieceOut(BaseModel):
@@ -184,6 +205,7 @@ class PieceOut(BaseModel):
     name: str
     text: str
     short: str | None
+    description: str | None
     version: int
     updated_at: datetime
 
@@ -227,6 +249,7 @@ def _out(piece: PersonaPiece) -> PieceOut:
         name=piece.name,
         text=piece.text,
         short=piece.short,
+        description=piece.description,
         version=piece.version,
         updated_at=piece.updated_at,
     )
@@ -285,7 +308,12 @@ async def create_piece(new: NewPiece, session: Session) -> PieceOut:
     if await _taken(session, new.slot, new.voice, new.name):
         raise _conflict(new.slot, new.voice, new.name)
     piece = PersonaPiece(
-        slot=new.slot, voice=new.voice, name=new.name, text=new.text, short=new.short
+        slot=new.slot,
+        voice=new.voice,
+        name=new.name,
+        text=new.text,
+        short=new.short,
+        description=new.description,
     )
     session.add(piece)
     await session.commit()
@@ -316,6 +344,8 @@ async def save_piece(piece_id: uuid.UUID, changes: PieceChanges, session: Sessio
         piece.text = changes.text
     if changes.short is not None:
         piece.short = changes.short
+    if "description" in changes.model_fields_set:
+        piece.description = changes.description
     if session.is_modified(piece):
         try:
             await session.commit()
