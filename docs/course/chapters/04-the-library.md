@@ -314,6 +314,98 @@ and that is fine — a trigger is schema, and schema is written out. The course 
 the repetition does not look like an oversight.
 :::
 
+## A note for lists, and a count for the tabs
+
+Two small things were added to the library after step 9, both because the owner's library grew
+past what a list of names can carry: **a short description** on an entry, and **a count** on
+each shelf. They are in `src/lustjinn/library.py` and migration `0017`.
+
+### The description
+
+The mixin from the first section is where it goes, so one declaration reaches four tables —
+characters, personas, snippets and the persona pieces of chapter 10:
+
+```python
+class LibraryEntry:
+    ...
+    description: Mapped[str | None] = mapped_column(String(200))
+    """A short note for the owner, shown in lists. Never part of a prompt: nothing that builds one
+    reads it."""
+```
+
+`library_history` is not a `LibraryEntry`, so its copy is a column of its own, and the migration
+adds five columns to five tables with one loop. The history row carries the description because
+a version is the whole entry as saved.
+
+The rules sit in one function, shared by the library's two request bodies and the pieces':
+
+```python
+def check_description(description: str | None) -> str | None:
+    if description is None:
+        return None
+    description = description.strip()
+    if len(description) > DESCRIPTION_LENGTH:
+        raise ValueError(f"A description is at most {DESCRIPTION_LENGTH} characters.")
+    return description or None
+```
+
+Trimmed, blank is none, and over 200 characters is refused with a sentence. Pydantic runs it as a
+`field_validator`, so a refusal is a 422 whose body says what is wrong. The 200 is the same figure
+as the column's `String(200)`: the database would refuse a longer one too, but a person should be
+told in words.
+
+The interesting rule is on the save. A save names only what it changes, so there are **three**
+states for the description: left out (do not touch it), `null` or blank (clear it), and a text
+(set it). JSON cannot tell "absent" from `null` once it is a plain field, and pydantic can:
+
+```python
+if "description" in changes.model_fields_set:
+    entry.description = changes.description
+```
+
+`model_fields_set` is the set of fields the client actually sent. The opening of a character is
+saved the same way, and for the same reason. A save that changes only the description is a real
+save: `session.is_modified(entry)` is true, the version goes up and a history row is written, so
+the description has a history like everything else; a save that changes nothing still writes
+nothing.
+
+The most important test is the one that is *not* about the description: it sends a turn with a
+character and a persona that both carry one and asserts the text is in none of the messages the
+model is sent. A note for the owner must not become an instruction to the model.
+
+::: dotnet
+`model_fields_set` is what `System.Text.Json` has no built-in answer for: a DTO with
+`string? Description` cannot say "the client left it out". In .NET you reach for a
+`JsonPatchDocument`, an `Optional<T>` wrapper, or a hand-rolled `JsonConverter` that records
+which properties it saw. Pydantic records it for free.
+:::
+
+### Counting the shelves
+
+The web library's tabs show every shelf's count while one shelf is open, so a count per list
+call would take three calls. `GET /library/counts` answers all of them at once:
+
+```python
+@router.get("/counts")
+async def read_counts(session: Session) -> Counts:
+    ...
+    total = await session.scalar(select(func.count()).select_from(model))
+    underscored = await session.scalar(
+        select(func.count()).where(model.name.startswith("_", autoescape=True))
+    )
+```
+
+A count is what a list shows, and a list hides names that start with an underscore (working
+papers, a template), so those are counted apart under `hidden` and left out of the number on the
+tab. `autoescape=True` matters for the same reason as in the list: `_` is a wildcard in SQL's
+`LIKE`, which `startswith` compiles to. The persona pieces are counted too; they have no hidden
+names.
+
+One detail of FastAPI's routing: routes match **in the order they are declared**, and the
+shelves are `/{shelf}` with a `Literal` type. `/counts` is not a shelf, so if it were declared
+after `/{shelf}` it would be refused with a 422 before it was ever tried. It is declared first,
+and `test_counts_is_not_mistaken_for_a_shelf` pins both halves.
+
 ## Snippets expand at send time
 
 A snippet is authored prose deployed at the dramatically right moment: written once, typed as
@@ -410,6 +502,8 @@ Rebuild the database and seed it, then edit the dummy from `/docs`:
   client's version, and by the ORM on the write itself.
 - A history of every version, insert-only, that outlives the entry.
 - Snippets that expand where `:name` opens a word, and nowhere else.
+- Afterwards: a short description on every entry (never read by a prompt, versioned like the
+  rest) and a count of each shelf in one call.
 
 **Next — Chapter 5, The context builder.** The prompt, properly: layers in order from least to
 most volatile, a token budget counted with the model's own vocabulary, the newest turn always
