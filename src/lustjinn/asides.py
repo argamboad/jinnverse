@@ -59,7 +59,8 @@ async def ask(
     # so the answer is grounded in exactly what the character can see, and so a question can
     # trigger the same summary a turn would have. The question's own sampling stays cold and
     # short whatever the dials say: it is an answer, not a reply.
-    directives, knobs = await dials.of_story(session, story.id)
+    # No reminders: they restate how a reply is written, and this one is an answer, not a reply.
+    directives, _reminders, knobs = await dials.of_story(session, story.id)
     built = await memory.compose(
         session,
         openrouter,

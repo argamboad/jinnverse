@@ -1,9 +1,9 @@
 """The context builder: what the model is sent, assembled from layers in a fixed order.
 
 The order is least volatile first — character, persona, directives, world, summaries, history,
-recalled memories, trackers, instruction — because a provider's prefix cache keeps everything up
-to the first byte that changed. The card never changes; the instruction changes every turn. Put
-retrieval in the middle and the cache would break on every turn.
+recalled memories, trackers, reminders, instruction — because a provider's prefix cache keeps
+everything up to the first byte that changed. The card never changes; the instruction changes
+every turn. Put retrieval in the middle and the cache would break on every turn.
 
 Pure functions over dataclasses: nothing here touches the database or the network, so every rule
 is tested with a real-size card in a few milliseconds.
@@ -28,6 +28,10 @@ DIRECTIVES_FRAME = (
 )
 """Says what the dials' lines are and which side wins. Sent bare, after a card of thousands of
 tokens, they read as notes: the model split the difference and the card mostly won (#142)."""
+REMINDERS_FRAME = "Standing instructions for this reply, set above and repeated here:\n"
+"""A directive written once, early, is outweighed by a long history that does not follow it:
+inner thoughts stopped within fifty replies while the dial stayed on (#167). The dials that ask
+for it say it again here, after the history, where a model weighs it most."""
 WORLD_FRAME = "What is true in this story right now:\n"
 MEMORIES_FRAME = "Earlier in this conversation:\n"
 
@@ -107,6 +111,8 @@ class Layers:
     """Recalled turns, most relevant first (step 6)."""
     trackers: str | None = None
     """The meters, rendered (step 7)."""
+    reminders: str | None = None
+    """The dials that ask to be repeated, rendered; sent under `REMINDERS_FRAME` (#167)."""
     instruction: str | None = None
     """This turn only: a direction, a question, a reroll note."""
 
@@ -191,6 +197,7 @@ ORDER = (
     "history",
     "memories",
     "trackers",
+    "reminders",
     "instruction",
 )
 
@@ -229,6 +236,7 @@ def build(layers: Layers, *, budget: int | None = None, recall_percent: int = 10
     after = [
         fixed("memories", memories, memories_dropped),
         fixed("trackers", layers.trackers),
+        fixed("reminders", layers.reminders and REMINDERS_FRAME + layers.reminders),
     ]
     instruction: ChatMessage | None = None
     if layers.instruction:

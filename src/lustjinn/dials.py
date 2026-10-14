@@ -94,6 +94,8 @@ class Dial:
     levels: tuple[Level, ...] = ()
     options: tuple[Option, ...] = ()
     on_text: str | None = None
+    reminder: str | None = None
+    """A toggle's short restatement, sent again after the history while the toggle is on."""
     template: str | None = None
     accepts: str | None = None
     examples: tuple[str, ...] = ()
@@ -239,6 +241,7 @@ def _read(key: str, raw: Json) -> Dial:
         levels=levels,
         options=options,
         on_text=on_text,
+        reminder=(_text(raw, "reminder") or "").strip() or None if kind is Kind.TOGGLE else None,
         template=template,
         accepts=_text(raw, "accepts"),
         examples=_examples(raw.get("examples")),
@@ -408,6 +411,21 @@ def directives(pack: Pack, values: Mapping[str, str]) -> str | None:
     return "\n\n".join(parts) if parts else None
 
 
+def reminders(pack: Pack, values: Mapping[str, str]) -> str | None:
+    """The restatements of the toggles that are on, in pack order, one line each.
+
+    A toggle's text sits in the directives layer, far ahead of the newest turns; a long run of
+    replies that do not follow it then teaches the model not to (#167). The reminder travels
+    after the history instead. Only a toggle that is on has one: off says nothing, as before.
+    """
+    lines = [
+        dial.reminder
+        for dial in pack.dials
+        if dial.kind is Kind.TOGGLE and dial.reminder and is_on(effective(dial, values))
+    ]
+    return "\n".join(lines) if lines else None
+
+
 @dataclass(frozen=True)
 class Sampler:
     """The sampler parameters the dials ask for; None where no dial speaks to one."""
@@ -442,11 +460,14 @@ async def values_of(session: AsyncSession, story_id: uuid.UUID) -> dict[str, str
     return {row.key: row.value for row in rows}
 
 
-async def of_story(session: AsyncSession, story_id: uuid.UUID) -> tuple[str | None, Sampler]:
-    """A story's dials: rendered for the directives layer, and resolved for the sampler."""
+async def of_story(
+    session: AsyncSession, story_id: uuid.UUID
+) -> tuple[str | None, str | None, Sampler]:
+    """A story's dials: rendered for the directives layer, the reminders layer, and resolved
+    for the sampler."""
     pack = shipped()
     values = await values_of(session, story_id)
-    return directives(pack, values), sampler(pack, values)
+    return directives(pack, values), reminders(pack, values), sampler(pack, values)
 
 
 # --- the API --------------------------------------------------------------------------------------

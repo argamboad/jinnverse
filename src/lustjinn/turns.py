@@ -132,7 +132,7 @@ async def reply(
     """
     # The dials first: their text is a layer of the prompt, and their ceiling is room the memory
     # must reserve. Then the memory — a summary if the story no longer fits — then the prompt.
-    directives, knobs = await dials.of_story(session, story.id)
+    directives, reminders, knobs = await dials.of_story(session, story.id)
     ceiling = knobs.max_tokens or settings.max_tokens
     meters = await trackers.of(session, story.id)
     built = await memory.compose(
@@ -144,6 +144,7 @@ async def reply(
         await visible_messages(session, story.id),
         directives=directives,
         trackers=trackers.render(meters),
+        reminders=reminders,
         instruction=instruction,
         reply_tokens=ceiling,
     )

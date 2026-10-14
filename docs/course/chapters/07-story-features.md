@@ -141,6 +141,37 @@ otherwise — `string.IsNullOrEmpty(d) ? d : Frame + d` in C#. Python's `and`/`o
 operand, not a `bool`, which is why the idiom works.
 :::
 
+### A rule that has to be said twice
+
+A directive sits in the layer *before* the history, and the history is the longest thing in the
+prompt. On one real story, inner thoughts was on from the start and the model wrote the line in a
+third of its first replies and in one of the next three hundred and fifty (#167). Two things pulled
+against the dial: its own text told the model to leave the line out when it only repeated the
+speech — an easy permission to take — and every reply without the line, now in the history, was an
+example of what a reply looks like. A long chat teaches by example louder than a rule said once,
+far away.
+
+The cure is not louder wording but a second place. A toggle may carry a `reminder`, one short line,
+and the prompt gets a layer after the history and the meters:
+
+```python
+fixed("reminders", layers.reminders and REMINDERS_FRAME + layers.reminders),
+```
+
+`dials.reminders` collects them in pack order, only for toggles that are on, so a story with the
+dial off sends nothing. The layer goes last of the fixed ones, just before the turn's own
+instruction, which is the cheapest place in the prompt to be heard and costs about forty tokens a
+reply. Two rules keep it honest: an `/ask` carries none, because a reminder says how a *reply* is
+written and an answer is not one, and a rebuild passes it, so the summaries land where playing
+would have put them. The wording was fixed in the same change: the dial now says every character
+who speaks or acts gets the line, every reply, and that it is never a copy of the speech.
+
+::: dotnet
+This is the middleware-ordering problem in prompt form: a filter registered first sees the request
+first, but the *last* thing to touch the response is what the client reads. The model attends most
+to the end of what it is given, so a rule that must hold goes there, not only at the top.
+:::
+
 ## Meters: a value the model draws and the app reads back
 
 A meter is a number the story keeps — trust, heat, suspicion — with a name, a range and, if the

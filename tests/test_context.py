@@ -8,6 +8,7 @@ from lustjinn.context import (
     DIRECTIVES_FRAME,
     MEMORIES_FRAME,
     PERSONA_FRAME,
+    REMINDERS_FRAME,
     WORLD_FRAME,
     Fact,
     Layers,
@@ -44,6 +45,7 @@ def test_the_layers_are_sent_least_volatile_first(dummy: Dummy) -> None:
             history=turns("I take the stairs.", "*The stair creaks.*"),
             memories=[Recalled(2, Role.ASSISTANT, "Room seven. Back stairs or front.")],
             trackers="[TRUST] ##........ 20/100",
+            reminders="End on the inner thoughts line.",
             instruction="Keep this one short.",
         )
     )
@@ -57,8 +59,21 @@ def test_the_layers_are_sent_least_volatile_first(dummy: Dummy) -> None:
     assert contents[5:7] == ["I take the stairs.", "*The stair creaks.*"]
     assert contents[7] == MEMORIES_FRAME + "[2] The Gilded Heron: Room seven. Back stairs or front."
     assert contents[8] == "[TRUST] ##........ 20/100"
-    assert contents[9] == "Keep this one short."
-    assert len(contents) == 10
+    assert contents[9] == REMINDERS_FRAME + "End on the inner thoughts line."
+    assert contents[10] == "Keep this one short."
+    assert len(contents) == 11
+    assert list(built.spent) == [
+        "character",
+        "persona",
+        "directives",
+        "world",
+        "summaries",
+        "history",
+        "memories",
+        "trackers",
+        "reminders",
+        "instruction",
+    ]
 
 
 def test_a_layer_with_nothing_in_it_is_left_out(dummy: Dummy) -> None:

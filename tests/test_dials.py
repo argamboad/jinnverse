@@ -9,8 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lustjinn import dials
-from lustjinn.context import DIRECTIVES_FRAME, PERSONA_FRAME
-from lustjinn.dials import Kind, Lever, Pack, accept, directives, effective, label, sampler
+from lustjinn.context import DIRECTIVES_FRAME, PERSONA_FRAME, REMINDERS_FRAME
+from lustjinn.dials import (
+    Kind,
+    Lever,
+    Pack,
+    accept,
+    directives,
+    effective,
+    label,
+    reminders,
+    sampler,
+)
 from lustjinn.models import DialValue
 from lustjinn.settings import Settings
 from scripts.seed_dummy import Dummy
@@ -176,6 +186,56 @@ def test_directives_render_lines_first_then_blocks_in_pack_order() -> None:
 def test_nothing_set_renders_nothing() -> None:
     assert directives(dials.shipped(), {}) is None
     assert directives(dials.shipped(), {"inner-thoughts": "false", "veils": "[]"}) is None
+    assert reminders(dials.shipped(), {}) is None
+    assert reminders(dials.shipped(), {"inner-thoughts": "false"}) is None
+
+
+def test_inner_thoughts_is_asked_for_every_reply_not_left_to_the_models_taste() -> None:
+    """The first wording said to leave the line out when it repeated the speech; within fifty
+    replies the model left it out always (#167)."""
+    dial = dials.shipped().find("inner-thoughts")
+
+    assert dial is not None
+    assert dial.on_text is not None
+    assert "leave it out" not in dial.on_text
+    assert "every reply" in dial.on_text
+
+
+def test_a_toggle_that_is_on_is_restated_after_the_history_and_one_that_is_off_is_not() -> None:
+    pack = dials.shipped()
+
+    restated = reminders(pack, {"inner-thoughts": "true", "lust": "3"})
+
+    assert restated is not None
+    assert "inner thoughts" in restated
+    assert "Lust" not in restated  # a scale has no reminder: only a toggle can ask for one
+
+
+def test_a_reminder_is_read_from_a_toggle_only_and_trimmed() -> None:
+    pack = a_pack(
+        quiet={"kind": "toggle", "lever": "prompt", "on": "Be quiet.", "reminder": "  Hush.  "},
+        blank={"kind": "toggle", "lever": "prompt", "on": "Be blank.", "reminder": "   "},
+        scale={"kind": "scale", "lever": "prompt", "levels": five(), "reminder": "Not read."},
+    )
+
+    assert [d.reminder for d in pack.dials] == ["Hush.", None, None]
+    assert reminders(pack, {"quiet": "true", "blank": "true"}) == "Hush."
+    assert reminders(pack, {"scale": "2"}) is None
+
+
+def test_a_disabled_toggle_is_restated_by_its_default_and_not_by_a_stored_value() -> None:
+    pack = a_pack(
+        pinned={
+            "kind": "toggle",
+            "lever": "prompt",
+            "enabled": False,
+            "default": False,
+            "on": "Pinned.",
+            "reminder": "Pinned!",
+        }
+    )
+
+    assert reminders(pack, {"pinned": "true"}) is None
 
 
 def test_a_value_the_pack_cannot_read_says_nothing_rather_than_something_wrong() -> None:
@@ -391,6 +451,42 @@ async def test_a_prompt_lever_reaches_the_directives_layer_after_the_persona(
         "After each character speaks and acts"
     )
     assert sent[3] == {"role": "assistant", "content": dummy.opening}
+
+
+async def test_a_reminder_travels_after_the_history_and_only_while_the_toggle_is_on(
+    client: httpx2.AsyncClient, session: AsyncSession, model: ScriptedModel
+) -> None:
+    story = await a_played_story(session)
+    await client.put(f"/stories/{story.id}/dials/inner-thoughts", json={"value": "true"})
+    model.says("She looks up.")
+
+    await send(client, story.id, "I come in.")
+
+    sent = model.last["messages"]
+    assert sent[-1]["role"] == "system"
+    assert sent[-1]["content"].startswith(REMINDERS_FRAME)
+    assert "inner thoughts" in sent[-1]["content"]
+    assert sent[-2] == {"role": "user", "content": "I come in."}  # after the history, not before
+
+    await client.put(f"/stories/{story.id}/dials/inner-thoughts", json={"value": "false"})
+    model.says("She smiles.")
+
+    await send(client, story.id, "I sit.")
+
+    assert not any(m["content"].startswith(REMINDERS_FRAME) for m in model.last["messages"])
+
+
+async def test_a_question_out_of_character_carries_no_reminder(
+    client: httpx2.AsyncClient, session: AsyncSession, model: ScriptedModel
+) -> None:
+    """A reminder says how a reply is written; an answer is not a reply."""
+    story = await a_played_story(session)
+    await client.put(f"/stories/{story.id}/dials/inner-thoughts", json={"value": "true"})
+    model.says("She is nervous.")
+
+    await send(client, story.id, "/ask How does she feel?")
+
+    assert not any(m["content"].startswith(REMINDERS_FRAME) for m in model.last["messages"])
 
 
 async def test_a_sampler_lever_reaches_the_request_and_never_the_prompt(
