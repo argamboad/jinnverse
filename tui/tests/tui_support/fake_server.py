@@ -277,7 +277,13 @@ class FakeServer:
         return added
 
     def piece(
-        self, slot: str, name: str, text: str, voice: str = "he", short: str | None = None
+        self,
+        slot: str,
+        name: str,
+        text: str,
+        voice: str = "he",
+        short: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
         """A persona piece in the pool, as the API serves it."""
         added = {
@@ -287,6 +293,7 @@ class FakeServer:
             "name": name,
             "text": text,
             "short": short,
+            "description": description,
             "version": 1,
             "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
         }
@@ -649,7 +656,46 @@ class FakeServer:
             return httpx2.Response(201, json=made)
         if parts[1:] in (["preview"], ["build"]) and request.method == "POST":
             return self._join_a_pick(json.loads(request.content), build=parts[1] == "build")
+        found = (
+            next((p for p in self.pieces if p["id"] == parts[1]), None) if len(parts) == 2 else None
+        )
+        if found is not None and request.method == "DELETE":
+            self.pieces.remove(found)
+            return httpx2.Response(204)
+        if found is not None and request.method == "PATCH":
+            return self._save_piece(found, json.loads(request.content))
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _save_piece(self, found: dict[str, Any], body: dict[str, Any]) -> httpx2.Response:
+        if body["version"] != found["version"]:
+            return httpx2.Response(
+                409,
+                json={
+                    "detail": {
+                        "message": "This piece changed somewhere else since you opened it. "
+                        "Nothing was saved. Here is what it says now; save again to replace it.",
+                        "current": found,
+                    }
+                },
+            )
+        voice = body.get("voice", found["voice"])
+        name = body.get("name", found["name"])
+        if (voice, name.lower()) != (found["voice"], found["name"].lower()) and any(
+            (p["slot"], p["voice"], p["name"].lower()) == (found["slot"], voice, name.lower())
+            for p in self.pieces
+            if p is not found
+        ):
+            return httpx2.Response(
+                409, json={"detail": f"A {found['slot']} piece called '{name}' already exists."}
+            )
+        changed = False
+        for field in ("name", "voice", "text", "short", "description"):
+            if field in body and body[field] != found.get(field):
+                found[field] = body[field]
+                changed = True
+        if changed:
+            found["version"] += 1
+        return httpx2.Response(200, json=found)
 
     def _join_a_pick(self, body: dict[str, Any], *, build: bool) -> httpx2.Response:
         def refuse(detail: str) -> httpx2.Response:

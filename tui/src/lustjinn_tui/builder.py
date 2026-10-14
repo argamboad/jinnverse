@@ -64,6 +64,7 @@ class PersonaBuilderScreen(View):
         Hint("←→", "Slots/pieces"),
         Hint("Space", "Pick"),
         Hint("N", "New piece"),
+        Hint("E", "Edit piece"),
         Hint("V", "Voice"),
         Hint("R", "Random"),
         Hint("Ctrl+S", "Make it"),
@@ -80,6 +81,7 @@ class PersonaBuilderScreen(View):
         Binding("right,tab", "pane('pieces')", "Pieces", show=False),
         Binding("space,enter", "pick", "Pick", show=False),
         Binding("n,N", "new_piece", "New piece", show=False),
+        Binding("e,E", "edit_piece", "Edit the piece", show=False),
         Binding("v,V", "voice", "Voice", show=False),
         Binding("r,R", "random", "Random", show=False),
         Binding("pageup", "page(-1)", "Read up", show=False),
@@ -144,6 +146,11 @@ class PersonaBuilderScreen(View):
         yield Hairline()
         with Vertical(id="preview"), VerticalScroll():
             yield Static("", id="preview-text")
+
+    def on_screen_resume(self) -> None:
+        super().on_screen_resume()
+        if self.slots:  # back from the library, where a piece may have changed
+            self.run_worker(self._load, exclusive=True)
 
     def on_mount(self) -> None:
         self.query_one("#field", Input).display = False
@@ -372,6 +379,17 @@ class PersonaBuilderScreen(View):
             self._ask("full", "the full name, as it opens the persona")
         else:
             self._ask("label", f"a name for this {slot.label.lower()} piece, for the picker")
+
+    def action_edit_piece(self) -> None:
+        """The piece under the cursor, in the library's Pieces shelf; Esc comes back here."""
+        from lustjinn_tui.library import LibraryScreen  # here: the library opens this screen
+
+        piece = self.piece
+        if self._mode != "browse" or self.pane != "pieces" or piece is None:
+            if self._mode == "browse":
+                self.status("Move to a piece first (→), then E edits it.", Kind.WARNING)
+            return
+        self.lustjinn.push_screen(LibraryScreen("pieces", select=piece.id))
 
     @on(Input.Submitted, "#field")
     def _answered(self, event: Input.Submitted) -> None:

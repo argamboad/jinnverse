@@ -158,10 +158,12 @@ SECTIONS: Final[tuple[Section, ...]] = (
     Section(
         "Library",
         (
-            Row("← →  /  Tab", "Shelf: characters, personas, snippets"),
+            Row("← →  /  Tab", "Shelf: characters, personas, snippets, pieces"),
             Row("Enter  /  O", "Edit the text / a character's opening, in your editor"),
+            Row("E", "Describe: a short note shown in lists, never sent to the model"),
             Row("N  /  F2", "New entry / rename"),
-            Row("D", "Make the persona the default (again to clear)"),
+            Row("D  /  B", "Make the persona the default (again to clear) / build one from pieces"),
+            Row("V  /  S", "A piece's voice / a name piece's short form"),
             Row("Del", "Remove, after confirming"),
             Row("PgUp PgDn", "Read the text"),
         ),
