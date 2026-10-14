@@ -122,6 +122,9 @@ class LibraryEntry:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    description: Mapped[str | None] = mapped_column(String(200))
+    """A short note for the owner, shown in lists. Never part of a prompt: nothing that builds one
+    reads it."""
 
     @declared_attr.directive
     @classmethod
@@ -155,6 +158,7 @@ class LibraryHistory(Base):
     name: Mapped[str] = mapped_column(String(200))
     text: Mapped[str] = mapped_column(Text)
     opening: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(String(200))
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

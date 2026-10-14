@@ -29,6 +29,7 @@ from lustjinn.models import (
     LibraryHistory,
     LibraryKind,
     Persona,
+    PersonaPiece,
     Snippet,
     Story,
 )
@@ -90,6 +91,19 @@ OnShelf = Annotated[Shelf[Any], Depends(shelf_named)]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Body = Annotated[str, StringConstraints(min_length=1)]
 
+DESCRIPTION_LENGTH = 200
+
+
+def check_description(description: str | None) -> str | None:
+    """A description as it is kept: trimmed, and blank is none. Longer than the limit is refused:
+    it is a note for a list, not a second text."""
+    if description is None:
+        return None
+    description = description.strip()
+    if len(description) > DESCRIPTION_LENGTH:
+        raise ValueError(f"A description is at most {DESCRIPTION_LENGTH} characters.")
+    return description or None
+
 
 def check_name(name: str) -> str:
     if RESERVED_IN_NAMES & set(name) or any(c.isprintable() is False for c in name):
@@ -102,11 +116,18 @@ class NewEntry(BaseModel):
     text: Body
     opening: str | None = None
     """Characters only: the scene a story starts on. Blank is the same as none."""
+    description: str | None = None
+    """A short note for lists, never part of a prompt. Blank is the same as none."""
 
     @field_validator("name")
     @classmethod
     def _usable(cls, name: str) -> str:
         return check_name(name)
+
+    @field_validator("description")
+    @classmethod
+    def _short(cls, description: str | None) -> str | None:
+        return check_description(description)
 
 
 class EntryChanges(BaseModel):
@@ -118,11 +139,18 @@ class EntryChanges(BaseModel):
     name: Name | None = None
     text: Body | None = None
     opening: str | None = None
+    description: str | None = None
+    """Given as null or blank, it clears the description; left out, it is not touched."""
 
     @field_validator("name")
     @classmethod
     def _usable(cls, name: str | None) -> str | None:
         return None if name is None else check_name(name)
+
+    @field_validator("description")
+    @classmethod
+    def _short(cls, description: str | None) -> str | None:
+        return check_description(description)
 
 
 class EntrySummary(BaseModel):
@@ -134,6 +162,8 @@ class EntrySummary(BaseModel):
     version: int
     updated_at: datetime
     preview: str
+    description: str | None
+    """The owner's short note; a list shows it in place of the preview when there is one."""
 
 
 class EntryOut(EntrySummary):
@@ -152,6 +182,7 @@ class HistoryOut(BaseModel):
     name: str
     text: str
     opening: str | None
+    description: str | None
     saved_at: datetime
 
 
@@ -172,6 +203,7 @@ def _summary(shelf: Shelf[Any], entry: LibraryEntry) -> EntrySummary:
         version=entry.version,
         updated_at=entry.updated_at,
         preview=shelf.text_of(entry)[:PREVIEW_LENGTH],
+        description=entry.description,
     )
 
 
@@ -265,6 +297,7 @@ def _remembered(shelf: Shelf[Any], entry: LibraryEntry, version: int) -> Library
         name=entry.name,
         text=shelf.text_of(entry),
         opening=entry.opening if isinstance(entry, Character) else None,
+        description=entry.description,
     )
 
 
@@ -309,6 +342,47 @@ async def set_defaults(body: SetDefaults, session: Session) -> Defaults:
     return await read_defaults(session)
 
 
+class Hidden(BaseModel):
+    characters: int
+    personas: int
+    snippets: int
+
+
+class Counts(BaseModel):
+    """How many entries each shelf holds, as its list shows them."""
+
+    characters: int
+    personas: int
+    snippets: int
+    pieces: int
+    hidden: Hidden
+    """Entries whose name starts with `_` are kept but not listed, and so not counted above."""
+
+
+@router.get("/counts")
+async def read_counts(session: Session) -> Counts:
+    """One call for every shelf, so a screen showing one can badge all of them. The persona
+    pieces are counted too; they have no hidden names, a list of them shows every one."""
+    shown: dict[str, int] = {}
+    hidden: dict[str, int] = {}
+    for slug, model in (
+        ("characters", Character),
+        ("personas", Persona),
+        ("snippets", Snippet),
+    ):
+        total = await session.scalar(select(func.count()).select_from(model)) or 0
+        underscored = (
+            await session.scalar(
+                select(func.count()).where(model.name.startswith("_", autoescape=True))
+            )
+            or 0
+        )
+        shown[slug] = total - underscored
+        hidden[slug] = underscored
+    pieces = await session.scalar(select(func.count()).select_from(PersonaPiece)) or 0
+    return Counts(**shown, pieces=pieces, hidden=Hidden(**hidden))
+
+
 @router.get("/{shelf}")
 async def list_entries(
     shelf: OnShelf, session: Session, hidden: bool = False
@@ -334,7 +408,7 @@ async def create_entry(shelf: OnShelf, new: NewEntry, session: Session) -> Entry
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"A {shelf.kind} has no opening."
         )
-    entry = await add_entry(session, shelf, new.name, new.text, new.opening)
+    entry = await add_entry(session, shelf, new.name, new.text, new.opening, new.description)
     return _out(shelf, entry, [])
 
 
@@ -344,6 +418,7 @@ async def add_entry(
     name: str,
     text: str,
     opening: str | None = None,
+    description: str | None = None,
 ) -> LibraryEntry:
     """Adds an entry and its first history row. A name already on the shelf, in any case, is
     refused with 409: adding never becomes replacing."""
@@ -354,6 +429,7 @@ async def add_entry(
         )
     entry: LibraryEntry = shelf.model(name=name)
     shelf.set_text(entry, text)
+    entry.description = description
     if isinstance(entry, Character):
         entry.opening = _opening(opening)
     session.add(entry)
@@ -405,6 +481,8 @@ async def save_entry(
                 status.HTTP_422_UNPROCESSABLE_CONTENT, f"A {shelf.kind} has no opening."
             )
         entry.opening = _opening(changes.opening)
+    if "description" in changes.model_fields_set:
+        entry.description = changes.description
     if session.is_modified(entry):
         session.add(_remembered(shelf, entry, version=entry.version + 1))
         try:
