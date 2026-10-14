@@ -86,6 +86,38 @@ Three constants, each a lesson airp paid for:
 - **`AT_MOST_PER_SUMMARY = 40`.** One call over ninety-nine messages came back as `##`. A model
   asked to compress too much compresses it to nothing.
 
+### The second chance: turns the builder had to drop
+
+The summariser plans from an **estimate** made before the facts and the recalled turns are known:
+the fixed layers, the reply's ceiling, 200 tokens of slack and a guess at the room retrieval will
+take. When the real prompt comes out larger, the builder (chapter 5) drops the oldest turns that
+no summary covers, and for that one reply those turns are *nowhere*: not in a summary, not in the
+prompt, not in the facts (extraction runs on the same batch), and not recallable (only summarised
+turns are embedded). A real story showed it on 55% of its replies in one day: in one case a
+meeting, a phone number and a plan were missing for seven replies, until the next summary covered
+them. Part of the cause was that the world layer, 3,200 tokens of facts, was not in the estimate
+at all.
+
+Two changes, both in `compose`:
+
+- **The reserve now counts the world layer**, read before the summariser plans.
+- **The prompt is built, and if it dropped turns, those are summarised and it is built again**
+  (`dropped_to_compress`), up to `MOST_SUMMARIES_A_TURN = 3` summaries in all. The dropped turns
+  were not in the prompt, so summarising them frees nothing, and the summary's own text would push
+  the oldest turns out in turn; so the batch also takes enough of the turns after them to pay for
+  a summary of the largest size. After that every turn is either in the prompt or inside a summary
+  that is.
+
+The failure rule is unchanged: if the second summary fails, the turns go whole and the budget is
+set aside. And the cost is a model call the reader waits for, which is why the loop has a ceiling
+and why this is the exception, not the plan.
+
+::: dotnet
+The shape is a retry loop with a postcondition: build, check the result for what must not
+happen (a silent drop), repair, build again. In .NET it reads like a Polly policy that retries on
+a result predicate, with the repair done in its retry callback.
+:::
+
 ### What is asked, and what is accepted
 
 The stretch is rendered as `Name: text` lines — the character by name, **the reader by their

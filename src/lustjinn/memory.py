@@ -43,6 +43,9 @@ AT_MOST_PER_SUMMARY = 40
 LEAST_COMPRESSION = 60
 """A summary shorter than one sixtieth of what it replaces cannot have kept it: refused."""
 LEAST_SUMMARY_TOKENS = 20
+MOST_SUMMARIES_A_TURN = 3
+"""Summaries one turn may wait for: the planned batch, then batches for the turns the built prompt
+still could not hold. Each is a model call the reader waits for."""
 LONGEST_QUERY = 500
 """A reader's turn longer than this is a document they pasted, not a question put to the memory,
 and it is not used as a query. In the story that showed it, 97% of the reader's turns were
@@ -108,10 +111,25 @@ def batch_to_compress(recent: Sequence[Message], allowance: int) -> list[Message
     builder's to drop from this prompt (the newest never), not the summariser's to compress.
     """
     overflow = overflowing(recent, allowance)
-    if overflow <= 0:
-        return []
-    size = min(max(overflow, WORTH_A_CALL), len(recent) - ALWAYS_WHOLE, AT_MOST_PER_SUMMARY)
+    return oldest_to_compress(recent, overflow) if overflow > 0 else []
+
+
+def oldest_to_compress(recent: Sequence[Message], count: int) -> list[Message]:
+    """The oldest `count` turns, widened and narrowed by the rules of a batch."""
+    size = min(max(count, WORTH_A_CALL), len(recent) - ALWAYS_WHOLE, AT_MOST_PER_SUMMARY)
     return list(recent[:size]) if size > 0 else []
+
+
+def dropped_to_compress(recent: Sequence[Message], dropped: int) -> list[Message]:
+    """The turns the builder had to drop, and enough of the turns after them to pay for the
+    summary that replaces them: the dropped ones were not in the prompt, so summarising them
+    frees nothing, and the summary's own text would push the oldest turns out in turn."""
+    size = dropped
+    spare = 0
+    while size < len(recent) and spare < SUMMARY_MAX_TOKENS:
+        spare += tokens.for_message(recent[size].text)
+        size += 1
+    return oldest_to_compress(recent, size)
 
 
 def credible(summary: str, source: Sequence[Message]) -> bool:
@@ -337,8 +355,10 @@ async def compose(
 
     The turns a summary already covers are not sent; the summary is. When the rest no longer
     fits, the oldest of them are compressed first — one summary per call — and the prompt is
-    built again from what remains. If the summariser fails, the turns go whole and the budget is
-    set aside: over budget rather than discard.
+    built again from what remains. If the built prompt still has to drop turns (the estimate
+    that decided what to compress was short), those are compressed too, up to
+    `MOST_SUMMARIES_A_TURN` summaries in all. If the summariser fails, the turns go whole and the
+    budget is set aside: over budget rather than discard.
     """
     from lustjinn import facts  # here, not at the top: facts imports memory.transcript
 
@@ -365,40 +385,72 @@ async def compose(
 
     summarised: Summary | None = None
     failed = False
-    reserve = _reserve(layers(()), settings, covered, recent, reply_tokens)
+    live = await facts.live_facts(session, story.id)
+    reserve = _reserve(layers((), world=facts.world(live)), settings, covered, recent, reply_tokens)
     allowance = max(0, settings.context_budget - reserve)
     batch = batch_to_compress(recent, allowance)
-    if batch:
-        try:
-            summarised = await summarise(session, openrouter, settings, story, persona, batch)
-        except ModelError as error:
-            log.warning("summariser failed, sending the turns whole: %s", error)
-            failed = True
-        if summarised is not None:
-            summaries.append(summarised)
-            covered = summarised.to_sequence
-            recent = [turn for turn in recent if turn.sequence > covered]
-            # The same stretch, read once more for what it left true. Its failure is logged
-            # and nothing else: the summary stands, and the facts can be made again.
-            try:
-                await facts.extract(session, openrouter, settings, story, persona, batch)
-            except ModelError as error:
-                log.warning("fact extraction failed: %s", error)
-        else:
-            failed = True
+    attempt = 0
+    while True:
+        attempt += 1
+        if batch:
+            summary = await _compress(session, openrouter, settings, story, persona, batch)
+            if summary is None:
+                failed = True
+            else:
+                summaries.append(summary)
+                summarised = summary
+                covered = summary.to_sequence
+                recent = [turn for turn in recent if turn.sequence > covered]
+                # Read after the extraction, so a fact the stretch just established reaches
+                # this turn.
+                live = await facts.live_facts(session, story.id)
 
-    recalled = (
-        await memories_for(session, openrouter, settings, story, covered, recent)
-        if retrieval
-        else []
-    )
-    # Read after the extraction, so a fact the stretch just established reaches this turn.
-    world = facts.world(await facts.live_facts(session, story.id))
-    built = build(
-        layers(recent, recalled, world),
-        budget=None if failed else settings.context_budget,
-        recall_percent=settings.recall_percent,
-    )
+        recalled = (
+            await memories_for(session, openrouter, settings, story, covered, recent)
+            if retrieval
+            else []
+        )
+        built = build(
+            layers(recent, recalled, facts.world(live)),
+            budget=None if failed else settings.context_budget,
+            recall_percent=settings.recall_percent,
+        )
+        # The reserve is an estimate made before the facts and the recalled turns are known.
+        # When the real prompt is larger, the builder drops the oldest turns no summary covers:
+        # for this reply they would be nowhere. Those are compressed next, and the prompt built
+        # again, so every turn is either in the prompt or inside a summary that is.
+        sent = built.spent.get("history")
+        batch = dropped_to_compress(recent, sent.dropped) if sent and sent.dropped else []
+        if failed or not batch or attempt >= MOST_SUMMARIES_A_TURN:
+            break
     return Composed(
         built.messages, built.spent, built.budget, summarised=summarised, compression_failed=failed
     )
+
+
+async def _compress(
+    session: AsyncSession,
+    openrouter: OpenRouter,
+    settings: Settings,
+    story: Story,
+    persona: Persona | None,
+    batch: Sequence[Message],
+) -> Summary | None:
+    """One summary of `batch`, then the same stretch read once more for what it left true. None
+    when the summariser failed or was refused: the turns then go whole."""
+    from lustjinn import facts  # here, not at the top: facts imports memory.transcript
+
+    try:
+        summary = await summarise(session, openrouter, settings, story, persona, batch)
+    except ModelError as error:
+        log.warning("summariser failed, sending the turns whole: %s", error)
+        return None
+    if summary is None:
+        return None
+    # The extraction's failure is logged and nothing else: the summary stands, and the facts can
+    # be made again.
+    try:
+        await facts.extract(session, openrouter, settings, story, persona, batch)
+    except ModelError as error:
+        log.warning("fact extraction failed: %s", error)
+    return summary

@@ -13,8 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lustjinn import memory, tokens
-from lustjinn.memory import SUMMARY_INSTRUCTION, batch_to_compress, credible
-from lustjinn.models import Message, Role, SpendKind, Story, Summary
+from lustjinn.memory import (
+    SUMMARY_INSTRUCTION,
+    batch_to_compress,
+    credible,
+    dropped_to_compress,
+)
+from lustjinn.models import Fact, Message, Role, SpendKind, Story, Summary
 from lustjinn.settings import Settings
 from scripts.seed_dummy import Dummy
 from tests.factories import a_message, a_story
@@ -321,6 +326,118 @@ async def test_a_question_can_trigger_the_summary_a_turn_would_have(
     assert len(await summaries(session, story)) == 1
 
 
+def an_estimate_that_is_too_generous(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The reserve the summariser plans with, taken as zero: whatever makes the estimate short
+    (facts and recalled turns it cannot know yet), the planned batch is empty and the builder is
+    left to drop turns."""
+
+    def nothing(*args: object, **kwargs: object) -> int:
+        return 0
+
+    monkeypatch.setattr(memory, "_reserve", nothing)
+
+
+async def test_turns_the_builder_would_drop_are_summarised_before_the_reply(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Turns dropped from a prompt with no summary covering them are nowhere for that reply (#152):
+    a stretch of a real story went missing for seven replies."""
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    an_estimate_that_is_too_generous(monkeypatch)
+    story = await a_long_story(session, 38)
+    model.summarises("Rowan arrived and took a room.").extracts().says("Hm.")
+
+    streamed = await send(client, story.id, "I come in.")
+
+    [summary] = await summaries(session, story)
+    assert summary.from_sequence == 1
+    assert summary.message_count > memory.WORTH_A_CALL  # the dropped turns, and some to pay for it
+    sent = prompt_texts(model)
+    assert any(text.startswith("Rowan arrived and took a room.") for text in sent)
+    assert not any("Turn 2." in text for text in sent)  # inside the summary, not sent raw
+    assert "I come in." in sent
+    assert streamed.done["reply"]["text"] == "Hm."
+    reply = (
+        await session.scalars(
+            select(Message)
+            .where(Message.story_id == story.id, Message.role == Role.ASSISTANT)
+            .order_by(Message.sequence.desc())
+        )
+    ).first()
+    assert reply is not None
+    assert reply.context_audit is not None
+    assert "dropped" not in reply.context_audit  # nothing left out unsummarised
+    assert [row.kind for row in await ledger(session, story)] == [
+        SpendKind.SUMMARY,
+        SpendKind.FACTS,
+        SpendKind.REPLY,
+    ]
+
+
+async def test_a_summariser_that_fails_on_the_second_chance_still_sends_the_turns_whole(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    an_estimate_that_is_too_generous(monkeypatch)
+    story = await a_long_story(session, 38)
+    model.fails().fails().says("Hm.")
+
+    streamed = await send(client, story.id, "I come in.")
+
+    assert streamed.done["reply"]["text"] == "Hm."
+    assert await summaries(session, story) == []
+    assert any("Turn 2." in text for text in prompt_texts(model))  # over budget rather than discard
+
+
+async def test_the_facts_are_counted_in_what_the_summariser_plans_for(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+) -> None:
+    """The world layer was left out of the reserve: the planned batch came up short, the builder
+    dropped turns, and a second summary was needed for what the first should have covered."""
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    story = await a_long_story(session, 38)
+    for i in range(8):
+        session.add(
+            Fact(
+                story_id=story.id,
+                subject=f"Guest {i}",
+                text="keeps a ledger of every debt owed on the third floor, and settles none. " * 3,
+                valid_from_sequence=1,
+                pinned=True,
+            )
+        )
+    await session.commit()
+    model.summarises("Rowan arrived.").extracts().says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    assert len(await summaries(session, story)) == 1
+    reply = (
+        await session.scalars(
+            select(Message)
+            .where(Message.story_id == story.id, Message.role == Role.ASSISTANT)
+            .order_by(Message.sequence.desc())
+        )
+    ).first()
+    assert reply is not None
+    assert reply.context_audit is not None
+    assert "dropped" not in reply.context_audit
+
+
 # --- the batch rules, as pure functions ------------------------------------------------------
 
 
@@ -370,6 +487,20 @@ def test_the_newest_six_turns_are_never_compressed_even_when_the_overflow_reache
 def test_nothing_is_compressed_when_only_the_newest_six_remain() -> None:
     assert batch_to_compress(turns(6), allowance=0) == []
     assert batch_to_compress(turns(4), allowance=0) == []
+
+
+def test_dropped_turns_are_summarised_with_enough_of_the_next_to_pay_for_the_summary() -> None:
+    one_turn = tokens.for_message(FILLER)
+    spare_turns = -(-memory.SUMMARY_MAX_TOKENS // one_turn)  # the turns that cover its size
+
+    batch = dropped_to_compress(turns(60), dropped=12)
+
+    assert [t.sequence for t in batch] == list(range(1, 12 + spare_turns + 1))
+
+
+def test_dropped_turns_never_take_the_newest_six_or_more_than_a_summary_can_carry() -> None:
+    assert len(dropped_to_compress(turns(14), dropped=12)) == 14 - memory.ALWAYS_WHOLE
+    assert len(dropped_to_compress(turns(200), dropped=90)) == memory.AT_MOST_PER_SUMMARY
 
 
 def test_a_summary_must_account_for_what_it_replaces() -> None:
