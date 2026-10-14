@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "The shipped dial pack, ported from airp. A scale has exactly five levels, read by index. A prompt lever puts the chosen text in the directives layer; a sampler lever sets the API parameter named in 'maps' and injects nothing; 'both' does one of each per level. A disabled dial is pinned to its default, not switched off. A null default injects nothing. The text shown on screen is the exact text the model receives, and every prompt-lever sentence rides every prompt of every story that sets it: keep wording terse.",
+  "about": "The shipped dial pack, ported from airp. A scale has exactly five levels, read by index. A prompt lever puts the chosen text in the directives layer; a sampler lever sets the API parameter named in 'maps' and injects nothing; 'both' does one of each per level. A disabled dial is pinned to its default, not switched off. A null default injects nothing. The text shown on screen is the exact text the model receives, and every prompt-lever sentence rides every prompt of every story that sets it: keep wording terse. A toggle may also carry a 'reminder': one short line sent again after the history while it is on, for a rule a long chat teaches the model to drop.",
   "dials": {
     "lust": {
       "kind": "scale",
@@ -56,7 +56,8 @@
       "default": false,
       "title": "Inner thoughts",
       "help": "Each character adds one line of what they did NOT say, after their turn — the one thing a scene with a model cannot give you any other way. Never written for you.",
-      "on": "After each character speaks and acts, give one line of what they did not say, in this shape:\n\n>NAME's inner thoughts: what they are actually thinking\n\nOne line, first person, and never for the user. It is for what the character is keeping back — if it only repeats what they said out loud, leave it out."
+      "on": "After each character speaks and acts, give one line of what they did not say, in this shape:\n\n>NAME's inner thoughts: what they are actually thinking\n\nOne line, first person, and never for the user. It is for what the character is keeping back, so it is never a copy of what they said out loud. Every character who speaks or acts in a reply gets one, every reply.",
+      "reminder": "Close each character's turn with their one-line >NAME's inner thoughts: …, never for the user."
     },
     "pacing": {
       "kind": "scale",

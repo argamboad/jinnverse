@@ -86,7 +86,7 @@ async def rebuild(
     # Composed as a turn would be — the dials' layer, the meters — so the batches fall where
     # playing would have put them.
     persona = await persona_of(session, story)
-    directives, knobs = await dials.of_story(session, story.id)
+    directives, reminders, knobs = await dials.of_story(session, story.id)
     ceiling = knobs.max_tokens or settings.max_tokens
     meters = trackers.render(await trackers.of(session, story.id))
     history = list(
@@ -108,6 +108,7 @@ async def rebuild(
             history,
             directives=directives,
             trackers=meters,
+            reminders=reminders,
             reply_tokens=ceiling,
             retrieval=False,  # nothing is asked, so there is nothing to recall for
         )
