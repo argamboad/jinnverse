@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import { api, ApiError, type Defaults, type Entry } from '#lib/api.ts';
@@ -25,6 +26,9 @@
 				api.defaults()
 			]);
 			if (characters.length === 1) characterId = characters[0].id;
+			// Back from building a persona: it is the one picked.
+			const built = page.url.searchParams.get('persona');
+			if (built && personas.some((p) => p.id === built)) personaId = built;
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -108,6 +112,9 @@
 					{/each}
 				</select>
 			</label>
+			<a class="build" href="/library/personas/from-pieces?then=new"
+				>Build a new persona from pieces</a
+			>
 		</section>
 		<section>
 			<h2>Call it</h2>
@@ -201,6 +208,14 @@
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+	}
+	.build {
+		justify-self: start;
+		font-size: 0.85rem;
+		font-weight: 600;
+		text-decoration: none;
+		color: var(--gold-text);
+		padding: 6px 0;
 	}
 	.foot {
 		display: grid;

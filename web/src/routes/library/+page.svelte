@@ -77,6 +77,9 @@
 <div class="screen">
 	<AppBar title="Library" mark>
 		{#snippet actions()}
+			{#if shelf === 'personas'}
+				<a class="btn ghost small" href="/library/personas/from-pieces">Build from pieces</a>
+			{/if}
 			<a class="btn primary small" href="/library/{shelf}/new">New {current.one}</a>
 		{/snippet}
 	</AppBar>
