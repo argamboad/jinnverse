@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DESCRIPTION_LENGTH, blurb, hiddenCount, remaining, sentDescription } from './library.ts';
+import {
+	DESCRIPTION_LENGTH,
+	blurb,
+	hiddenCount,
+	pieceBlurb,
+	remaining,
+	sentDescription
+} from './library.ts';
 
 describe('what a list shows under a name', () => {
 	it('is the description when there is one', () => {
@@ -15,6 +22,23 @@ describe('what a list shows under a name', () => {
 			note: false
 		});
 		expect(blurb({ description: '   ', preview: 'You are Elena…' }).note).toBe(false);
+	});
+});
+
+describe('what a list shows under a piece', () => {
+	it('is its description, or the start of its text', () => {
+		expect(pieceBlurb({ description: 'The corgi', text: 'He has a corgi.' })).toEqual({
+			text: 'The corgi',
+			note: true
+		});
+		expect(pieceBlurb({ description: null, text: 'He has a corgi.' })).toEqual({
+			text: 'He has a corgi.',
+			note: false
+		});
+	});
+
+	it('cuts a long text to what a description may hold', () => {
+		expect(pieceBlurb({ description: null, text: 'x'.repeat(500) }).text).toHaveLength(200);
 	});
 });
 

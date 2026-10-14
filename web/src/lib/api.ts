@@ -107,7 +107,10 @@ export interface Piece {
 	text: string;
 	/** A name piece only: the short form the text uses after the first mention. */
 	short: string | null;
+	/** The owner's short note; the pool shows it in place of the start of the text. */
+	description: string | null;
 	version: number;
+	updated_at: string;
 }
 
 /** The persona a pick would make, and the library name it would get (null: nothing says). */
@@ -443,7 +446,21 @@ export const api = {
 		name: string;
 		text: string;
 		short?: string | null;
+		description?: string | null;
 	}) => json<Piece>('POST', '/persona-pieces', body),
+	/** A save over `version`; a stale one is refused with 409 and the piece as it is now. */
+	savePiece: (
+		id: string,
+		body: {
+			version: number;
+			name?: string;
+			voice?: Voice;
+			text?: string;
+			short?: string | null;
+			description?: string | null;
+		}
+	) => json<Piece>('PATCH', `/persona-pieces/${id}`, body),
+	deletePiece: (id: string) => call('DELETE', `/persona-pieces/${id}`).then(() => undefined),
 	previewPersona: (voice: Voice, pieces: Picks, name?: string | null) =>
 		json<PersonaPreview>('POST', '/persona-pieces/preview', { voice, pieces, name: name || null }),
 	buildPersona: (voice: Voice, pieces: Picks, name?: string | null) =>

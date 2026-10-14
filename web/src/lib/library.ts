@@ -1,7 +1,7 @@
 /** The library's small rules that need no screen: the note a list shows, the count beside "show
  * hidden", and how much of a description is left. */
 
-import type { Entry } from './api.ts';
+import type { Entry, Piece } from './api.ts';
 
 /** The most a description may hold; the API refuses more. */
 export const DESCRIPTION_LENGTH = 200;
@@ -14,6 +14,17 @@ export function blurb(entry: Pick<Entry, 'description' | 'preview'>): {
 } {
 	const note = entry.description?.trim();
 	return note ? { text: note, note: true } : { text: entry.preview, note: false };
+}
+
+/** The same for a piece of a persona: its description, or the start of its text. */
+export function pieceBlurb(piece: Pick<Piece, 'description' | 'text'>): {
+	text: string;
+	note: boolean;
+} {
+	return blurb({
+		description: piece.description,
+		preview: piece.text.slice(0, DESCRIPTION_LENGTH)
+	});
 }
 
 /** The count of hidden `_name` entries, as it reads beside the toggle; nothing when there are none. */
