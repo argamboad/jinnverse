@@ -155,6 +155,43 @@ class Defaults(BaseModel):
     default_persona_name: str | None = None
 
 
+Voice = Literal["he", "she", "they", "any"]
+
+
+class Slot(BaseModel):
+    """One of the fixed places a persona is built from, in the order a builder shows them."""
+
+    key: str
+    label: str
+    paragraph: int | None = None
+    """Which paragraph it writes; None for the name, which is written into the others."""
+
+
+class Piece(BaseModel):
+    """One piece of a persona: a slot, a voice, a name for the picker and the text."""
+
+    id: uuid.UUID
+    slot: str
+    voice: Voice
+    name: str
+    text: str
+    short: str | None = None
+    version: int = 1
+
+
+class Preview(BaseModel):
+    """The persona a pick would make, and the library name it would get (None: nothing says)."""
+
+    name: str | None = None
+    text: str
+
+
+class Built(BaseModel):
+    id: uuid.UUID
+    name: str
+    text: str
+
+
 class Cut(BaseModel):
     """What deleting from a message left behind."""
 
@@ -383,6 +420,8 @@ Event = Delta | TurnDone | AsideDone | Said | Failed
 
 _stories = TypeAdapter(list[Story])
 _entries = TypeAdapter(list[Entry])
+_slots = TypeAdapter(list[Slot])
+_pieces = TypeAdapter(list[Piece])
 _facts = TypeAdapter(list[Fact])
 _dials = TypeAdapter(list[Dial])
 _story_dials = TypeAdapter(list[StoryDial])
@@ -646,6 +685,54 @@ class Api:
 
     async def delete_entry(self, shelf: Shelf, entry_id: uuid.UUID) -> None:
         await self._request("DELETE", f"/library/{shelf}/{entry_id}")
+
+    # -- persona pieces -------------------------------------------------------------------------
+
+    async def piece_slots(self) -> list[Slot]:
+        return _slots.validate_python(await self._request("GET", "/persona-pieces/slots"))
+
+    async def pieces(self, *, voice: Voice | None = None) -> list[Piece]:
+        """The pool; with a ``voice``, the pieces a persona of that voice may use."""
+        params = {"voice": voice} if voice is not None else None
+        return _pieces.validate_python(await self._request("GET", "/persona-pieces", params=params))
+
+    async def create_piece(
+        self, slot: str, voice: Voice, name: str, text: str, short: str | None = None
+    ) -> Piece:
+        body: dict[str, object] = {"slot": slot, "voice": voice, "name": name, "text": text}
+        if short is not None:
+            body["short"] = short
+        return Piece.model_validate(await self._request("POST", "/persona-pieces", json=body))
+
+    @staticmethod
+    def _pick(voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "voice": voice,
+            "pieces": {slot: [str(i) for i in ids] for slot, ids in picks.items() if ids},
+        }
+        if name:
+            body["name"] = name
+        return body
+
+    async def preview_persona(
+        self, voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None = None
+    ) -> Preview:
+        """The persona a pick would make; saves nothing."""
+        return Preview.model_validate(
+            await self._request(
+                "POST", "/persona-pieces/preview", json=self._pick(voice, picks, name)
+            )
+        )
+
+    async def build_persona(
+        self, voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None = None
+    ) -> Built:
+        """Makes an ordinary persona in the library from a pick."""
+        return Built.model_validate(
+            await self._request(
+                "POST", "/persona-pieces/build", json=self._pick(voice, picks, name)
+            )
+        )
 
     # -- dials ----------------------------------------------------------------------------------
 

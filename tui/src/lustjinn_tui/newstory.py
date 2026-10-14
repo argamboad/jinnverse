@@ -31,7 +31,8 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
-from lustjinn_tui.api import Defaults, Entry, Story
+from lustjinn_tui.api import Built, Defaults, Entry, Story
+from lustjinn_tui.builder import PersonaBuilderScreen
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.conversation import ConversationScreen
 from lustjinn_tui.hairline import Hairline
@@ -169,12 +170,14 @@ class NewStoryScreen(View):
         Hint("Tab", "Next field"),
         Hint("←→", "Pick"),
         Hint("PgUp/PgDn", "Read the panel"),
+        Hint("Ctrl+B", "Build a persona"),
         Hint("Ctrl+S", "Create"),
         Hint("Esc", "Cancel"),
     )
     AUTO_FOCUS: ClassVar[str | None] = "#name"
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+s,ctrl+enter", "create", "Create", show=False, priority=True),
+        Binding("ctrl+b", "build", "Build a persona", show=False, priority=True),
         Binding("down", "app.focus_next", "Next field", show=False),
         Binding("up", "app.focus_previous", "Previous field", show=False),
         Binding("pageup", "page(-1)", "Read up", show=False),
@@ -327,6 +330,22 @@ class NewStoryScreen(View):
                 throw_away,
             )
         )
+
+    def action_build(self) -> None:
+        """Make a persona from pieces, then come back with it picked."""
+
+        async def built(persona: Built) -> None:
+            await self._read_library()
+            names = [p.name for p in self._personas]
+            if persona.name in names:
+                picker = self.picker("persona")
+                picker.index = names.index(persona.name) + 1  # the first choice is the default
+                picker.refresh()
+                self._touched_pick = True
+                await self._describe_persona()
+            self.status(f"Built '{persona.name}' and picked it.", Kind.SUCCESS)
+
+        self.lustjinn.push_screen(PersonaBuilderScreen(built))
 
     def action_create(self) -> None:
         self.run_worker(self._create, exclusive=True)
