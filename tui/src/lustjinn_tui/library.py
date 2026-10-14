@@ -27,7 +27,16 @@ from textual.content import Content
 from textual.widgets import Input, Static
 
 from lustjinn_tui import skeletons
-from lustjinn_tui.api import ApiError, ConflictError, Entry, EntryFull, Shelf, UnreachableError
+from lustjinn_tui.api import (
+    ApiError,
+    Built,
+    ConflictError,
+    Entry,
+    EntryFull,
+    Shelf,
+    UnreachableError,
+)
+from lustjinn_tui.builder import PersonaBuilderScreen
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.editor import editor_name
 from lustjinn_tui.hairline import Hairline
@@ -117,6 +126,7 @@ class LibraryScreen(View):
         Hint("O", "Opening"),
         Hint("F2", "Rename"),
         Hint("D", "Default persona"),
+        Hint("B", "Build persona"),
         Hint("Del", "Remove"),
         Hint("PgUp/PgDn", "Read"),
         Hint("Esc", "Back"),
@@ -141,6 +151,7 @@ class LibraryScreen(View):
         Binding("o,O", "opening", "Opening", show=False),
         Binding("f2", "rename", "Rename", show=False),
         Binding("d,D", "default", "Default persona", show=False),
+        Binding("b,B", "build", "Build a persona", show=False),
         Binding("delete", "remove", "Remove", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
     ]
@@ -192,6 +203,7 @@ class LibraryScreen(View):
             PaletteCommand(
                 "Default persona", "make the selected persona the default", self.action_default
             ),
+            PaletteCommand("Build a persona", "from pieces", self.action_build),
             PaletteCommand("Remove the entry", "asks first", self.action_remove),
         ]
 
@@ -506,6 +518,22 @@ class LibraryScreen(View):
                 f"{entry.name} is the default persona: every story that names none plays as it.",
                 Kind.SUCCESS,
             )
+
+    def action_build(self) -> None:
+        """A persona made from pieces, opened on top of this screen; the new one is selected."""
+        if self._mode != "list":
+            return
+
+        async def built(persona: Built) -> None:
+            self.shelf = "personas"
+            await self._load(False, select=persona.id)
+            self.status(
+                f"Built '{persona.name}' from pieces. It is an ordinary persona now: edit it "
+                "here like any other.",
+                Kind.SUCCESS,
+            )
+
+        self.lustjinn.push_screen(PersonaBuilderScreen(built))
 
     def action_remove(self) -> None:
         entry = self._shown
