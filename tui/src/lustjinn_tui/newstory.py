@@ -143,6 +143,12 @@ class Panel(Vertical):
         with VerticalScroll():
             yield Static("", classes="text")
 
+    def note(self, description: str | None) -> None:
+        """The owner's short note beside the caption, when the entry has one."""
+        self.query_one(".caption", Static).update(
+            f"{self._caption} — {description}" if description else self._caption
+        )
+
     def show(self, text: str | None) -> None:
         self.text = text or ""
         self.query_one(".text", Static).update(self.text)
@@ -271,12 +277,15 @@ class NewStoryScreen(View):
     async def _describe_character(self) -> None:
         character = self.character
         text = None
+        description = None
         if character is not None:
             full = await self.lustjinn.call(
                 "Reading the card", self.lustjinn.api.entry("characters", character.id)
             )
             text = full.text if full is not None else None
+            description = full.description if full is not None else None
         self.query_one("#world", Panel).show(text)
+        self.query_one("#world", Panel).note(description)
 
     async def _describe_persona(self) -> None:
         """The persona that will be sent: the picked one, or the default, which is a real
@@ -285,12 +294,15 @@ class NewStoryScreen(View):
         persona = self.persona
         persona_id = persona.id if persona is not None else self._defaults.default_persona_id
         text = None
+        description = None
         if persona_id is not None:
             full = await self.lustjinn.call(
                 "Reading the persona", self.lustjinn.api.entry("personas", persona_id)
             )
             text = full.text if full is not None else None
+            description = full.description if full is not None else None
         self.query_one("#persona-text", Panel).show(text)
+        self.query_one("#persona-text", Panel).note(description)
 
     # -- the keys -------------------------------------------------------------------------------
 

@@ -142,6 +142,8 @@ class Entry(BaseModel):
     version: int
     updated_at: datetime
     preview: str
+    description: str | None = None
+    """The owner's short note; shown in place of the preview when there is one."""
 
 
 class EntryFull(Entry):
@@ -153,6 +155,22 @@ class EntryFull(Entry):
 class Defaults(BaseModel):
     default_persona_id: uuid.UUID | None = None
     default_persona_name: str | None = None
+
+
+class Hidden(BaseModel):
+    characters: int = 0
+    personas: int = 0
+    snippets: int = 0
+
+
+class Counts(BaseModel):
+    """How many entries each shelf holds, as its list shows them; the pieces are counted too."""
+
+    characters: int = 0
+    personas: int = 0
+    snippets: int = 0
+    pieces: int = 0
+    hidden: Hidden = Field(default_factory=Hidden)
 
 
 Voice = Literal["he", "she", "they", "any"]
@@ -651,12 +669,22 @@ class Api:
         body = {"default_persona_id": None if persona_id is None else str(persona_id)}
         return Defaults.model_validate(await self._request("PUT", "/library/settings", json=body))
 
+    async def counts(self) -> Counts:
+        return Counts.model_validate(await self._request("GET", "/library/counts"))
+
     async def create_entry(
-        self, shelf: Shelf, name: str, text: str, opening: str | None = None
+        self,
+        shelf: Shelf,
+        name: str,
+        text: str,
+        opening: str | None = None,
+        description: str | None = None,
     ) -> EntryFull:
         body: dict[str, object] = {"name": name, "text": text}
         if opening is not None:
             body["opening"] = opening
+        if description is not None:
+            body["description"] = description
         return EntryFull.model_validate(await self._request("POST", f"/library/{shelf}", json=body))
 
     async def save_entry(
@@ -669,6 +697,8 @@ class Api:
         text: str | None = None,
         opening: str | None = None,
         clear_opening: bool = False,
+        description: str | None = None,
+        clear_description: bool = False,
     ) -> EntryFull:
         """Saves what is given over ``version``; a save over a newer one raises
         ``ConflictError`` with the entry as it is now."""
@@ -679,6 +709,8 @@ class Api:
             body["text"] = text
         if opening is not None or clear_opening:
             body["opening"] = opening
+        if description is not None or clear_description:
+            body["description"] = description
         return EntryFull.model_validate(
             await self._request("PATCH", f"/library/{shelf}/{entry_id}", json=body)
         )

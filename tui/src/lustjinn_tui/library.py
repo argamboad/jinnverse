@@ -31,6 +31,7 @@ from lustjinn_tui.api import (
     ApiError,
     Built,
     ConflictError,
+    Counts,
     Entry,
     EntryFull,
     Shelf,
@@ -44,13 +45,13 @@ from lustjinn_tui.legend import Hint
 from lustjinn_tui.listing import Rows
 from lustjinn_tui.palette import PaletteCommand
 from lustjinn_tui.status import Kind
-from lustjinn_tui.textfmt import count, pad
+from lustjinn_tui.textfmt import count, fit, pad
 from lustjinn_tui.theme import HEADING, SELECTION
 from lustjinn_tui.view import View
 
 SHELVES: tuple[Shelf, ...] = ("characters", "personas", "snippets")
 KINDS: dict[Shelf, str] = {"characters": "character", "personas": "persona", "snippets": "snippet"}
-Mode = Literal["list", "naming", "renaming"]
+Mode = Literal["list", "naming", "renaming", "describing"]
 
 
 class ConflictScreen(View):
@@ -124,6 +125,7 @@ class LibraryScreen(View):
         Hint("Enter", "Edit"),
         Hint("N", "New"),
         Hint("O", "Opening"),
+        Hint("E", "Describe"),
         Hint("F2", "Rename"),
         Hint("D", "Default persona"),
         Hint("B", "Build persona"),
@@ -136,6 +138,10 @@ class LibraryScreen(View):
         Hint("Esc", "Cancel"),
     )
     RENAMING_HINTS: ClassVar[tuple[Hint, ...]] = (Hint("Enter", "Rename"), Hint("Esc", "Cancel"))
+    DESCRIBING_HINTS: ClassVar[tuple[Hint, ...]] = (
+        Hint("Enter", "Save the description"),
+        Hint("Esc", "Cancel"),
+    )
     AUTO_FOCUS: ClassVar[str | None] = ""
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("left", "shelf(-1)", "Previous shelf", show=False),
@@ -149,6 +155,7 @@ class LibraryScreen(View):
         Binding("n,N", "new", "New", show=False),
         Binding("enter", "edit", "Edit", show=False),
         Binding("o,O", "opening", "Opening", show=False),
+        Binding("e,E", "describe", "Describe", show=False),
         Binding("f2", "rename", "Rename", show=False),
         Binding("d,D", "default", "Default persona", show=False),
         Binding("b,B", "build", "Build a persona", show=False),
@@ -164,6 +171,7 @@ class LibraryScreen(View):
     LibraryScreen #text { width: 1fr; height: 1fr; padding: 0 1; }
     LibraryScreen #text VerticalScroll { height: 1fr; }
     LibraryScreen .caption { color: $muted; height: 1; }
+    LibraryScreen #description { color: $foreground; height: auto; }
     LibraryScreen .prose { color: $muted; }
     """
 
@@ -173,6 +181,7 @@ class LibraryScreen(View):
         self._mode: Mode = "list"
         self._default_persona: uuid.UUID | None = None
         self._shown: EntryFull | None = None
+        self._counts = Counts()
 
     # -- the frame ------------------------------------------------------------------------------
 
@@ -181,6 +190,8 @@ class LibraryScreen(View):
             return self.NAMING_HINTS
         if self._mode == "renaming":
             return self.RENAMING_HINTS
+        if self._mode == "describing":
+            return self.DESCRIBING_HINTS
         return self.HINTS
 
     def summary(self) -> str | None:
@@ -198,6 +209,9 @@ class LibraryScreen(View):
         return [
             PaletteCommand("Edit the text", "in your editor", self.action_edit),
             PaletteCommand("Edit the opening", "a character's first message", self.action_opening),
+            PaletteCommand(
+                "Describe the entry", "a short note for lists, never sent", self.action_describe
+            ),
             PaletteCommand("New entry", "on this shelf, from a skeleton", self.action_new),
             PaletteCommand("Rename the entry", "the one the cursor is on", self.action_rename),
             PaletteCommand(
@@ -216,6 +230,7 @@ class LibraryScreen(View):
                 yield Rows[Entry](self._row, empty="", id="list")
             with Vertical(id="text"):
                 yield Static("", classes="caption", id="caption")
+                yield Static("", id="description")
                 with VerticalScroll():
                     yield Static("", classes="prose", id="prose")
 
@@ -246,6 +261,9 @@ class LibraryScreen(View):
         if self.shelf == "personas":
             defaults = await self.lustjinn.call("Reading the default", api.defaults())
             self._default_persona = defaults.default_persona_id if defaults else None
+        counted = await self.lustjinn.call("Counting the shelves", api.counts())
+        if counted is not None:
+            self._counts = counted
         self.rows.set_items(listed, empty=f"No {self.kind}s yet — N starts one.")
         if select is not None:
             index = next((i for i, e in enumerate(listed) if e.id == select), -1)
@@ -260,22 +278,36 @@ class LibraryScreen(View):
     def _show_tabs(self) -> None:
         parts: list[str] = []
         for shelf in SHELVES:
-            label = Content(f" {shelf.capitalize()} ").markup
+            label = Content(f" {shelf.capitalize()} {getattr(self._counts, shelf)} ").markup
             parts.append(f"{SELECTION}{label}[/]" if shelf == self.shelf else f"[$muted]{label}[/]")
         self.query_one("#tabs", Static).update(Content.from_markup("  ".join(parts)))
 
     def _row(self, entry: Entry, selected: bool, width: int) -> Content:
         marker = "★ " if self.shelf == "personas" and entry.id == self._default_persona else "  "
-        line = Content(pad(f"{marker}{entry.name}", width)).markup
-        return Content.from_markup(f"{SELECTION}{line}[/]" if selected else line)
+        head = f"{marker}{entry.name}"
+        if not entry.description:
+            line = Content(pad(head, width)).markup
+            return Content.from_markup(f"{SELECTION}{line}[/]" if selected else line)
+        # The note after the name, muted, as much of it as the width leaves room for.
+        room = width - len(head) - 2
+        note = fit(entry.description, room) if room > 2 else ""
+        used = len(head) + (2 + len(note) if note else 0)
+        gap = " " * max(0, width - used)
+        name = Content(head).markup
+        tail = f"  {Content(note).markup}" if note else ""
+        if selected:
+            return Content.from_markup(f"{SELECTION}{name}{tail}{gap}[/]")
+        return Content.from_markup(f"{name}[$muted]{tail}[/]{gap}")
 
     async def _show_text(self) -> None:
         entry = self.selected
         caption = self.query_one("#caption", Static)
+        note = self.query_one("#description", Static)
         prose = self.query_one("#prose", Static)
         if entry is None:
             self._shown = None
             caption.update("")
+            note.display = False
             prose.update("")
             return
         try:
@@ -287,6 +319,8 @@ class LibraryScreen(View):
         if self.shelf == "snippets":
             used = "copied into a message when :name is typed"
         caption.update(f"{full.name}   ·   version {full.version}   ·   {used}")
+        note.display = bool(full.description)
+        note.update(full.description or "")
         text = full.text
         if self.shelf == "characters":
             opening = full.opening.strip() if full.opening else "(none — O writes one)"
@@ -357,6 +391,11 @@ class LibraryScreen(View):
         self.set_focus(None)
         self.refresh_hints()
 
+    def action_describe(self) -> None:
+        entry = self._shown
+        if self._mode == "list" and entry is not None:
+            self._open_field("describing", entry.description or "", "a short note for lists")
+
     def action_new(self) -> None:
         if self._mode == "list":
             self._open_field("naming", "", f"new {self.kind}: its name")
@@ -372,6 +411,11 @@ class LibraryScreen(View):
         mode = self._mode
         entry = self.selected
         self._leave_field()
+        if mode == "describing":
+            shown = self._shown
+            if shown is not None:
+                self.run_worker(partial(self._describe, shown, name), exclusive=True)
+            return
         if not name:
             self.status(f"A {self.kind} needs a name.", Kind.WARNING)
             return
@@ -392,6 +436,24 @@ class LibraryScreen(View):
             return
         await self._load(False, select=created.id)
         await self._edit(created, "text")
+
+    async def _describe(self, entry: EntryFull, description: str) -> None:
+        """Saves the description over the version on screen; blank clears it."""
+        if description == (entry.description or ""):
+            self.status("Nothing changed.")
+            return
+        saved = await self._save(
+            entry.id,
+            entry.version,
+            description=description or None,
+            clear_description=not description,
+        )
+        if saved is not None:
+            await self._load(False, select=saved.id)
+            self.status(
+                "Description saved." if saved.description else "Description cleared.",
+                Kind.SUCCESS,
+            )
 
     async def _rename(self, entry: Entry, name: str) -> None:
         renamed = await self._save(entry.id, entry.version, name=name)
@@ -450,6 +512,8 @@ class LibraryScreen(View):
         text: str | None = None,
         opening: str | None = None,
         clear_opening: bool = False,
+        description: str | None = None,
+        clear_description: bool = False,
     ) -> EntryFull | None:
         """A save over ``version``; a conflict opens the screen that shows the server's text."""
         api = self.lustjinn.api
@@ -464,6 +528,8 @@ class LibraryScreen(View):
                 text=text,
                 opening=opening,
                 clear_opening=clear_opening,
+                description=description,
+                clear_description=clear_description,
             )
         except ConflictError as conflict:
 
@@ -476,6 +542,8 @@ class LibraryScreen(View):
                     text=text,
                     opening=opening,
                     clear_opening=clear_opening,
+                    description=description,
+                    clear_description=clear_description,
                 )
                 await self._load(False, select=saved.id)
                 self.status(f"Saved over version {theirs.version}.", Kind.SUCCESS)

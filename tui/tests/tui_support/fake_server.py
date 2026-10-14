@@ -63,14 +63,17 @@ def story(
     }
 
 
-def entry(name: str, text: str, opening: str | None = None) -> dict[str, Any]:
+def entry(
+    name: str, text: str, opening: str | None = None, description: str | None = None
+) -> dict[str, Any]:
     return {
         "id": str(uuid.uuid4()),
         "name": name,
-        "hidden": False,
+        "hidden": name.startswith("_"),
         "version": 1,
         "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
         "preview": text[:200],
+        "description": description,
         "text": text,
         "opening": opening,
         "used_by": [],
@@ -262,9 +265,14 @@ class FakeServer:
         return added
 
     def shelve(
-        self, shelf: str, name: str, text: str, opening: str | None = None
+        self,
+        shelf: str,
+        name: str,
+        text: str,
+        opening: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        added = entry(name, text, opening)
+        added = entry(name, text, opening, description)
         self.library[shelf].append(added)
         return added
 
@@ -503,6 +511,8 @@ class FakeServer:
                     "default_persona_name": None if default is None else default["name"],
                 },
             )
+        if parts[1:] == ["counts"]:
+            return self._counts()
         shelf = self.library.get(parts[1]) if len(parts) > 1 else None
         if shelf is None:
             return httpx2.Response(404, json={"detail": "There is no such shelf."})
@@ -523,7 +533,9 @@ class FakeServer:
                         "or pick another name."
                     },
                 )
-            created = self.shelve(parts[1], body["name"], body["text"], body.get("opening"))
+            created = self.shelve(
+                parts[1], body["name"], body["text"], body.get("opening"), body.get("description")
+            )
             return httpx2.Response(201, json=created)
         found = next((e for e in shelf if e["id"] == parts[2]), None) if len(parts) > 2 else None
         if found is None:
@@ -551,7 +563,7 @@ class FakeServer:
                     },
                 )
             changed = False
-            for field in ("name", "text", "opening"):
+            for field in ("name", "text", "opening", "description"):
                 if field in body and body[field] != found.get(field):
                     found[field] = body[field]
                     changed = True
@@ -577,6 +589,20 @@ class FakeServer:
             shelf.remove(found)
             return httpx2.Response(204)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _counts(self) -> httpx2.Response:
+        """The shelves as lists show them: names starting with an underscore are counted apart."""
+        shown = {
+            k: [e for e in v if not e["name"].startswith("_")] for k, v in self.library.items()
+        }
+        return httpx2.Response(
+            200,
+            json={
+                **{k: len(v) for k, v in shown.items()},
+                "pieces": len(self.pieces),
+                "hidden": {k: len(self.library[k]) - len(v) for k, v in shown.items()},
+            },
+        )
 
     # The slots and the paragraphs they write, as the API's own list has them.
     _SLOTS: ClassVar[list[tuple[str, str, int | None]]] = [
