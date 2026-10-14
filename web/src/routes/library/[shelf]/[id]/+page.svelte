@@ -5,6 +5,7 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import Sheet from '#lib/Sheet.svelte';
 	import { api, ApiError, type EntryFull, type HistoryEntry, type Shelf } from '#lib/api.ts';
+	import { DESCRIPTION_LENGTH, remaining, sentDescription } from '#lib/library.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	const shelf = $derived(page.params.shelf as Shelf);
@@ -18,6 +19,7 @@
 	let name = $state('');
 	let text = $state('');
 	let opening = $state('');
+	let description = $state('');
 	let version = $state(0);
 	let loaded = $state(false);
 	let busy = $state(false);
@@ -29,11 +31,16 @@
 
 	const dirty = $derived(
 		creating
-			? name.trim().length > 0 || text.trim().length > 0
+			? name.trim().length > 0 || text.trim().length > 0 || description.trim().length > 0
 			: entry !== null &&
-					(name !== entry.name || text !== entry.text || opening !== (entry.opening ?? ''))
+					(name !== entry.name ||
+						text !== entry.text ||
+						opening !== (entry.opening ?? '') ||
+						description.trim() !== (entry.description ?? ''))
 	);
-	const ready = $derived(name.trim().length > 0 && text.trim().length > 0 && !busy);
+	const ready = $derived(
+		name.trim().length > 0 && text.trim().length > 0 && remaining(description) >= 0 && !busy
+	);
 
 	onMount(async () => {
 		if (creating) {
@@ -58,6 +65,7 @@
 		name = found.name;
 		text = found.text;
 		opening = found.opening ?? '';
+		description = found.description ?? '';
 		version = found.version;
 		theirs = null;
 	}
@@ -70,7 +78,8 @@
 				const made = await api.createEntry(shelf, {
 					name: name.trim(),
 					text,
-					opening: shelf === 'characters' ? opening.trim() || null : undefined
+					opening: shelf === 'characters' ? opening.trim() || null : undefined,
+					description: sentDescription(description)
 				});
 				toasts.show('ok', `${made.name} is on the shelf`);
 				await goto(`/library/${shelf}/${made.id}`, { replaceState: true });
@@ -80,7 +89,8 @@
 					version,
 					name: name.trim(),
 					text,
-					...(shelf === 'characters' ? { opening: opening.trim() || null } : {})
+					...(shelf === 'characters' ? { opening: opening.trim() || null } : {}),
+					description: sentDescription(description)
 				});
 				take(saved);
 				toasts.show(
@@ -129,6 +139,7 @@
 		name = h.name;
 		text = h.text;
 		opening = h.opening ?? '';
+		description = h.description ?? '';
 		historyOpen = false;
 		toasts.show(
 			'info',
@@ -199,6 +210,22 @@
 					bind:value={name}
 					maxlength="200"
 					placeholder={shelf === 'snippets' ? 'storm (typed as :storm)' : 'A name'}
+				/>
+			</label>
+			<label class="field">
+				<span
+					>Description <small class="muted">— a short note for lists, never sent to the model</small
+					>
+					<small class="count" class:over={remaining(description) < 0}
+						>{description.length} / {DESCRIPTION_LENGTH}</small
+					></span
+				>
+				<input
+					class="input"
+					id="entry-description"
+					type="text"
+					bind:value={description}
+					placeholder="The innkeeper of the Gilded Heron"
 				/>
 			</label>
 			<label class="field grow">
@@ -319,6 +346,13 @@
 	}
 	.small {
 		font-size: 0.82rem;
+	}
+	.count {
+		float: right;
+		color: var(--muted);
+	}
+	.count.over {
+		color: var(--danger);
 	}
 	.conflict {
 		display: grid;

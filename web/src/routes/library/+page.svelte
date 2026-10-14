@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import Tabs from '#lib/Tabs.svelte';
-	import { api, type Defaults, type Entry, type Shelf } from '#lib/api.ts';
+	import { api, type Counts, type Defaults, type Entry, type Shelf } from '#lib/api.ts';
+	import { blurb, hiddenCount } from '#lib/library.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	const shelves: { id: Shelf; label: string; one: string }[] = [
@@ -15,6 +16,7 @@
 	let hidden = $state(false);
 	let entries = $state<Entry[] | null>(null);
 	let defaults = $state<Defaults | null>(null);
+	let counts = $state<Counts | null>(null);
 
 	const current = $derived(shelves.find((s) => s.id === shelf)!);
 
@@ -26,16 +28,27 @@
 			/* a convenience only */
 		}
 		void load();
+		void loadCounts();
 		api
 			.defaults()
 			.then((d) => (defaults = d))
 			.catch(() => undefined);
 	});
 
+	/** The tabs' numbers: all the shelves in one call; without them the tabs show no number. */
+	async function loadCounts() {
+		try {
+			counts = await api.counts();
+		} catch {
+			/* a convenience only */
+		}
+	}
+
 	async function load() {
 		entries = null;
 		try {
 			entries = await api.entries(shelf, hidden);
+			void loadCounts();
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -77,9 +90,6 @@
 <div class="screen">
 	<AppBar title="Library" mark>
 		{#snippet actions()}
-			{#if shelf === 'personas'}
-				<a class="btn ghost small" href="/library/personas/from-pieces">Build from pieces</a>
-			{/if}
 			<a class="btn primary small" href="/library/{shelf}/new">New {current.one}</a>
 		{/snippet}
 	</AppBar>
@@ -87,7 +97,7 @@
 		<div class="seg" role="tablist" aria-label="Shelf">
 			{#each shelves as s (s.id)}
 				<button type="button" role="tab" aria-selected={shelf === s.id} onclick={() => pick(s.id)}
-					>{s.label}</button
+					>{s.label}{#if counts}<span class="n">{counts[s.id]}</span>{/if}</button
 				>
 			{/each}
 		</div>
@@ -96,8 +106,11 @@
 			title="Entries whose name starts with _ (a template, working notes) are kept but not listed"
 		>
 			<input type="checkbox" bind:checked={hidden} onchange={load} />
-			<span>Show hidden <code>_name</code></span>
+			<span>Show hidden <code>_name</code>{hiddenCount(counts?.hidden[shelf])}</span>
 		</label>
+		{#if shelf === 'personas'}
+			<a class="btn ghost small build" href="/library/personas/from-pieces">Build from pieces</a>
+		{/if}
 	</div>
 	<main class="list">
 		{#if entries === null}
@@ -120,6 +133,7 @@
 			</div>
 		{:else}
 			{#each entries as entry (entry.id)}
+				{@const shown = blurb(entry)}
 				<a class="entry" href="/library/{shelf}/{entry.id}">
 					<span class="who">{initial(entry)}</span>
 					<span class="text">
@@ -130,7 +144,7 @@
 								<span class="chip gold">default</span>
 							{/if}
 						</span>
-						<span class="preview prose">{entry.preview}</span>
+						<span class="preview" class:prose={!shown.note}>{shown.text}</span>
 						<span class="meta"
 							>v{entry.version} · {new Date(entry.updated_at).toLocaleDateString()}</span
 						>
@@ -163,6 +177,7 @@
 		padding: 6px 14px;
 		font-size: 0.85rem;
 		text-decoration: none;
+		white-space: nowrap;
 		box-shadow: none;
 	}
 	.toolbar {
@@ -175,6 +190,8 @@
 	}
 	.seg {
 		display: inline-flex;
+		max-width: 100%;
+		overflow-x: auto;
 		padding: 3px;
 		gap: 2px;
 		border-radius: var(--r-pill);
@@ -182,6 +199,7 @@
 		border: 1px solid var(--line);
 	}
 	.seg button {
+		white-space: nowrap;
 		appearance: none;
 		border: 0;
 		background: transparent;
@@ -191,6 +209,11 @@
 		padding: 6px 12px;
 		min-height: 34px;
 		border-radius: var(--r-pill);
+	}
+	.seg .n {
+		margin-left: 6px;
+		font-weight: 400;
+		opacity: 0.7;
 	}
 	.seg button[aria-selected='true'] {
 		background: var(--gold);

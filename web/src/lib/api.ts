@@ -75,6 +75,8 @@ export interface Entry {
 	version: number;
 	updated_at: string;
 	preview: string;
+	/** The owner's short note; a list shows it in place of the preview when there is one. */
+	description: string | null;
 }
 
 export interface EntryFull extends Entry {
@@ -128,7 +130,18 @@ export interface HistoryEntry {
 	name: string;
 	text: string;
 	opening: string | null;
+	description: string | null;
 	saved_at: string;
+}
+
+/** How many entries each shelf holds, as its list shows them (the pieces too). */
+export interface Counts {
+	characters: number;
+	personas: number;
+	snippets: number;
+	pieces: number;
+	/** `_name` entries are kept but not listed, so they are not counted above. */
+	hidden: { characters: number; personas: number; snippets: number };
 }
 
 export interface Defaults {
@@ -400,12 +413,21 @@ export const api = {
 	entries: (shelf: Shelf, hidden = false) =>
 		json<Entry[]>('GET', `/library/${shelf}${hidden ? '?hidden=true' : ''}`),
 	entry: (shelf: Shelf, id: string) => json<EntryFull>('GET', `/library/${shelf}/${id}`),
-	createEntry: (shelf: Shelf, body: { name: string; text: string; opening?: string | null }) =>
-		json<EntryFull>('POST', `/library/${shelf}`, body),
+	counts: () => json<Counts>('GET', '/library/counts'),
+	createEntry: (
+		shelf: Shelf,
+		body: { name: string; text: string; opening?: string | null; description?: string | null }
+	) => json<EntryFull>('POST', `/library/${shelf}`, body),
 	saveEntry: (
 		shelf: Shelf,
 		id: string,
-		body: { version: number; name?: string; text?: string; opening?: string | null }
+		body: {
+			version: number;
+			name?: string;
+			text?: string;
+			opening?: string | null;
+			description?: string | null;
+		}
 	) => json<EntryFull>('PATCH', `/library/${shelf}/${id}`, body),
 	deleteEntry: (shelf: Shelf, id: string) =>
 		call('DELETE', `/library/${shelf}/${id}`).then(() => undefined),
