@@ -123,11 +123,15 @@ export class Extras {
 		}
 	}
 
+	/** Moves a meter at once and tells the API; if the API refuses, it goes back. */
 	async setTracker(name: string, value: number) {
+		const before = this.trackers.find((t) => t.name === name);
+		this.trackers = this.trackers.map((t) => (t.name === name ? { ...t, value } : t));
 		try {
 			const changed = await api.changeTracker(this.storyId, name, { value });
 			this.trackers = this.trackers.map((t) => (t.name === name ? changed : t));
 		} catch (error) {
+			if (before) this.trackers = this.trackers.map((t) => (t.name === name ? before : t));
 			toasts.show('danger', 'Meter not set', error instanceof Error ? error.message : undefined);
 		}
 	}

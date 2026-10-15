@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Dial, StoryDial } from './api.ts';
+import type { Dial, StoryDial, Tracker } from './api.ts';
 
-const calls = vi.hoisted(() => ({ setDial: vi.fn(), clearDial: vi.fn() }));
+const calls = vi.hoisted(() => ({
+	setDial: vi.fn(),
+	clearDial: vi.fn(),
+	changeTracker: vi.fn()
+}));
 vi.mock('./api.ts', () => ({ api: calls }));
 
 import { Extras } from './extras.svelte.ts';
@@ -73,5 +77,39 @@ describe('Extras dials', () => {
 		await pending;
 
 		expect(extras.dials[0]).toMatchObject({ stored: '2', label: 'Flirty' });
+	});
+});
+
+describe('Extras meters', () => {
+	const trust = { id: 't1', name: 'Trust', value: 34, max: 100, delta: 3 } as Tracker;
+
+	beforeEach(() => {
+		calls.changeTracker.mockReset();
+		toasts.list = [];
+	});
+
+	it('moves a meter before the API has answered, then takes the API’s word', async () => {
+		let answer: (t: Tracker) => void = () => {};
+		calls.changeTracker.mockReturnValue(new Promise<Tracker>((resolve) => (answer = resolve)));
+		const extras = new Extras('story-1');
+		extras.trackers = [trust];
+
+		const pending = extras.setTracker('Trust', 50);
+		expect(extras.trackers[0].value).toBe(50);
+		answer({ ...trust, value: 50, delta: 16 });
+		await pending;
+
+		expect(extras.trackers[0]).toMatchObject({ value: 50, delta: 16 });
+	});
+
+	it('puts the meter back and says so when the API refuses', async () => {
+		calls.changeTracker.mockRejectedValue(new Error('no'));
+		const extras = new Extras('story-1');
+		extras.trackers = [trust];
+
+		await extras.setTracker('Trust', 50);
+
+		expect(extras.trackers[0].value).toBe(34);
+		expect(toasts.list.some((t) => t.title === 'Meter not set')).toBe(true);
 	});
 });

@@ -2,6 +2,7 @@
 	import { slide } from 'svelte/transition';
 	import DialControl from '#lib/DialControl.svelte';
 	import type { Extras } from '#lib/extras.svelte.ts';
+	import MetersPanel from '#lib/MetersPanel.svelte';
 	import { money } from '#lib/money.ts';
 	import StatusPanel from '#lib/StatusPanel.svelte';
 
@@ -32,41 +33,6 @@
 	function clear(key: string) {
 		if (expanded === key) expanded = null;
 		void extras.clearDial(key);
-	}
-
-	// --- meters -------------------------------------------------------------------------------
-	let adding = $state(false);
-	let name = $state('');
-	let start = $state(0);
-	let max = $state(100);
-	let means = $state('');
-	let setting = $state<string | null>(null);
-	let setTo = $state(0);
-
-	async function add(event: SubmitEvent) {
-		event.preventDefault();
-		if (!name.trim()) return;
-		const ok = await extras.addTracker({
-			name: name.trim(),
-			value: start,
-			max,
-			means: means.trim() || null
-		});
-		if (ok) {
-			adding = false;
-			name = '';
-			start = 0;
-			max = 100;
-			means = '';
-		}
-	}
-
-	function bar(value: number, maximum: number): number {
-		return maximum > 0 ? Math.min(100, Math.max(0, (value / maximum) * 100)) : 0;
-	}
-
-	function trim(n: number): string {
-		return Number.isInteger(n) ? String(n) : n.toFixed(1);
 	}
 </script>
 
@@ -136,136 +102,7 @@
 				{/if}
 			</div>
 		{:else if section === 'meters'}
-			<div class="stack">
-				{#if extras.trackers.length === 0 && !adding}
-					<p class="muted small">
-						No meters. A meter is a number the story keeps — trust, heat, suspicion — that the model
-						moves a little each turn and the app reads back. A meter the model can see is a meter it
-						writes towards.
-					</p>
-				{/if}
-				{#each extras.trackers as t (t.id)}
-					<div class="meter">
-						<div class="mhead">
-							<b>{t.name}</b>
-							<span class="mono">
-								{trim(t.value)}/{trim(t.max)}
-								{#if t.delta !== 0}
-									<span class:up={t.delta > 0} class:down={t.delta < 0}
-										>{t.delta > 0 ? '+' : ''}{trim(t.delta)}</span
-									>
-								{/if}
-							</span>
-						</div>
-						<div class="bar"><i style:width="{bar(t.value, t.max)}%"></i></div>
-						<div class="mfoot">
-							<span class="muted"
-								>{t.note ?? t.means ?? '—'}{t.updated_at_sequence
-									? ` · turn ${t.updated_at_sequence}`
-									: ''}</span
-							>
-							{#if setting === t.name}
-								<form
-									class="setrow"
-									onsubmit={(e) => {
-										e.preventDefault();
-										extras.setTracker(t.name, setTo);
-										setting = null;
-									}}
-								>
-									<input
-										class="input tiny"
-										id="set-{t.id}"
-										type="number"
-										min="0"
-										max={t.max}
-										step="any"
-										bind:value={setTo}
-										aria-label="New value"
-									/>
-									<button type="submit" class="btn tiny primary">Set</button>
-									<button type="button" class="btn tiny ghost" onclick={() => (setting = null)}
-										>Cancel</button
-									>
-								</form>
-							{:else}
-								<span class="acts">
-									<button
-										type="button"
-										class="link"
-										onclick={() => {
-											setting = t.name;
-											setTo = t.value;
-										}}>Set</button
-									>
-									<button
-										type="button"
-										class="link danger"
-										onclick={() => extras.removeTracker(t.name)}>Remove</button
-									>
-								</span>
-							{/if}
-						</div>
-					</div>
-				{/each}
-				{#if adding}
-					<form class="add" onsubmit={add}>
-						<label class="field"
-							><span>Name</span><input
-								class="input"
-								id="meter-name"
-								type="text"
-								bind:value={name}
-								maxlength="120"
-								required
-								placeholder="Trust"
-							/></label
-						>
-						<div class="two">
-							<label class="field"
-								><span>Starts at</span><input
-									class="input"
-									id="meter-start"
-									type="number"
-									step="any"
-									min="0"
-									bind:value={start}
-								/></label
-							>
-							<label class="field"
-								><span>Out of</span><input
-									class="input"
-									id="meter-max"
-									type="number"
-									step="any"
-									min="1"
-									bind:value={max}
-								/></label
-							>
-						</div>
-						<label class="field"
-							><span>What it measures (optional)</span><input
-								class="input"
-								id="meter-means"
-								type="text"
-								bind:value={means}
-								maxlength="500"
-								placeholder="how far she trusts Rowan"
-							/></label
-						>
-						<div class="two">
-							<button type="submit" class="btn primary">Add meter</button>
-							<button type="button" class="btn ghost" onclick={() => (adding = false)}
-								>Cancel</button
-							>
-						</div>
-					</form>
-				{:else}
-					<button type="button" class="btn ghost" onclick={() => (adding = true)}
-						>Add a meter</button
-					>
-				{/if}
-			</div>
+			<MetersPanel {extras} />
 		{:else if section === 'status'}
 			<StatusPanel {extras} />
 		{:else}
@@ -436,98 +273,9 @@
 		color: var(--muted);
 		font-weight: 600;
 	}
-	.meter {
-		display: grid;
-		gap: 6px;
-		padding: 10px 12px;
-		border-radius: var(--r-s);
-		background: var(--surface);
-		border: 1px solid var(--line);
-	}
-	.mhead {
-		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-		align-items: baseline;
-	}
-	.mhead b {
-		font-weight: 600;
-	}
 	.mono {
 		font-family: var(--font-mono);
 		font-size: 0.8rem;
-	}
-	.up {
-		color: var(--ok);
-	}
-	.down {
-		color: var(--danger);
-	}
-	.bar {
-		height: 8px;
-		border-radius: 4px;
-		background: var(--surface-2);
-		overflow: hidden;
-	}
-	.bar i {
-		display: block;
-		height: 100%;
-		border-radius: 4px;
-		background: linear-gradient(90deg, var(--gold-2), var(--gold));
-		transition: width 0.3s ease;
-	}
-	.mfoot {
-		display: flex;
-		justify-content: space-between;
-		gap: 8px;
-		align-items: center;
-		font-size: 0.75rem;
-		flex-wrap: wrap;
-	}
-	.acts {
-		display: flex;
-		gap: 4px;
-	}
-	.link {
-		appearance: none;
-		border: 0;
-		background: transparent;
-		color: var(--gold-text);
-		font-weight: 600;
-		font-size: 0.75rem;
-		padding: 6px 8px;
-		min-height: 32px;
-	}
-	.link.danger {
-		color: var(--danger);
-	}
-	.setrow {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-	.input.tiny {
-		width: 84px;
-		min-height: 34px;
-		padding: 6px 8px;
-	}
-	.btn.tiny {
-		min-height: 34px;
-		padding: 4px 12px;
-		font-size: 0.8rem;
-	}
-	.add {
-		display: grid;
-		gap: 10px;
-		padding: 12px;
-		border-radius: var(--r-s);
-		background: var(--surface);
-		border: 1px solid var(--line);
-	}
-	.two {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 8px;
 	}
 	.layer {
 		display: grid;
