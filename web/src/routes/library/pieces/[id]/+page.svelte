@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
+	import SaveBar from '#lib/SaveBar.svelte';
 	import { api, ApiError, type Piece, type Slot, type Voice } from '#lib/api.ts';
+	import { guardLeaving } from '#lib/leaveGuard.ts';
 	import { DESCRIPTION_LENGTH, remaining, sentDescription } from '#lib/library.ts';
 	import { PIECE_VOICES } from '#lib/personaBuilder.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
@@ -52,6 +53,8 @@
 			!busy
 	);
 
+	const guard = guardLeaving(() => dirty);
+
 	onMount(async () => {
 		try {
 			slots = await api.pieceSlots();
@@ -84,6 +87,11 @@
 		theirs = null;
 	}
 
+	function discard() {
+		if (piece) take(piece);
+		else name = text = short = description = '';
+	}
+
 	function insert(token: string) {
 		text = text ? `${text} ${token}` : token;
 	}
@@ -102,8 +110,8 @@
 					description: sentDescription(description)
 				});
 				toasts.show('ok', `${made.name} is in the pool`);
-				await goto(`/library/pieces/${made.id}`, { replaceState: true });
 				take(made);
+				await guard.leave(`/library/pieces/${made.id}`, { replaceState: true });
 			} else {
 				const saved = await api.savePiece(id, {
 					version,
@@ -116,8 +124,8 @@
 				take(saved);
 				toasts.show(
 					'ok',
-					'Saved',
-					`Version ${saved.version}. Personas already built from it keep the text they were made with.`
+					`Saved as v${saved.version}`,
+					'Personas already built from it keep the text they were made with.'
 				);
 			}
 		} catch (error) {
@@ -150,7 +158,7 @@
 		try {
 			await api.deletePiece(id);
 			toasts.show('ok', `Deleted ${piece?.name ?? 'the piece'}`);
-			await goto(backTo);
+			await guard.leave(backTo);
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -269,28 +277,20 @@
 					picked beside it.
 				</p>
 			{/if}
-			<div class="foot">
-				<button
-					type="button"
-					class="btn primary"
-					onclick={save}
-					disabled={!ready || (!creating && !dirty && !theirs)}
-				>
-					{busy ? 'Saving…' : creating ? 'Add the piece' : 'Save'}
-				</button>
-				{#if !creating}
-					{#if deleting}
+			{#if !creating}
+				{#if deleting}
+					<div class="foot">
 						<span class="muted small">Delete {piece?.name}?</span>
 						<button type="button" class="btn danger" onclick={remove} disabled={busy}>Delete</button
 						>
 						<button type="button" class="btn ghost" onclick={() => (deleting = false)}>Keep</button>
-					{:else}
-						<button type="button" class="btn ghost danger-text" onclick={() => (deleting = true)}
-							>Delete piece</button
-						>
-					{/if}
+					</div>
+				{:else}
+					<button type="button" class="delete" onclick={() => (deleting = true)}
+						>Delete this piece…</button
+					>
 				{/if}
-			</div>
+			{/if}
 			{#if !creating}
 				<p class="muted small">
 					Nothing depends on a piece: a persona built from it holds its own copy of the text.
@@ -298,20 +298,32 @@
 			{/if}
 		{/if}
 	</main>
+	{#if dirty || theirs}
+		<SaveBar
+			note={creating ? 'Not in the pool yet' : 'Unsaved changes'}
+			saveLabel={creating ? 'Add the piece' : `Save as v${version + 1}`}
+			{busy}
+			disabled={!ready}
+			onsave={save}
+			ondiscard={discard}
+		/>
+	{/if}
 </div>
 
 <style>
 	.screen {
-		min-height: 100%;
+		height: 100%;
 		display: flex;
 		flex-direction: column;
 	}
 	main {
 		flex: 1;
+		min-height: 0;
+		overflow: auto;
 		display: grid;
 		gap: 14px;
 		align-content: start;
-		padding: 14px 16px calc(24px + var(--safe-bottom));
+		padding: 14px 16px 24px;
 		max-width: 760px;
 		width: 100%;
 		margin: 0 auto;
@@ -378,8 +390,15 @@
 		background: var(--danger);
 		color: #fff;
 	}
-	.danger-text {
+	.delete {
+		appearance: none;
+		justify-self: start;
+		border: 0;
+		background: transparent;
 		color: var(--danger);
+		font-weight: 600;
+		font-size: 0.85rem;
+		padding: 8px 0;
 	}
 	.small {
 		font-size: 0.82rem;

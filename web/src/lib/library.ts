@@ -51,6 +51,15 @@ export function entryMeta(entry: Pick<Entry, 'version' | 'used'>, shelf: Shelf):
 	return `v${entry.version} · ${use}`;
 }
 
+/** What the save bar says beside its buttons while an entry has unsaved changes: on a wide
+ * window, which version the stories using it will read, and when. */
+export function saveNote(one: string, used: number, next: number, wide: boolean): string {
+	if (!wide || used === 0) return 'Unsaved changes';
+	return used === 1
+		? `Unsaved changes · the story using this ${one} reads v${next} from its next turn`
+		: `Unsaved changes · the ${used} stories using this ${one} read v${next} from their next turn`;
+}
+
 const VOICES: Voice[] = ['he', 'she', 'they', 'any'];
 
 /** What the pool of pieces holds, in one line: how many, across how many slots, and by voice

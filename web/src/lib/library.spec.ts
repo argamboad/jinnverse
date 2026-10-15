@@ -7,6 +7,7 @@ import {
 	pieceBlurb,
 	piecesSummary,
 	remaining,
+	saveNote,
 	sentDescription
 } from './library.ts';
 
@@ -18,6 +19,21 @@ describe('the line under an entry', () => {
 	});
 	it('gives only the version for a snippet, which no story keeps', () => {
 		expect(entryMeta({ version: 4, used: 0 }, 'snippets')).toBe('v4');
+	});
+});
+
+describe('the save bar', () => {
+	it('says only that there are changes on a phone, or when nothing uses the entry', () => {
+		expect(saveNote('character', 3, 4, false)).toBe('Unsaved changes');
+		expect(saveNote('snippet', 0, 2, true)).toBe('Unsaved changes');
+	});
+	it('says which version the stories will read on a wide window', () => {
+		expect(saveNote('character', 1, 4, true)).toBe(
+			'Unsaved changes · the story using this character reads v4 from its next turn'
+		);
+		expect(saveNote('persona', 2, 2, true)).toBe(
+			'Unsaved changes · the 2 stories using this persona read v2 from their next turn'
+		);
 	});
 });
 

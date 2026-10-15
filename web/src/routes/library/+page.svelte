@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
+	import LibraryRail from '#lib/LibraryRail.svelte';
 	import Tabs from '#lib/Tabs.svelte';
 	import { api, type Counts, type Defaults, type Entry, type Piece, type Shelf } from '#lib/api.ts';
 	import { blurb, entryMeta, piecesSummary } from '#lib/library.ts';
+	import { Media } from '#lib/media.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	/** The three shelves. The persona pieces live under Personas, as a card that builds a persona
@@ -22,6 +24,8 @@
 	let counts = $state<Counts | null>(null);
 
 	const current = $derived(shelves.find((s) => s.id === shelf)!);
+	/** From 900 px the library is a workspace: the rail, and an editor beside it once one is open. */
+	const wide = new Media('(min-width: 900px)');
 	const hiddenHere = $derived(counts?.hidden[shelf] ?? 0);
 
 	onMount(() => {
@@ -90,90 +94,109 @@
 	}
 </script>
 
-<div class="screen">
-	<AppBar title="Library" mark>
-		{#snippet actions()}
-			<a class="btn primary small" href="/library/{shelf}/new">+ New {current.one}</a>
-		{/snippet}
-	</AppBar>
-	<div class="toolbar">
-		<div class="seg" role="tablist" aria-label="Shelf">
-			{#each shelves as s (s.id)}
-				<button type="button" role="tab" aria-selected={shelf === s.id} onclick={() => pick(s.id)}
-					>{s.label}{#if counts}<span class="n">{counts[s.id]}</span>{/if}</button
-				>
-			{/each}
+{#if wide.current}
+	<div class="libwide">
+		<LibraryRail {shelf} />
+		<div class="pick">
+			<p class="muted">Pick an entry, or write a new one.</p>
 		</div>
 	</div>
-	<main class="list">
-		{#if entries === null}
-			<p class="muted center">Reading the shelf…</p>
-		{:else if entries.length === 0 && !hidden}
-			<div class="empty">
-				<p class="muted">
-					{#if shelf === 'snippets'}
-						No snippets yet. A snippet is text you insert often — typed as <code>:name</code> in the composer,
-						or picked from its list.
-					{:else if shelf === 'personas'}
-						No personas yet. A persona is who you are in a story; the default one plays in every
-						story that names none.
-					{:else}
-						No characters yet. A character is a card — who they are, how they speak, where the scene
-						opens.
-					{/if}
-				</p>
-				<a class="btn primary" href="/library/{shelf}/new">Write the first {current.one}</a>
+{:else}
+	<div class="screen">
+		<AppBar title="Library" mark>
+			{#snippet actions()}
+				<a class="btn primary small" href="/library/{shelf}/new">+ New {current.one}</a>
+			{/snippet}
+		</AppBar>
+		<div class="toolbar">
+			<div class="seg" role="tablist" aria-label="Shelf">
+				{#each shelves as s (s.id)}
+					<button type="button" role="tab" aria-selected={shelf === s.id} onclick={() => pick(s.id)}
+						>{s.label}{#if counts}<span class="n">{counts[s.id]}</span>{/if}</button
+					>
+				{/each}
 			</div>
-		{:else}
-			{#each entries as entry (entry.id)}
-				{@const shown = blurb(entry)}
-				{@const isDefault = shelf === 'personas' && defaults?.default_persona_id === entry.id}
-				<a class="entry" href="/library/{shelf}/{entry.id}">
-					<span class="who" class:gold={isDefault}>{initial(entry)}</span>
-					<span class="text">
-						<span class="name">
-							{entry.name}
-							{#if entry.hidden}<span class="chip">hidden</span>{/if}
-							{#if isDefault}<span class="chip gold">default</span>{/if}
+		</div>
+		<main class="list">
+			{#if entries === null}
+				<p class="muted center">Reading the shelf…</p>
+			{:else if entries.length === 0 && !hidden}
+				<div class="empty">
+					<p class="muted">
+						{#if shelf === 'snippets'}
+							No snippets yet. A snippet is text you insert often — typed as <code>:name</code> in the
+							composer, or picked from its list.
+						{:else if shelf === 'personas'}
+							No personas yet. A persona is who you are in a story; the default one plays in every
+							story that names none.
+						{:else}
+							No characters yet. A character is a card — who they are, how they speak, where the
+							scene opens.
+						{/if}
+					</p>
+					<a class="btn primary" href="/library/{shelf}/new">Write the first {current.one}</a>
+				</div>
+			{:else}
+				{#each entries as entry (entry.id)}
+					{@const shown = blurb(entry)}
+					{@const isDefault = shelf === 'personas' && defaults?.default_persona_id === entry.id}
+					<a class="entry" href="/library/{shelf}/{entry.id}">
+						<span class="who" class:gold={isDefault}>{initial(entry)}</span>
+						<span class="text">
+							<span class="name">
+								{entry.name}
+								{#if entry.hidden}<span class="chip">hidden</span>{/if}
+								{#if isDefault}<span class="chip gold">default</span>{/if}
+							</span>
+							<span class="preview" class:prose={!shown.note}>{shown.text}</span>
+							<span class="meta">{entryMeta(entry, shelf)}</span>
 						</span>
-						<span class="preview" class:prose={!shown.note}>{shown.text}</span>
-						<span class="meta">{entryMeta(entry, shelf)}</span>
-					</span>
-					<span class="chev" aria-hidden="true">›</span>
-				</a>
-			{/each}
-		{/if}
+						<span class="chev" aria-hidden="true">›</span>
+					</a>
+				{/each}
+			{/if}
 
-		{#if shelf === 'personas' && entries !== null}
-			<div class="pieces">
-				<h2>Pieces</h2>
-				<a class="entry" href="/library/personas/from-pieces">
-					<span class="who">P</span>
-					<span class="text">
-						<span class="name">Build a persona from pieces</span>
-						<span class="summary">{pieces ? piecesSummary(pieces) : 'Reading the pieces…'}</span>
-					</span>
-					<span class="chev" aria-hidden="true">›</span>
-				</a>
-				<a class="browse" href="/library/pieces">Browse and edit the pieces ›</a>
-			</div>
-		{/if}
+			{#if shelf === 'personas' && entries !== null}
+				<div class="pieces">
+					<h2>Pieces</h2>
+					<a class="entry" href="/library/personas/from-pieces">
+						<span class="who">P</span>
+						<span class="text">
+							<span class="name">Build a persona from pieces</span>
+							<span class="summary">{pieces ? piecesSummary(pieces) : 'Reading the pieces…'}</span>
+						</span>
+						<span class="chev" aria-hidden="true">›</span>
+					</a>
+					<a class="browse" href="/library/pieces">Browse and edit the pieces ›</a>
+				</div>
+			{/if}
 
-		{#if entries !== null && (hidden || hiddenHere > 0)}
-			<button type="button" class="hidden-toggle" onclick={toggleHidden}>
-				{#if hidden}
-					Hide the <code>_name</code> entries
-				{:else}
-					Show {hiddenHere} hidden <code>_name</code>
-					{hiddenHere === 1 ? 'entry' : 'entries'}
-				{/if}
-			</button>
-		{/if}
-	</main>
-	<Tabs />
-</div>
+			{#if entries !== null && (hidden || hiddenHere > 0)}
+				<button type="button" class="hidden-toggle" onclick={toggleHidden}>
+					{#if hidden}
+						Hide the <code>_name</code> entries
+					{:else}
+						Show {hiddenHere} hidden <code>_name</code>
+						{hiddenHere === 1 ? 'entry' : 'entries'}
+					{/if}
+				</button>
+			{/if}
+		</main>
+		<Tabs />
+	</div>
+{/if}
 
 <style>
+	.libwide {
+		height: 100%;
+		display: grid;
+		grid-template-columns: 340px minmax(0, 1fr);
+	}
+	.pick {
+		display: grid;
+		place-items: center;
+		padding: 24px;
+	}
 	.screen {
 		height: 100%;
 		display: flex;
