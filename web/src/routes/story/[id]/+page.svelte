@@ -179,7 +179,8 @@
 		stories.touch({
 			...story,
 			last_message_at: last?.sent_at ?? story.last_message_at,
-			last_message_preview: last?.text.slice(0, 200) ?? story.last_message_preview
+			last_message_preview: last?.text.slice(0, 200) ?? story.last_message_preview,
+			turns: story.messages.filter((m) => m.role === 'user').length
 		});
 	}
 

@@ -5,6 +5,18 @@ export function initial(story: Story): string {
 	return story.character_name.trim().charAt(0).toUpperCase() || '?';
 }
 
+/** The line under a story's name: who it is with, as whom, and how far it has got. A story the
+ * reader has not written to is "not started", whatever opening the character gave it. */
+export function whoLine(story: Story): string {
+	return [
+		story.character_name,
+		story.persona_name ? `as ${story.persona_name}` : null,
+		story.turns > 0 ? `turn ${story.turns}` : 'not started'
+	]
+		.filter(Boolean)
+		.join(' · ');
+}
+
 /** How long ago a story last moved, as the list shows it: "now", "5m", "3h", "yesterday", the
  * weekday within a week, then the date. */
 export function when(story: Story, now = Date.now()): string {
