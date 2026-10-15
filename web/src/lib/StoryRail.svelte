@@ -2,6 +2,7 @@
 	import { slide } from 'svelte/transition';
 	import DialControl from '#lib/DialControl.svelte';
 	import type { Extras } from '#lib/extras.svelte.ts';
+	import { money } from '#lib/money.ts';
 	import StatusPanel from '#lib/StatusPanel.svelte';
 
 	/** Beside the conversation: the dials, the meters, the status, the last prompt and the running
@@ -58,13 +59,6 @@
 			max = 100;
 			means = '';
 		}
-	}
-
-	function money(cost: string | undefined): string {
-		if (cost === undefined) return '—';
-		const n = Number(cost);
-		if (n === 0) return '$0';
-		return n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`;
 	}
 
 	function bar(value: number, maximum: number): number {

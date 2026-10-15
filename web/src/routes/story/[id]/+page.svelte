@@ -10,6 +10,7 @@
 	import Sheet from '#lib/Sheet.svelte';
 	import StatusStrip from '#lib/StatusStrip.svelte';
 	import StoryRail from '#lib/StoryRail.svelte';
+	import StorySheet from '#lib/StorySheet.svelte';
 	import {
 		api,
 		ApiError,
@@ -42,13 +43,12 @@
 	let notes = $state<{ id: number; title: string; text: string }[]>([]);
 	let rerollOpen = $state(false);
 	let menuFor = $state<Message | null>(null);
-	let storyMenu = $state(false);
+	/** The story's own sheet, opened from the title. */
+	let storyOpen = $state(false);
 	let extras = $state<Extras | null>(null);
 	/** The Dials sheet (a phone, or a window narrower than the workspace) and the tab it is on. */
 	let panelOpen = $state(false);
 	let panelTab = $state<'dials' | 'meters' | 'status' | 'prompt'>('dials');
-	let renaming = $state(false);
-	let newName = $state('');
 	let cutConfirm = $state(false);
 	let composer: Composer | undefined = $state();
 	let scroller: HTMLElement | undefined = $state();
@@ -243,15 +243,17 @@
 		}
 	}
 
-	async function rename() {
-		if (!story || !newName.trim()) return;
+	/** The name changes at once; if the API refuses, it goes back and a toast says why. */
+	async function rename(name: string) {
+		if (!story) return;
+		const before = story.name;
+		story.name = name;
 		try {
-			const renamed = await api.renameStory(id, newName.trim());
+			const renamed = await api.renameStory(id, name);
 			story.name = renamed.name;
 			stories.touch({ ...story, ...renamed });
-			renaming = false;
-			storyMenu = false;
 		} catch (error) {
+			story.name = before;
 			toasts.show('danger', 'Could not rename', error instanceof Error ? error.message : undefined);
 		}
 	}
@@ -274,7 +276,13 @@
 </script>
 
 <div class="screen">
-	<AppBar title={story?.name ?? 'Story'} {sub} back="/">
+	<AppBar
+		title={story?.name ?? 'Story'}
+		{sub}
+		back="/"
+		ontitle={story ? () => (storyOpen = true) : undefined}
+		titleOpen={storyOpen}
+	>
 		{#snippet actions()}
 			<button
 				class="dials"
@@ -282,12 +290,6 @@
 				type="button"
 				aria-expanded={panelOpen}
 				onclick={() => openPanel()}><span aria-hidden="true">◐</span>Dials</button
-			>
-			<button
-				class="btn icon"
-				type="button"
-				aria-label="Story menu"
-				onclick={() => (storyMenu = true)}>⋯</button
 			>
 		{/snippet}
 	</AppBar>
@@ -394,41 +396,18 @@
 	{/if}
 </Sheet>
 
-<Sheet bind:open={storyMenu} title={story?.name ?? 'Story'} hint={sub}>
-	{#if renaming}
-		<label class="field">
-			<span>Name</span>
-			<input class="input" id="rename" type="text" bind:value={newName} maxlength="200" />
-		</label>
-		<div class="menu">
-			<button type="button" class="btn primary" onclick={rename}>Save</button>
-			<button type="button" class="btn ghost" onclick={() => (renaming = false)}>Cancel</button>
-		</div>
-	{:else}
-		<div class="menu">
-			<button
-				type="button"
-				class="btn"
-				onclick={() => {
-					newName = story?.name ?? '';
-					renaming = true;
-				}}>Rename</button
-			>
-			{#if newestReply}
-				<button
-					type="button"
-					class="btn"
-					onclick={() => {
-						storyMenu = false;
-						if (newestReply) void branchFrom(newestReply);
-					}}>Branch from the end</button
-				>
-			{/if}
-			<button type="button" class="btn danger" onclick={deleteStory}>Delete the story</button>
-			<button type="button" class="btn ghost" onclick={() => (storyMenu = false)}>Close</button>
-		</div>
-	{/if}
-</Sheet>
+<StorySheet
+	bind:open={storyOpen}
+	{story}
+	spend={extras?.spend ?? null}
+	canBranch={newestReply !== null}
+	onrename={rename}
+	onbranch={() => {
+		storyOpen = false;
+		if (newestReply) void branchFrom(newestReply);
+	}}
+	ondelete={deleteStory}
+/>
 
 <style>
 	.screen {

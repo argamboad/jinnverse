@@ -9,8 +9,17 @@
 		title,
 		hint,
 		max,
+		bare = false,
 		children
-	}: { open?: boolean; title: string; hint?: string; max?: string; children: Snippet } = $props();
+	}: {
+		open?: boolean;
+		title: string;
+		hint?: string;
+		max?: string;
+		/** No title row: the `title` is still the dialog's name for a screen reader. */
+		bare?: boolean;
+		children: Snippet;
+	} = $props();
 
 	function close() {
 		open = false;
@@ -27,10 +36,12 @@
 	<div class="scrim" role="presentation" onclick={close}></div>
 	<div class="sheet" role="dialog" aria-modal="true" aria-label={title} style:max-height={max}>
 		<div class="grab" aria-hidden="true"></div>
-		<h3>
-			<span>{title}</span>
-			{#if hint}<small>{hint}</small>{/if}
-		</h3>
+		{#if !bare}
+			<h3>
+				<span>{title}</span>
+				{#if hint}<small>{hint}</small>{/if}
+			</h3>
+		{/if}
 		<div class="content">
 			{@render children()}
 		</div>
