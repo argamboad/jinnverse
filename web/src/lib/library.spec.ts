@@ -2,11 +2,56 @@ import { describe, expect, it } from 'vitest';
 import {
 	DESCRIPTION_LENGTH,
 	blurb,
+	entryMeta,
 	hiddenCount,
 	pieceBlurb,
+	piecesSummary,
 	remaining,
+	saveNote,
 	sentDescription
 } from './library.ts';
+
+describe('the line under an entry', () => {
+	it('gives the version and how many stories use it', () => {
+		expect(entryMeta({ version: 2, used: 3 }, 'characters')).toBe('v2 · in 3 stories');
+		expect(entryMeta({ version: 1, used: 1 }, 'personas')).toBe('v1 · in 1 story');
+		expect(entryMeta({ version: 1, used: 0 }, 'personas')).toBe('v1 · unused');
+	});
+	it('gives only the version for a snippet, which no story keeps', () => {
+		expect(entryMeta({ version: 4, used: 0 }, 'snippets')).toBe('v4');
+	});
+});
+
+describe('the save bar', () => {
+	it('says only that there are changes on a phone, or when nothing uses the entry', () => {
+		expect(saveNote('character', 3, 4, false)).toBe('Unsaved changes');
+		expect(saveNote('snippet', 0, 2, true)).toBe('Unsaved changes');
+	});
+	it('says which version the stories will read on a wide window', () => {
+		expect(saveNote('character', 1, 4, true)).toBe(
+			'Unsaved changes · the story using this character reads v4 from its next turn'
+		);
+		expect(saveNote('persona', 2, 2, true)).toBe(
+			'Unsaved changes · the 2 stories using this persona read v2 from their next turn'
+		);
+	});
+});
+
+describe('the pool of pieces in one line', () => {
+	it('counts pieces, the slots they fill, and each voice there is', () => {
+		const pool = [
+			{ slot: 'look', voice: 'he' },
+			{ slot: 'look', voice: 'she' },
+			{ slot: 'home', voice: 'he' },
+			{ slot: 'pets', voice: 'any' }
+		] as const;
+		expect(piecesSummary([...pool])).toBe('4 pieces across 3 slots · he 2 · she 1 · any 1');
+	});
+	it('says so when there are none, and counts one in the singular', () => {
+		expect(piecesSummary([])).toBe('No pieces yet');
+		expect(piecesSummary([{ slot: 'look', voice: 'they' }])).toBe('1 piece across 1 slot · they 1');
+	});
+});
 
 describe('what a list shows under a name', () => {
 	it('is the description when there is one', () => {

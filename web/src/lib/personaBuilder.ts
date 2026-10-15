@@ -2,7 +2,7 @@
  * small changes a pick goes through. The join itself is the server's (`/persona-pieces/preview`),
  * so the client never disagrees with it about what a persona looks like. */
 
-import type { Picks, Voice } from './api.ts';
+import type { Picks, Slot, Voice } from './api.ts';
 
 export const VOICES: { id: Voice; label: string }[] = [
 	{ id: 'he', label: 'He' },
@@ -70,6 +70,37 @@ export function hasText(picks: Picks): boolean {
 
 export function count(picks: Picks): number {
 	return Object.values(picks).reduce((n, ids) => n + ids.length, 0);
+}
+
+/** A row of the builder's checklist: one slot, or the slots that write one paragraph together
+ * (home, vehicle and pets). */
+export interface SlotGroup {
+	key: string;
+	label: string;
+	slots: Slot[];
+}
+
+/** The slots as the checklist shows them, in order: slots that share a paragraph share a row. */
+export function groupSlots(slots: Slot[]): SlotGroup[] {
+	const groups: SlotGroup[] = [];
+	for (const slot of slots) {
+		const last = groups.at(-1);
+		if (slot.paragraph !== null && last && last.slots[0].paragraph === slot.paragraph) {
+			last.slots.push(slot);
+			last.key = `${last.key}+${slot.key}`;
+			last.label = `${last.label} · ${slot.label}`;
+		} else {
+			groups.push({ key: slot.key, label: slot.label, slots: [slot] });
+		}
+	}
+	return groups;
+}
+
+/** The line under the builder's title: how many slots are picked, and what is still needed. */
+export function builderLine(slots: Slot[], picks: Picks): string {
+	const picked = slots.filter((s) => picks[s.key]?.length).length;
+	const needed = missing(picks).length;
+	return `${picked} of ${slots.length} slots picked${needed ? ` · ${needed} needed` : ''}`;
 }
 
 /** One piece for the slot, chosen by `roll` (a number in [0, 1)); null when the slot has none. */

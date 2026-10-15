@@ -54,6 +54,8 @@
 	/** The story's own sheet, opened from the title. */
 	let storyOpen = $state(false);
 	let extras = $state<Extras | null>(null);
+	/** The version of the character's card the story reads (always the newest). */
+	let cardVersion = $state<number | null>(null);
 	/** The Dials sheet (a phone, or a window narrower than the workspace) and the tab it is on. */
 	let panelOpen = $state(false);
 	let panelTab = $state<'dials' | 'meters' | 'status' | 'prompt'>('dials');
@@ -137,6 +139,7 @@
 		story = null;
 		problem = null;
 		extras = null;
+		cardVersion = null;
 		notes = [];
 		pendingSent = null;
 		pendingReply = null;
@@ -160,6 +163,12 @@
 					.catch(() => undefined);
 			}
 			extras = new Extras(target);
+			api
+				.entry('characters', found.character_id)
+				.then((card) => {
+					if (target === id) cardVersion = card.version;
+				})
+				.catch(() => undefined); // the version is a detail; the name is already shown
 			void extras.load();
 			await scrollToEnd(false);
 		} catch (error) {
@@ -461,6 +470,7 @@
 		<aside class="column" aria-label="Dials">
 			{#if story}
 				<StoryHead
+					{cardVersion}
 					bind:this={head}
 					{story}
 					canBranch={newestReply !== null}
@@ -522,6 +532,7 @@
 </Sheet>
 
 <StorySheet
+	{cardVersion}
 	bind:open={storyOpen}
 	{story}
 	spend={extras?.spend ?? null}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import Lamp from '#lib/Lamp.svelte';
+	import RailHead from '#lib/RailHead.svelte';
 	import StoryList from '#lib/StoryList.svelte';
 	import { stories } from '#lib/stories.svelte.ts';
 
@@ -16,15 +16,7 @@
 </script>
 
 <aside class="rail" aria-label="Stories">
-	<div class="head">
-		<Lamp size={30} />
-		<nav class="seg" aria-label="Sections">
-			<a href="/" aria-current="page" class="on">Stories</a>
-			<a href="/library">Library</a>
-		</nav>
-		<div class="grow"></div>
-		<a class="avatar" href="/you" aria-label="You">R</a>
-	</div>
+	<RailHead section="stories" />
 	<div class="search">
 		<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"
 			><path
@@ -56,48 +48,6 @@
 		min-width: 0;
 		background: var(--bg-2);
 		border-right: 1px solid var(--line);
-	}
-	.head {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 12px 12px 8px;
-		min-height: 62px;
-	}
-	.grow {
-		flex: 1;
-	}
-	.seg {
-		display: flex;
-		gap: 2px;
-		padding: 3px;
-		border-radius: var(--r-pill);
-		background: var(--surface-2);
-		border: 1px solid var(--line);
-	}
-	.seg a {
-		text-decoration: none;
-		color: var(--fg-2);
-		font-weight: 500;
-		font-size: 0.85rem;
-		padding: 5px 12px;
-		border-radius: var(--r-pill);
-	}
-	.seg a.on {
-		background: var(--gold);
-		color: var(--gold-ink);
-	}
-	.avatar {
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: var(--gold-soft);
-		color: var(--gold-text);
-		display: grid;
-		place-items: center;
-		font-weight: 600;
-		font-size: 0.8rem;
-		text-decoration: none;
 	}
 	.search {
 		margin: 0 12px 8px;

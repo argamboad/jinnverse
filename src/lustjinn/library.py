@@ -164,6 +164,8 @@ class EntrySummary(BaseModel):
     preview: str
     description: str | None
     """The owner's short note; a list shows it in place of the preview when there is one."""
+    used: int = 0
+    """How many live stories use it, by the same rule as `used_by`. Always 0 for a snippet."""
 
 
 class EntryOut(EntrySummary):
@@ -195,7 +197,7 @@ class SetDefaults(BaseModel):
     default_persona_id: uuid.UUID | None
 
 
-def _summary(shelf: Shelf[Any], entry: LibraryEntry) -> EntrySummary:
+def _summary(shelf: Shelf[Any], entry: LibraryEntry, used: int = 0) -> EntrySummary:
     return EntrySummary(
         id=entry.id,
         name=entry.name,
@@ -204,12 +206,13 @@ def _summary(shelf: Shelf[Any], entry: LibraryEntry) -> EntrySummary:
         updated_at=entry.updated_at,
         preview=shelf.text_of(entry)[:PREVIEW_LENGTH],
         description=entry.description,
+        used=used,
     )
 
 
 def _out(shelf: Shelf[Any], entry: LibraryEntry, used_by: Sequence[str]) -> EntryOut:
     return EntryOut(
-        **_summary(shelf, entry).model_dump(),
+        **_summary(shelf, entry, len(used_by)).model_dump(),
         text=shelf.text_of(entry),
         opening=entry.opening if isinstance(entry, Character) else None,
         used_by=list(used_by),
@@ -270,6 +273,29 @@ async def used_by(session: AsyncSession, shelf: Shelf[Any], entry: LibraryEntry)
         .order_by(alphabetical(Story.name))
     )
     return list(names)
+
+
+async def use_counts(session: AsyncSession, shelf: Shelf[Any]) -> dict[uuid.UUID, int]:
+    """How many live stories use each entry of the shelf, by the rule `used_by` follows, counted
+    in one query for the whole shelf. An entry no story uses is absent."""
+    if shelf.model is Character:
+        column = Story.character_id
+    elif shelf.model is Persona:
+        column = Story.persona_id
+    else:
+        return {}
+    rows = await session.execute(
+        select(column, func.count()).where(Story.deleted_at.is_(None)).group_by(column)
+    )
+    counts: dict[uuid.UUID | None, int] = {key: n for key, n in rows}
+    naming_none = counts.pop(None, 0)
+    if shelf.model is Persona and naming_none:
+        # The stories that name no persona play as the default one, as `used_by` says.
+        settings = await _settings(session)
+        if settings is not None and settings.default_persona_id is not None:
+            default = settings.default_persona_id
+            counts[default] = counts.get(default, 0) + naming_none
+    return {key: n for key, n in counts.items() if key is not None}
 
 
 def alphabetical(name: InstrumentedAttribute[str]) -> ColumnElement[str]:
@@ -392,7 +418,8 @@ async def list_entries(
     if not hidden:
         # autoescape: `_` is a wildcard in LIKE, which `startswith` compiles to.
         query = query.where(~shelf.model.name.startswith("_", autoescape=True))
-    return [_summary(shelf, entry) for entry in await session.scalars(query)]
+    used = await use_counts(session, shelf)
+    return [_summary(shelf, entry, used.get(entry.id, 0)) for entry in await session.scalars(query)]
 
 
 @router.post("/{shelf}", status_code=status.HTTP_201_CREATED)
