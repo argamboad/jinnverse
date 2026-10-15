@@ -34,6 +34,7 @@ from lustjinn import (
     recap,
     regenerate,
     snippets,
+    status_api,
     streams,
     trackers,
 )
@@ -331,6 +332,10 @@ async def send(
             # Checked before the stream opens, so a refusal is a 4xx and not a stream of one.
             return streams.streamed(
                 await streams.started(trackers.set_tracker(session, story, argument))
+            )
+        case commands.Command(spec=commands.Spec(name="status"), argument=argument):
+            return streams.streamed(
+                await streams.started(status_api.set_command(session, story, argument))
             )
         case commands.Command(spec=spec):
             raise HTTPException(

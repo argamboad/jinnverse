@@ -212,7 +212,7 @@ def _name(value: str) -> str | None:
     return name
 
 
-def _value(field: StatusField, raw: str) -> str | None:
+def value_of(field: StatusField, raw: str) -> str | None:
     """A value as it will be stored, or None when there is nothing to store."""
     text = " ".join(raw.strip().strip('[]"“”').split())
     if text.casefold() in EMPTY:
@@ -258,7 +258,7 @@ def read(reply: str, fields: Sequence[StatusField], default_subject: str = "") -
         if field is None:
             subject = None
             continue
-        kept = _value(field, value)
+        kept = value_of(field, value)
         if kept is None:
             continue
         who = "" if field.scope == StatusScope.SCENE.value else subject or default_subject
