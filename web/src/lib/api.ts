@@ -464,6 +464,7 @@ export const api = {
 		call('DELETE', `/stories/${storyId}/trackers/${encodeURIComponent(name)}`).then(
 			() => undefined
 		),
+	statusStarters: () => json<StatusStarter[]>('GET', '/status-starters'),
 	status: (storyId: string) => json<Status>('GET', `/stories/${storyId}/status`),
 	adoptStatus: (storyId: string, keys: string[]) =>
 		json<Status>('POST', `/stories/${storyId}/status/adopt`, { keys }),

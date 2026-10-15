@@ -26,6 +26,16 @@ async def adopted(client: httpx2.AsyncClient, story: object, *keys: str) -> dict
 # --- reading and adopting ---------------------------------------------------------------------
 
 
+async def test_the_starter_fields_can_be_read_before_a_story_exists(
+    client: httpx2.AsyncClient,
+) -> None:
+    response = await client.get("/status-starters")
+
+    assert response.status_code == 200
+    assert [s["key"] for s in response.json()] == ["time", "place", "outfit", "mood"]
+    assert response.json()[0]["label"] == "Day and time"
+
+
 async def test_a_new_story_has_no_fields_and_is_offered_the_starters(
     client: httpx2.AsyncClient, session: AsyncSession
 ) -> None:

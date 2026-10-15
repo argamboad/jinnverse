@@ -29,6 +29,9 @@ from lustjinn.stories import visible_story
 from lustjinn.streams import Said, event
 
 router = APIRouter(prefix="/stories/{story_id}/status", tags=["status"])
+catalogue = APIRouter(tags=["status"])
+"""What needs no story: the shipped starter fields, which the new-chat screen offers before the
+story exists."""
 
 MOST_FIELDS = 24
 MOST_WORDS = 40
@@ -144,6 +147,18 @@ class StatusOut(BaseModel):
     pins: list[str]
 
 
+def _starter_out(s: blocks.Starter) -> StarterOut:
+    return StarterOut(
+        key=s.key, label=s.label, icon=s.icon, hint=s.hint, kind=s.kind, scope=s.scope
+    )
+
+
+@catalogue.get("/status-starters")
+async def read_starters() -> list[StarterOut]:
+    """The shipped starter fields, in the order a screen lists them."""
+    return [_starter_out(s) for s in blocks.starters()]
+
+
 async def state_of(session: AsyncSession, story_id: uuid.UUID) -> StatusOut:
     fields = await blocks.fields_of(session, story_id)
     have = {field.key for field in fields}
@@ -157,13 +172,7 @@ async def state_of(session: AsyncSession, story_id: uuid.UUID) -> StatusOut:
     )
     return StatusOut(
         fields=[FieldOut.model_validate(field) for field in fields],
-        starters=[
-            StarterOut(
-                key=s.key, label=s.label, icon=s.icon, hint=s.hint, kind=s.kind, scope=s.scope
-            )
-            for s in blocks.starters()
-            if s.key not in have
-        ],
+        starters=[_starter_out(s) for s in blocks.starters() if s.key not in have],
         values=[
             ValueOut(
                 field=v.field_key,
