@@ -11,8 +11,20 @@
 		sub,
 		back,
 		mark = false,
+		ontitle,
+		titleOpen = false,
 		actions
-	}: { title: string; sub?: string; back?: string; mark?: boolean; actions?: Snippet } = $props();
+	}: {
+		title: string;
+		sub?: string;
+		back?: string;
+		mark?: boolean;
+		/** Makes the title block a button (the story's own sheet opens from it). */
+		ontitle?: () => void;
+		/** The thing `ontitle` opens is showing: the block is lit and the arrow points up. */
+		titleOpen?: boolean;
+		actions?: Snippet;
+	} = $props();
 </script>
 
 <header class="bar">
@@ -21,10 +33,27 @@
 	{:else if mark}
 		<Lamp size={30} />
 	{/if}
-	<div class="title">
-		<h1>{title}</h1>
-		{#if sub}<span class="sub">{sub}</span>{/if}
-	</div>
+	{#if ontitle}
+		<button
+			type="button"
+			class="title tap"
+			class:open={titleOpen}
+			aria-haspopup="dialog"
+			aria-expanded={titleOpen}
+			onclick={ontitle}
+		>
+			<span class="line">
+				<h1>{title}</h1>
+				<span class="caret" aria-hidden="true">{titleOpen ? '⌃' : '⌄'}</span>
+			</span>
+			{#if sub}<span class="sub">{sub}</span>{/if}
+		</button>
+	{:else}
+		<div class="title">
+			<h1>{title}</h1>
+			{#if sub}<span class="sub">{sub}</span>{/if}
+		</div>
+	{/if}
 	<div class="grow"></div>
 	{#if actions}{@render actions()}{/if}
 	<SectionNav />
@@ -59,6 +88,30 @@
 	.title {
 		min-width: 0;
 		display: grid;
+	}
+	.tap {
+		appearance: none;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		padding: 4px 6px;
+		margin-left: -6px;
+		border-radius: var(--r-s);
+	}
+	.tap.open {
+		background: var(--gold-soft);
+	}
+	.line {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+	.caret {
+		flex: none;
+		color: var(--muted);
+		font-size: 0.8rem;
 	}
 	h1 {
 		font-size: 1.05rem;

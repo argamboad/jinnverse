@@ -13,6 +13,25 @@ export interface Context {
 	budget: number | null;
 }
 
+/** The prompt's layers are named in the code; a few read better as plain words on a screen. */
+const LABELS: Record<string, string> = { history: 'recent turns' };
+
+export function layerLabel(name: string): string {
+	return LABELS[name] ?? name;
+}
+
+/** Each layer's share of the stacked bar, in percent: of the budget when the prompt had one (the
+ * empty remainder is room left), of the total when it had none (the bar fills). */
+export function shares(context: Context): number[] {
+	const whole = context.budget ?? Math.max(context.total, 1);
+	return context.layers.map((layer) => Math.min(100, (layer.tokens / whole) * 100));
+}
+
+/** The opacity of the i-th of n segments: the first full, the last faint, so neighbours differ. */
+export function fade(i: number, n: number): number {
+	return n <= 1 ? 1 : 1 - (0.65 * i) / (n - 1);
+}
+
 const LAYER = /^(\w+) (\d+)(?: \((\d+) dropped\))?$/;
 const TOTAL = /^total (\d+)(?:\/(\d+))?$/;
 

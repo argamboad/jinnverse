@@ -4,8 +4,11 @@
  * (`VITE_API_URL`), the local API by default.
  */
 
+import { fileNameOf } from './download.ts';
 import type { Shortcode } from './emoji.ts';
 import { readEvents } from './sse';
+
+export type ExportFormat = 'markdown' | 'json' | 'text';
 
 export const API_URL: string =
 	(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://127.0.0.1:8000';
@@ -161,6 +164,31 @@ export interface StorySpend {
 	discarded_cost: string;
 	unpriced: number;
 	cached_share: number | null;
+}
+
+/** One thing the story believes: who it is about, what, and for how long it held. */
+export interface Fact {
+	id: string;
+	subject: string;
+	text: string;
+	valid_from_sequence: number;
+	/** Null while the fact is live. */
+	valid_to_sequence: number | null;
+	/** Null when a person stated it. */
+	model: string | null;
+	pinned: boolean;
+	created_at: string;
+}
+
+/** What a memory rebuild did. */
+export interface Rebuilt {
+	dry_run: boolean;
+	summaries_removed: number;
+	facts_removed: number;
+	pinned_kept: number;
+	summaries_written: number;
+	facts_extracted: number;
+	messages_covered: number;
 }
 
 export interface SpendReport {
@@ -441,6 +469,18 @@ export const api = {
 			message_id: messageId,
 			name: name ?? null
 		}),
+	/** The visible transcript as a document, with the file name the server chose (null when a
+	 * cross-origin page may not read it). */
+	async exportStory(
+		storyId: string,
+		format: ExportFormat
+	): Promise<{ blob: Blob; name: string | null }> {
+		const response = await call('GET', `/stories/${storyId}/export?format=${format}`);
+		return {
+			blob: await response.blob(),
+			name: fileNameOf(response.headers.get('Content-Disposition'))
+		};
+	},
 	deleteFrom: (storyId: string, messageId: string) =>
 		json<{ story: StoryWithMessages; hidden: number }>(
 			'DELETE',
@@ -543,6 +583,10 @@ export const api = {
 	spend: (from?: string) =>
 		json<SpendReport>('GET', from ? `/spend?from_at=${encodeURIComponent(from)}` : '/spend'),
 	storySpend: (storyId: string) => json<StorySpend>('GET', `/stories/${storyId}/spend`),
+	/** What the story believes right now. */
+	facts: (storyId: string) => json<Fact[]>('GET', `/stories/${storyId}/facts`),
+	/** Throws the summaries and extracted facts away and writes them again: slow, and billed. */
+	rebuildMemory: (storyId: string) => json<Rebuilt>('POST', `/stories/${storyId}/memory/rebuild`),
 
 	/**
 	 * Sends what the reader typed and streams the reply: `onDelta` gets each piece of text as it

@@ -1,267 +1,140 @@
 <script lang="ts">
+	import { slide } from 'svelte/transition';
 	import DialControl from '#lib/DialControl.svelte';
 	import type { Extras } from '#lib/extras.svelte.ts';
+	import MetersPanel from '#lib/MetersPanel.svelte';
+	import PromptPanel from '#lib/PromptPanel.svelte';
 	import StatusPanel from '#lib/StatusPanel.svelte';
 
-	/** Beside the conversation: the dials, the meters, the last prompt and the running cost.
-	 * A column on the desktop, the ◐ sheet on a phone. */
-	let { extras, section = $bindable('dials') }: { extras: Extras; section?: Section } = $props();
+	/** Beside the conversation: the dials, the meters, the status, the last prompt and the running
+	 * cost. A column on the desktop (`compact`), the Dials sheet on a phone. A dial the reader has
+	 * set is a control; one still following the card is a single line that opens in place. */
+	let {
+		extras,
+		section = $bindable('dials'),
+		compact = false
+	}: { extras: Extras; section?: Section; compact?: boolean } = $props();
 
 	type Section = 'dials' | 'meters' | 'status' | 'prompt';
-	const sections: { id: Section; label: string }[] = [
+	const sections = $derived<{ id: Section; label: string; count?: number }[]>([
 		{ id: 'dials', label: 'Dials' },
-		{ id: 'meters', label: 'Meters' },
+		{ id: 'meters', label: 'Meters', count: extras.trackers.length || undefined },
 		{ id: 'status', label: 'Status' },
-		{ id: 'prompt', label: 'This prompt' }
-	];
+		{ id: 'prompt', label: 'Prompt' }
+	]);
 
-	// --- meters -------------------------------------------------------------------------------
-	let adding = $state(false);
-	let name = $state('');
-	let start = $state(0);
-	let max = $state(100);
-	let means = $state('');
-	let setting = $state<string | null>(null);
-	let setTo = $state(0);
+	// --- dials --------------------------------------------------------------------------------
+	const enabledDials = $derived(extras.dials.filter((d) => d.enabled));
+	const setDials = $derived(enabledDials.filter((d) => d.stored !== null));
+	const unsetDials = $derived(enabledDials.filter((d) => d.stored === null));
+	/** The unset dial opened to its full control. */
+	let expanded = $state<string | null>(null);
 
-	async function add(event: SubmitEvent) {
-		event.preventDefault();
-		if (!name.trim()) return;
-		const ok = await extras.addTracker({
-			name: name.trim(),
-			value: start,
-			max,
-			means: means.trim() || null
-		});
-		if (ok) {
-			adding = false;
-			name = '';
-			start = 0;
-			max = 100;
-			means = '';
-		}
-	}
-
-	function money(cost: string | undefined): string {
-		if (cost === undefined) return '—';
-		const n = Number(cost);
-		if (n === 0) return '$0';
-		return n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`;
-	}
-
-	function bar(value: number, maximum: number): number {
-		return maximum > 0 ? Math.min(100, Math.max(0, (value / maximum) * 100)) : 0;
-	}
-
-	function trim(n: number): string {
-		return Number.isInteger(n) ? String(n) : n.toFixed(1);
+	function clear(key: string) {
+		if (expanded === key) expanded = null;
+		void extras.clearDial(key);
 	}
 </script>
 
-<div class="rail">
-	<nav class="tabs" aria-label="Story settings">
+<div class="rail" class:compact>
+	<nav class="tabs" class:compact aria-label="Story panel">
 		{#each sections as s (s.id)}
 			<button type="button" class:on={section === s.id} onclick={() => (section = s.id)}
-				>{s.label}</button
+				>{s.label}{#if s.count}<span class="count">{s.count}</span>{/if}</button
 			>
 		{/each}
 	</nav>
 
-	{#if !extras.loaded}
-		<p class="muted small">Reading…</p>
-	{:else if section === 'dials'}
-		<div class="stack big">
-			{#each extras.dials.filter((d) => d.enabled) as sd (sd.key)}
-				{@const dial = extras.dial(sd.key)}
-				{#if dial}
-					<DialControl
-						{dial}
-						setting={sd}
-						onset={(value) => extras.setDial(sd.key, value)}
-						onclear={() => extras.clearDial(sd.key)}
-					/>
+	<div class="body" class:compact>
+		{#if !extras.loaded}
+			<p class="muted small">Reading…</p>
+		{:else if section === 'dials'}
+			<div class="stack big">
+				{#if compact}
+					<p class="muted lead">Saved as you touch them; reach the story from its next turn.</p>
 				{/if}
-			{/each}
-			<p class="muted small">
-				A dial reaches the prompt or the sampler from the next turn, never the transcript. This
-				story only.
-			</p>
-		</div>
-	{:else if section === 'meters'}
-		<div class="stack">
-			{#if extras.trackers.length === 0 && !adding}
-				<p class="muted small">
-					No meters. A meter is a number the story keeps — trust, heat, suspicion — that the model
-					moves a little each turn and the app reads back. A meter the model can see is a meter it
-					writes towards.
-				</p>
-			{/if}
-			{#each extras.trackers as t (t.id)}
-				<div class="meter">
-					<div class="mhead">
-						<b>{t.name}</b>
-						<span class="mono">
-							{trim(t.value)}/{trim(t.max)}
-							{#if t.delta !== 0}
-								<span class:up={t.delta > 0} class:down={t.delta < 0}
-									>{t.delta > 0 ? '+' : ''}{trim(t.delta)}</span
-								>
-							{/if}
-						</span>
-					</div>
-					<div class="bar"><i style:width="{bar(t.value, t.max)}%"></i></div>
-					<div class="mfoot">
-						<span class="muted"
-							>{t.note ?? t.means ?? '—'}{t.updated_at_sequence
-								? ` · turn ${t.updated_at_sequence}`
-								: ''}</span
-						>
-						{#if setting === t.name}
-							<form
-								class="setrow"
-								onsubmit={(e) => {
-									e.preventDefault();
-									extras.setTracker(t.name, setTo);
-									setting = null;
-								}}
-							>
-								<input
-									class="input tiny"
-									id="set-{t.id}"
-									type="number"
-									min="0"
-									max={t.max}
-									step="any"
-									bind:value={setTo}
-									aria-label="New value"
-								/>
-								<button type="submit" class="btn tiny primary">Set</button>
-								<button type="button" class="btn tiny ghost" onclick={() => (setting = null)}
-									>Cancel</button
-								>
-							</form>
-						{:else}
-							<span class="acts">
-								<button
-									type="button"
-									class="link"
-									onclick={() => {
-										setting = t.name;
-										setTo = t.value;
-									}}>Set</button
-								>
-								<button
-									type="button"
-									class="link danger"
-									onclick={() => extras.removeTracker(t.name)}>Remove</button
-								>
-							</span>
-						{/if}
-					</div>
-				</div>
-			{/each}
-			{#if adding}
-				<form class="add" onsubmit={add}>
-					<label class="field"
-						><span>Name</span><input
-							class="input"
-							id="meter-name"
-							type="text"
-							bind:value={name}
-							maxlength="120"
-							required
-							placeholder="Trust"
-						/></label
-					>
-					<div class="two">
-						<label class="field"
-							><span>Starts at</span><input
-								class="input"
-								id="meter-start"
-								type="number"
-								step="any"
-								min="0"
-								bind:value={start}
-							/></label
-						>
-						<label class="field"
-							><span>Out of</span><input
-								class="input"
-								id="meter-max"
-								type="number"
-								step="any"
-								min="1"
-								bind:value={max}
-							/></label
-						>
-					</div>
-					<label class="field"
-						><span>What it measures (optional)</span><input
-							class="input"
-							id="meter-means"
-							type="text"
-							bind:value={means}
-							maxlength="500"
-							placeholder="how far she trusts Rowan"
-						/></label
-					>
-					<div class="two">
-						<button type="submit" class="btn primary">Add meter</button>
-						<button type="button" class="btn ghost" onclick={() => (adding = false)}>Cancel</button>
-					</div>
-				</form>
-			{:else}
-				<button type="button" class="btn ghost" onclick={() => (adding = true)}>Add a meter</button>
-			{/if}
-		</div>
-	{:else if section === 'status'}
-		<StatusPanel {extras} />
-	{:else}
-		<div class="stack">
-			{#if extras.context}
-				{@const ctx = extras.context}
-				<h4>The last prompt</h4>
-				{#each ctx.layers as layer (layer.name)}
-					<div class="layer">
-						<span>{layer.name}{layer.dropped ? ` (${layer.dropped} dropped)` : ''}</span>
-						<span class="mono">{layer.tokens.toLocaleString()}</span>
-						<i
-							><b
-								style:width="{ctx.budget
-									? (layer.tokens / ctx.budget) * 100
-									: (layer.tokens / Math.max(ctx.total, 1)) * 100}%"
-							></b></i
-						>
-					</div>
+				{#each setDials as sd (sd.key)}
+					{@const dial = extras.dial(sd.key)}
+					{#if dial}
+						<DialControl
+							{dial}
+							setting={sd}
+							{compact}
+							onset={(value) => extras.setDial(sd.key, value)}
+							onclear={() => clear(sd.key)}
+						/>
+					{/if}
 				{/each}
-				<p class="mono small total">
-					total {ctx.total.toLocaleString()}{ctx.budget ? ` / ${ctx.budget.toLocaleString()}` : ''}
-					{#if extras.audit?.turns[0]?.prompt_tokens}
-						· billed {extras.audit.turns[0].prompt_tokens.toLocaleString()}
-					{/if}
-				</p>
-			{:else}
-				<p class="muted small">
-					No reply yet. After the first one, this shows what the prompt was built from.
-				</p>
-			{/if}
-			{#if extras.spend}
-				<h4>This story</h4>
-				<div class="cost">
-					<span>Calls</span><b>{extras.spend.calls}</b>
-					<span>Cost</span><b>{money(extras.spend.cost)}</b>
-					<span>Rerolled away</span><b class="warn">{money(extras.spend.discarded_cost)}</b>
-					{#if extras.spend.unpriced}<span>Unpriced calls</span><b>{extras.spend.unpriced}</b>{/if}
-					{#if extras.spend.cached_share !== null}
-						<span>Cached share</span><b>{Math.round(extras.spend.cached_share * 100)}%</b>
-					{/if}
-				</div>
-			{/if}
-		</div>
-	{/if}
+				{#if unsetDials.length > 0}
+					<div class="unset">
+						<h4>Not set · following the card</h4>
+						{#each unsetDials as sd (sd.key)}
+							{@const dial = extras.dial(sd.key)}
+							{#if dial}
+								{#if expanded === sd.key}
+									<div class="open" transition:slide={{ duration: 150 }}>
+										<DialControl
+											{dial}
+											setting={sd}
+											{compact}
+											onset={(value) => {
+												expanded = null;
+												void extras.setDial(sd.key, value);
+											}}
+											onclear={() => clear(sd.key)}
+											oncollapse={() => (expanded = null)}
+										/>
+									</div>
+								{:else}
+									<button type="button" class="row" onclick={() => (expanded = sd.key)}>
+										<span>{dial.title}</span><span class="set">Set ›</span>
+									</button>
+								{/if}
+							{/if}
+						{/each}
+					</div>
+				{/if}
+				{#if !compact}
+					<p class="muted small">
+						A dial reaches the prompt or the sampler from the next turn, never the transcript. This
+						story only.
+					</p>
+				{/if}
+			</div>
+		{:else if section === 'meters'}
+			<MetersPanel {extras} />
+		{:else if section === 'status'}
+			<StatusPanel {extras} />
+		{:else}
+			<PromptPanel {extras} />
+		{/if}
+	</div>
 </div>
 
 <style>
+	.rail.compact {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+	.rail.compact .tabs {
+		margin: 12px 16px 0;
+		flex: none;
+	}
+	.body {
+		display: grid;
+		gap: 14px;
+		align-content: start;
+		min-width: 0;
+	}
+	.body.compact {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		padding: 14px 16px 16px;
+		gap: 18px;
+	}
 	.rail {
 		display: grid;
 		gap: 14px;
@@ -288,9 +161,57 @@
 		min-height: 34px;
 		border-radius: var(--r-pill);
 	}
+	.tabs.compact button {
+		min-height: 32px;
+	}
 	.tabs button.on {
 		background: var(--gold);
 		color: var(--gold-ink);
+	}
+	.count {
+		margin-left: 5px;
+		opacity: 0.7;
+		font-weight: 400;
+	}
+	.lead {
+		font-size: 0.76rem;
+		line-height: 1.4;
+	}
+	.unset {
+		display: grid;
+		gap: 2px;
+		border-top: 1px solid var(--line);
+		padding-top: 12px;
+	}
+	.unset h4 {
+		font-size: 0.7rem;
+		margin-bottom: 6px;
+	}
+	.unset .row {
+		appearance: none;
+		border: 0;
+		background: transparent;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 8px 0;
+		min-height: 40px;
+		color: var(--fg);
+		font-size: 0.9rem;
+		text-align: left;
+	}
+	.unset .row:hover {
+		color: var(--gold-text);
+	}
+	.unset .set {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+	.unset .row:hover .set {
+		color: inherit;
+	}
+	.open {
+		padding: 8px 0 12px;
 	}
 	.stack {
 		display: grid;
@@ -308,136 +229,5 @@
 		text-transform: uppercase;
 		color: var(--muted);
 		font-weight: 600;
-	}
-	.meter {
-		display: grid;
-		gap: 6px;
-		padding: 10px 12px;
-		border-radius: var(--r-s);
-		background: var(--surface);
-		border: 1px solid var(--line);
-	}
-	.mhead {
-		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-		align-items: baseline;
-	}
-	.mhead b {
-		font-weight: 600;
-	}
-	.mono {
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-	}
-	.up {
-		color: var(--ok);
-	}
-	.down {
-		color: var(--danger);
-	}
-	.bar {
-		height: 8px;
-		border-radius: 4px;
-		background: var(--surface-2);
-		overflow: hidden;
-	}
-	.bar i {
-		display: block;
-		height: 100%;
-		border-radius: 4px;
-		background: linear-gradient(90deg, var(--gold-2), var(--gold));
-		transition: width 0.3s ease;
-	}
-	.mfoot {
-		display: flex;
-		justify-content: space-between;
-		gap: 8px;
-		align-items: center;
-		font-size: 0.75rem;
-		flex-wrap: wrap;
-	}
-	.acts {
-		display: flex;
-		gap: 4px;
-	}
-	.link {
-		appearance: none;
-		border: 0;
-		background: transparent;
-		color: var(--gold-text);
-		font-weight: 600;
-		font-size: 0.75rem;
-		padding: 6px 8px;
-		min-height: 32px;
-	}
-	.link.danger {
-		color: var(--danger);
-	}
-	.setrow {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-	.input.tiny {
-		width: 84px;
-		min-height: 34px;
-		padding: 6px 8px;
-	}
-	.btn.tiny {
-		min-height: 34px;
-		padding: 4px 12px;
-		font-size: 0.8rem;
-	}
-	.add {
-		display: grid;
-		gap: 10px;
-		padding: 12px;
-		border-radius: var(--r-s);
-		background: var(--surface);
-		border: 1px solid var(--line);
-	}
-	.two {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 8px;
-	}
-	.layer {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 2px 8px;
-		font-size: 0.82rem;
-		color: var(--fg-2);
-	}
-	.layer i {
-		grid-column: 1 / -1;
-		display: block;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--surface-2);
-		overflow: hidden;
-	}
-	.layer i b {
-		display: block;
-		height: 100%;
-		background: var(--gold-2);
-	}
-	.total {
-		color: var(--muted);
-	}
-	.cost {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 4px 12px;
-		font-size: 0.88rem;
-		color: var(--fg-2);
-		font-variant-numeric: tabular-nums;
-	}
-	.cost b {
-		font-weight: 600;
-		color: var(--fg);
-	}
-	.cost .warn {
-		color: var(--warn);
 	}
 </style>

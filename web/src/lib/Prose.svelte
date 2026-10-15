@@ -23,8 +23,8 @@
 <style>
 	.prose {
 		font-family: var(--font-prose);
-		font-size: 0.95rem;
-		line-height: 1.5;
+		font-size: var(--prose-size, 0.95rem);
+		line-height: var(--prose-leading, 1.5);
 		display: grid;
 		gap: 0.5em;
 		overflow-wrap: anywhere;

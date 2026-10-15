@@ -100,6 +100,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=_cors_origins(settings),
         allow_methods=["*"],
         allow_headers=["Authorization", "Content-Type"],
+        # A cross-origin page can read only the headers listed here: the export's file name.
+        expose_headers=["Content-Disposition"],
     )
 
     @app.middleware("http")

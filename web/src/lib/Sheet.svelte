@@ -2,13 +2,24 @@
 	import type { Snippet } from 'svelte';
 
 	/** A bottom sheet on a phone, a centred dialog on a wide screen. Closes on the scrim, on
-	 * Escape, or from inside through `onclose`. */
+	 * Escape, or from inside through `onclose`. `max` is a CSS height that replaces the default
+	 * ceiling (the Dials sheet is 88% tall). */
 	let {
 		open = $bindable(false),
 		title,
 		hint,
+		max,
+		bare = false,
 		children
-	}: { open?: boolean; title: string; hint?: string; children: Snippet } = $props();
+	}: {
+		open?: boolean;
+		title: string;
+		hint?: string;
+		max?: string;
+		/** No title row: the `title` is still the dialog's name for a screen reader. */
+		bare?: boolean;
+		children: Snippet;
+	} = $props();
 
 	function close() {
 		open = false;
@@ -23,12 +34,14 @@
 
 {#if open}
 	<div class="scrim" role="presentation" onclick={close}></div>
-	<div class="sheet" role="dialog" aria-modal="true" aria-label={title}>
+	<div class="sheet" role="dialog" aria-modal="true" aria-label={title} style:max-height={max}>
 		<div class="grab" aria-hidden="true"></div>
-		<h3>
-			<span>{title}</span>
-			{#if hint}<small>{hint}</small>{/if}
-		</h3>
+		{#if !bare}
+			<h3>
+				<span>{title}</span>
+				{#if hint}<small>{hint}</small>{/if}
+			</h3>
+		{/if}
 		<div class="content">
 			{@render children()}
 		</div>

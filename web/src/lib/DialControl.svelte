@@ -7,13 +7,19 @@
 	let {
 		dial,
 		setting,
+		compact = false,
 		onset,
-		onclear
+		onclear,
+		oncollapse
 	}: {
 		dial: Dial;
 		setting: StoryDial;
+		/** The narrow column: shorter steps with no labels under them (the level is the title). */
+		compact?: boolean;
 		onset: (value: string) => void;
 		onclear: () => void;
+		/** For a dial opened from the "not set" list: the × that folds it away without setting it. */
+		oncollapse?: () => void;
 	} = $props();
 
 	const inForce = $derived(setting.effective);
@@ -48,7 +54,7 @@
 	}
 </script>
 
-<div class="dial">
+<div class="dial" class:compact>
 	<div class="head">
 		<b>{dial.title}</b>
 		<span class="now">
@@ -56,6 +62,13 @@
 			{#if setting.stored !== null}
 				<button type="button" class="clear" onclick={onclear} aria-label="Back to the default"
 					>×</button
+				>
+			{:else if oncollapse}
+				<button
+					type="button"
+					class="clear"
+					onclick={oncollapse}
+					aria-label="Leave it following the card">×</button
 				>
 			{/if}
 		</span>
@@ -69,6 +82,7 @@
 					role="radio"
 					aria-checked={inForce === String(i)}
 					aria-label={lvl.label}
+					title={lvl.label}
 					class:on={inForce === String(i)}
 					class:after={inForce !== null && i > Number(inForce)}
 					onclick={() => onset(String(i))}
@@ -229,6 +243,45 @@
 	.toggle[aria-checked='true']::after {
 		transform: translateX(20px);
 		background: var(--gold-ink);
+	}
+	/* The column beside the conversation: the level's name is the title, not a label under the step. */
+	.compact .head b {
+		font-size: 0.92rem;
+	}
+	.compact .now {
+		font-size: 0.82rem;
+	}
+	.compact .clear {
+		width: 20px;
+		height: 20px;
+		font-size: 0.85rem;
+	}
+	.compact .steps {
+		padding-bottom: 0;
+	}
+	.compact .steps button {
+		height: 26px;
+		border-radius: 7px;
+	}
+	.compact .steps button.on {
+		box-shadow: 0 0 0 3px var(--gold-soft);
+	}
+	.compact .lbl {
+		display: none;
+	}
+	.compact .help {
+		font-size: 0.76rem;
+	}
+	.compact .toggle {
+		width: 44px;
+		height: 26px;
+	}
+	.compact .toggle::after {
+		top: 2px;
+		left: 2px;
+	}
+	.compact .toggle[aria-checked='true']::after {
+		transform: translateX(18px);
 	}
 	.options {
 		display: flex;

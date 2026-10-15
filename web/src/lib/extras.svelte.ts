@@ -8,6 +8,7 @@ import {
 	api,
 	type Audit,
 	type Dial,
+	type Fact,
 	type NewStatusField,
 	type Status,
 	type StatusFieldChanges,
@@ -24,6 +25,8 @@ export class Extras {
 	trackers = $state<Tracker[]>([]);
 	/** The status block's fields, what they hold and who is pinned; null until it is read. */
 	status = $state<Status | null>(null);
+	/** What the story believes right now (the live facts). */
+	facts = $state<Fact[]>([]);
 	audit = $state<Audit | null>(null);
 	spend = $state<StorySpend | null>(null);
 	loaded = $state(false);
@@ -55,13 +58,15 @@ export class Extras {
 
 	/** After a turn: the meters may have moved, the audit and the cost have a new line. */
 	async refresh() {
-		const [trackers, audit, spend, status] = await Promise.allSettled([
+		const [trackers, audit, spend, status, facts] = await Promise.allSettled([
 			api.trackers(this.storyId),
 			api.audit(this.storyId),
 			api.storySpend(this.storyId),
-			api.status(this.storyId)
+			api.status(this.storyId),
+			api.facts(this.storyId)
 		]);
 		if (trackers.status === 'fulfilled') this.trackers = trackers.value;
+		if (facts.status === 'fulfilled') this.facts = facts.value;
 		if (status.status === 'fulfilled') this.status = status.value;
 		if (audit.status === 'fulfilled') this.audit = audit.value;
 		if (spend.status === 'fulfilled') this.spend = spend.value;
@@ -71,32 +76,45 @@ export class Extras {
 		return this.pack.find((d) => d.key === key);
 	}
 
+	/** Sets a dial at once and tells the API; if the API refuses, the dial goes back. */
 	async setDial(key: string, value: string) {
+		const dial = this.dial(key);
+		const before = this.dials.find((d) => d.key === key);
+		this.replaceDial(key, (d) => ({
+			...d,
+			stored: value,
+			effective: value,
+			label: labelOf(dial, value)
+		}));
 		try {
 			const changed = await api.setDial(this.storyId, key, value);
-			this.dials = this.dials.map((d) => (d.key === key ? changed : d));
+			this.replaceDial(key, () => changed);
 		} catch (error) {
+			if (before) this.replaceDial(key, () => before);
 			toasts.show('danger', 'Not set', error instanceof Error ? error.message : undefined);
 		}
 	}
 
+	/** Puts a dial back on the card's own default at once; reverts if the API refuses. */
 	async clearDial(key: string) {
+		const dial = this.dial(key);
+		const before = this.dials.find((d) => d.key === key);
+		this.replaceDial(key, (d) => ({
+			...d,
+			stored: null,
+			effective: dial?.default ?? null,
+			label: labelOf(dial, dial?.default ?? null)
+		}));
 		try {
 			await api.clearDial(this.storyId, key);
-			const dial = this.dial(key);
-			this.dials = this.dials.map((d) =>
-				d.key === key
-					? {
-							...d,
-							stored: null,
-							effective: dial?.default ?? null,
-							label: labelOf(dial, dial?.default ?? null)
-						}
-					: d
-			);
 		} catch (error) {
+			if (before) this.replaceDial(key, () => before);
 			toasts.show('danger', 'Not cleared', error instanceof Error ? error.message : undefined);
 		}
+	}
+
+	private replaceDial(key: string, change: (d: StoryDial) => StoryDial) {
+		this.dials = this.dials.map((d) => (d.key === key ? change(d) : d));
 	}
 
 	async addTracker(body: Parameters<typeof api.addTracker>[1]) {
@@ -110,11 +128,15 @@ export class Extras {
 		}
 	}
 
+	/** Moves a meter at once and tells the API; if the API refuses, it goes back. */
 	async setTracker(name: string, value: number) {
+		const before = this.trackers.find((t) => t.name === name);
+		this.trackers = this.trackers.map((t) => (t.name === name ? { ...t, value } : t));
 		try {
 			const changed = await api.changeTracker(this.storyId, name, { value });
 			this.trackers = this.trackers.map((t) => (t.name === name ? changed : t));
 		} catch (error) {
+			if (before) this.trackers = this.trackers.map((t) => (t.name === name ? before : t));
 			toasts.show('danger', 'Meter not set', error instanceof Error ? error.message : undefined);
 		}
 	}
