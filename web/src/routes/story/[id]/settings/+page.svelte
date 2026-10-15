@@ -12,11 +12,11 @@
 
 	let extras = $state<Extras | null>(null);
 	let name = $state<string | null>(null);
-	let section = $state<'dials' | 'meters' | 'prompt'>('dials');
+	let section = $state<'dials' | 'meters' | 'status' | 'prompt'>('dials');
 
 	onMount(() => {
 		const tab = page.url.searchParams.get('tab');
-		if (tab === 'meters' || tab === 'prompt') section = tab;
+		if (tab === 'meters' || tab === 'status' || tab === 'prompt') section = tab;
 		extras = new Extras(id);
 		void extras.load();
 		api

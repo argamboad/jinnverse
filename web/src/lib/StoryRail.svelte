@@ -1,15 +1,17 @@
 <script lang="ts">
 	import DialControl from '#lib/DialControl.svelte';
 	import type { Extras } from '#lib/extras.svelte.ts';
+	import StatusPanel from '#lib/StatusPanel.svelte';
 
 	/** Beside the conversation: the dials, the meters, the last prompt and the running cost.
 	 * A column on the desktop, the ◐ sheet on a phone. */
 	let { extras, section = $bindable('dials') }: { extras: Extras; section?: Section } = $props();
 
-	type Section = 'dials' | 'meters' | 'prompt';
+	type Section = 'dials' | 'meters' | 'status' | 'prompt';
 	const sections: { id: Section; label: string }[] = [
 		{ id: 'dials', label: 'Dials' },
 		{ id: 'meters', label: 'Meters' },
+		{ id: 'status', label: 'Status' },
 		{ id: 'prompt', label: 'This prompt' }
 	];
 
@@ -212,6 +214,8 @@
 				<button type="button" class="btn ghost" onclick={() => (adding = true)}>Add a meter</button>
 			{/if}
 		</div>
+	{:else if section === 'status'}
+		<StatusPanel {extras} />
 	{:else}
 		<div class="stack">
 			{#if extras.context}
