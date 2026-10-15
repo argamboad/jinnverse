@@ -2,11 +2,40 @@ import { describe, expect, it } from 'vitest';
 import {
 	DESCRIPTION_LENGTH,
 	blurb,
+	entryMeta,
 	hiddenCount,
 	pieceBlurb,
+	piecesSummary,
 	remaining,
 	sentDescription
 } from './library.ts';
+
+describe('the line under an entry', () => {
+	it('gives the version and how many stories use it', () => {
+		expect(entryMeta({ version: 2, used: 3 }, 'characters')).toBe('v2 · in 3 stories');
+		expect(entryMeta({ version: 1, used: 1 }, 'personas')).toBe('v1 · in 1 story');
+		expect(entryMeta({ version: 1, used: 0 }, 'personas')).toBe('v1 · unused');
+	});
+	it('gives only the version for a snippet, which no story keeps', () => {
+		expect(entryMeta({ version: 4, used: 0 }, 'snippets')).toBe('v4');
+	});
+});
+
+describe('the pool of pieces in one line', () => {
+	it('counts pieces, the slots they fill, and each voice there is', () => {
+		const pool = [
+			{ slot: 'look', voice: 'he' },
+			{ slot: 'look', voice: 'she' },
+			{ slot: 'home', voice: 'he' },
+			{ slot: 'pets', voice: 'any' }
+		] as const;
+		expect(piecesSummary([...pool])).toBe('4 pieces across 3 slots · he 2 · she 1 · any 1');
+	});
+	it('says so when there are none, and counts one in the singular', () => {
+		expect(piecesSummary([])).toBe('No pieces yet');
+		expect(piecesSummary([{ slot: 'look', voice: 'they' }])).toBe('1 piece across 1 slot · they 1');
+	});
+});
 
 describe('what a list shows under a name', () => {
 	it('is the description when there is one', () => {

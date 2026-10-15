@@ -12,7 +12,9 @@
 	const creating = $derived(id === 'new');
 	/** Where Back and a delete go: the builder when the editor was opened from it. */
 	const backTo = $derived(
-		page.url.searchParams.get('back') === 'builder' ? '/library/personas/from-pieces' : '/library'
+		page.url.searchParams.get('back') === 'builder'
+			? '/library/personas/from-pieces'
+			: '/library/pieces'
 	);
 
 	let slots = $state<Slot[]>([]);

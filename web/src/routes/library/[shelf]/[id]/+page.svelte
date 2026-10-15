@@ -4,7 +4,14 @@
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import Sheet from '#lib/Sheet.svelte';
-	import { api, ApiError, type EntryFull, type HistoryEntry, type Shelf } from '#lib/api.ts';
+	import {
+		api,
+		ApiError,
+		type Defaults,
+		type EntryFull,
+		type HistoryEntry,
+		type Shelf
+	} from '#lib/api.ts';
 	import { DESCRIPTION_LENGTH, remaining, sentDescription } from '#lib/library.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
@@ -28,6 +35,9 @@
 	let history = $state<HistoryEntry[] | null>(null);
 	let historyOpen = $state(false);
 	let deleting = $state(false);
+	/** For a persona: which one plays in every story that names none. */
+	let defaults = $state<Defaults | null>(null);
+	const isDefault = $derived(entry !== null && defaults?.default_persona_id === entry.id);
 
 	const dirty = $derived(
 		creating
@@ -46,6 +56,12 @@
 		if (creating) {
 			loaded = true;
 			return;
+		}
+		if (shelf === 'personas') {
+			api
+				.defaults()
+				.then((d) => (defaults = d))
+				.catch(() => undefined);
 		}
 		try {
 			take(await api.entry(shelf, id));
@@ -148,6 +164,23 @@
 		);
 	}
 
+	/** Makes this persona the default, or stops it being one; saved at once, like a dial. */
+	async function toggleDefault() {
+		if (!entry) return;
+		try {
+			defaults = await api.setDefaults(isDefault ? null : entry.id);
+			toasts.show(
+				'ok',
+				isDefault ? `${entry.name} is the default persona` : 'No default persona',
+				isDefault
+					? 'Every story that names none plays as them.'
+					: 'A story that names none plays as nobody in particular.'
+			);
+		} catch (error) {
+			toasts.show('danger', 'Not set', error instanceof Error ? error.message : undefined);
+		}
+	}
+
 	async function remove() {
 		busy = true;
 		try {
@@ -228,6 +261,22 @@
 					placeholder="The innkeeper of the Gilded Heron"
 				/>
 			</label>
+			{#if shelf === 'personas' && !creating && entry}
+				<div class="switch-row">
+					<span>
+						<b>Default persona</b>
+						<small class="muted">Plays in every story that names none.</small>
+					</span>
+					<button
+						type="button"
+						class="toggle"
+						role="switch"
+						aria-checked={isDefault}
+						aria-label="Default persona"
+						onclick={toggleDefault}
+					></button>
+				</div>
+			{/if}
 			<label class="field grow">
 				<span
 					>{shelf === 'characters'
@@ -376,6 +425,51 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
+	}
+	.switch-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px;
+		border-radius: var(--r-s);
+		background: var(--surface);
+		border: 1px solid var(--line);
+	}
+	.switch-row span {
+		display: grid;
+		gap: 1px;
+	}
+	.switch-row small {
+		font-size: 0.78rem;
+	}
+	.toggle {
+		position: relative;
+		width: 48px;
+		height: 28px;
+		flex: none;
+		border-radius: var(--r-pill);
+		background: var(--surface-2);
+		border: 1px solid var(--line-strong);
+	}
+	.toggle::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--fg-2);
+		transition: transform 0.18s ease;
+	}
+	.toggle[aria-checked='true'] {
+		background: var(--gold);
+		border-color: transparent;
+	}
+	.toggle[aria-checked='true']::after {
+		transform: translateX(20px);
+		background: var(--gold-ink);
 	}
 	.versions {
 		display: grid;
