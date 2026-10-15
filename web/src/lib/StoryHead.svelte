@@ -7,12 +7,15 @@
 	 * for a window wide enough to keep them on screen. */
 	let {
 		story,
+		cardVersion = null,
 		canBranch,
 		onrename,
 		onbranch,
 		ondelete
 	}: {
 		story: Story;
+		/** The character's current version, which the story reads; null until it is known. */
+		cardVersion?: number | null;
 		canBranch: boolean;
 		onrename: (name: string) => void;
 		onbranch: () => void;
@@ -78,7 +81,10 @@
 	</div>
 	<dl class="facts">
 		<dt>With</dt>
-		<dd><a href="/library/characters/{story.character_id}">{story.character_name}</a></dd>
+		<dd>
+			<a href="/library/characters/{story.character_id}">{story.character_name}</a>
+			{#if cardVersion}<span class="muted card">· card v{cardVersion}</span>{/if}
+		</dd>
 		<dt>As</dt>
 		<dd>
 			{#if story.persona_id}<a href="/library/personas/{story.persona_id}">{story.persona_name}</a
@@ -163,6 +169,9 @@
 	dd a {
 		color: var(--fg);
 		text-decoration: none;
+	}
+	.card {
+		font-size: 0.74rem;
 	}
 	dd a:hover {
 		color: var(--gold-text);

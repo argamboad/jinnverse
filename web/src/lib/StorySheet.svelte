@@ -9,6 +9,7 @@
 	let {
 		open = $bindable(false),
 		story,
+		cardVersion = null,
 		spend,
 		canBranch,
 		onrename,
@@ -17,6 +18,8 @@
 	}: {
 		open?: boolean;
 		story: Story | null;
+		/** The character's current version, which the story reads; null until it is known. */
+		cardVersion?: number | null;
 		spend: StorySpend | null;
 		/** There is a reply to branch from. */
 		canBranch: boolean;
@@ -82,7 +85,9 @@
 			<dt>With</dt>
 			<dd>
 				<span>{story.character_name}</span>
-				<a href="/library/characters/{story.character_id}">open ›</a>
+				<a href="/library/characters/{story.character_id}"
+					>{cardVersion ? `card v${cardVersion} · ` : ''}open ›</a
+				>
 			</dd>
 			<dt>As</dt>
 			<dd>
