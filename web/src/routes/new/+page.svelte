@@ -77,7 +77,7 @@
 					toasts.show(
 						'info',
 						'The story started without its status lines',
-						'Add them in the story’s settings, on the Status tab.'
+						'Add them from the story’s Dials, on the Status tab.'
 					);
 				}
 			}
@@ -148,7 +148,7 @@
 				<h2>Status block</h2>
 				<p class="muted note">
 					Lines the model writes at the top of each reply, and the app keeps. Change them any time
-					in the story’s settings.
+					from the story’s Dials, on the Status tab.
 				</p>
 				<div class="ticks">
 					{#each starters as starter (starter.key)}

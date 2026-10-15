@@ -71,32 +71,45 @@ export class Extras {
 		return this.pack.find((d) => d.key === key);
 	}
 
+	/** Sets a dial at once and tells the API; if the API refuses, the dial goes back. */
 	async setDial(key: string, value: string) {
+		const dial = this.dial(key);
+		const before = this.dials.find((d) => d.key === key);
+		this.replaceDial(key, (d) => ({
+			...d,
+			stored: value,
+			effective: value,
+			label: labelOf(dial, value)
+		}));
 		try {
 			const changed = await api.setDial(this.storyId, key, value);
-			this.dials = this.dials.map((d) => (d.key === key ? changed : d));
+			this.replaceDial(key, () => changed);
 		} catch (error) {
+			if (before) this.replaceDial(key, () => before);
 			toasts.show('danger', 'Not set', error instanceof Error ? error.message : undefined);
 		}
 	}
 
+	/** Puts a dial back on the card's own default at once; reverts if the API refuses. */
 	async clearDial(key: string) {
+		const dial = this.dial(key);
+		const before = this.dials.find((d) => d.key === key);
+		this.replaceDial(key, (d) => ({
+			...d,
+			stored: null,
+			effective: dial?.default ?? null,
+			label: labelOf(dial, dial?.default ?? null)
+		}));
 		try {
 			await api.clearDial(this.storyId, key);
-			const dial = this.dial(key);
-			this.dials = this.dials.map((d) =>
-				d.key === key
-					? {
-							...d,
-							stored: null,
-							effective: dial?.default ?? null,
-							label: labelOf(dial, dial?.default ?? null)
-						}
-					: d
-			);
 		} catch (error) {
+			if (before) this.replaceDial(key, () => before);
 			toasts.show('danger', 'Not cleared', error instanceof Error ? error.message : undefined);
 		}
+	}
+
+	private replaceDial(key: string, change: (d: StoryDial) => StoryDial) {
+		this.dials = this.dials.map((d) => (d.key === key ? change(d) : d));
 	}
 
 	async addTracker(body: Parameters<typeof api.addTracker>[1]) {

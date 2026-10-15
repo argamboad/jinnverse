@@ -9,6 +9,7 @@
 	import RerollSheet from '#lib/RerollSheet.svelte';
 	import Sheet from '#lib/Sheet.svelte';
 	import StatusStrip from '#lib/StatusStrip.svelte';
+	import StoryRail from '#lib/StoryRail.svelte';
 	import {
 		api,
 		ApiError,
@@ -43,6 +44,9 @@
 	let menuFor = $state<Message | null>(null);
 	let storyMenu = $state(false);
 	let extras = $state<Extras | null>(null);
+	/** The Dials sheet (a phone, or a window narrower than the workspace) and the tab it is on. */
+	let panelOpen = $state(false);
+	let panelTab = $state<'dials' | 'meters' | 'status' | 'prompt'>('dials');
 	let renaming = $state(false);
 	let newName = $state('');
 	let cutConfirm = $state(false);
@@ -63,7 +67,15 @@
 		return parts.join(' · ');
 	});
 
+	function openPanel(tab: typeof panelTab = 'dials') {
+		panelTab = tab;
+		panelOpen = true;
+	}
+
 	onMount(async () => {
+		// `?tab=meters` (and the others) open the sheet on that tab.
+		const tab = page.url.searchParams.get('tab');
+		if (tab === 'dials' || tab === 'meters' || tab === 'status' || tab === 'prompt') openPanel(tab);
 		try {
 			[story, commands] = await Promise.all([api.story(id), api.commands()]);
 			void readEmoji(api.emoji); // once per session; until then nothing expands
@@ -264,7 +276,13 @@
 <div class="screen">
 	<AppBar title={story?.name ?? 'Story'} {sub} back="/">
 		{#snippet actions()}
-			<a class="btn icon" href="/story/{id}/settings" aria-label="Dials and meters">◐</a>
+			<button
+				class="dials"
+				class:on={panelOpen}
+				type="button"
+				aria-expanded={panelOpen}
+				onclick={() => openPanel()}><span aria-hidden="true">◐</span>Dials</button
+			>
 			<button
 				class="btn icon"
 				type="button"
@@ -278,7 +296,7 @@
 		<StatusStrip
 			status={extras.status}
 			newest={visible.at(-1)?.sequence ?? 0}
-			onopen={() => goto(`/story/${id}/settings?tab=status`)}
+			onopen={() => openPanel('status')}
 		/>
 	{/if}
 
@@ -326,15 +344,18 @@
 	</main>
 
 	{#if extras}
-		<MeterStrip
-			trackers={extras.trackers}
-			onopen={() => goto(`/story/${id}/settings?tab=meters`)}
-		/>
+		<MeterStrip trackers={extras.trackers} onopen={() => openPanel('meters')} />
 	{/if}
 	<Composer bind:this={composer} {commands} {snippets} {busy} onsend={send} oncarryon={carryOn} />
 </div>
 
 <RerollSheet bind:open={rerollOpen} onreroll={reroll} />
+
+<Sheet bind:open={panelOpen} title="Dials" hint="saved as you touch them" max="88%">
+	{#if extras}
+		<StoryRail {extras} bind:section={panelTab} />
+	{/if}
+</Sheet>
 
 <Sheet
 	open={menuFor !== null}
@@ -462,6 +483,28 @@
 		display: flex;
 		justify-content: space-between;
 		font-size: 0.72rem;
+	}
+	.dials {
+		appearance: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 36px;
+		padding: 0 12px 0 10px;
+		border-radius: var(--r-pill);
+		border: 1px solid var(--line-strong);
+		background: transparent;
+		color: var(--gold-text);
+		font-weight: 600;
+		font-size: 0.82rem;
+	}
+	.dials span {
+		font-size: 1rem;
+		line-height: 1;
+	}
+	.dials.on {
+		background: var(--gold-soft);
+		border-color: var(--gold);
 	}
 	.link {
 		appearance: none;
