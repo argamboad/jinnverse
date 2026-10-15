@@ -208,3 +208,5 @@ async def test_an_origin_the_settings_name_is_allowed(settings: Settings) -> Non
     assert preflight.status_code == 200
     assert "authorization" in preflight.headers["Access-Control-Allow-Headers"].lower()
     assert "Access-Control-Allow-Credentials" not in ours.headers
+    # The web client saves an export under the name the server chose, so it must be able to read it.
+    assert ours.headers["Access-Control-Expose-Headers"] == "Content-Disposition"

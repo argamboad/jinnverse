@@ -4,8 +4,11 @@
  * (`VITE_API_URL`), the local API by default.
  */
 
+import { fileNameOf } from './download.ts';
 import type { Shortcode } from './emoji.ts';
 import { readEvents } from './sse';
+
+export type ExportFormat = 'markdown' | 'json' | 'text';
 
 export const API_URL: string =
 	(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://127.0.0.1:8000';
@@ -441,6 +444,18 @@ export const api = {
 			message_id: messageId,
 			name: name ?? null
 		}),
+	/** The visible transcript as a document, with the file name the server chose (null when a
+	 * cross-origin page may not read it). */
+	async exportStory(
+		storyId: string,
+		format: ExportFormat
+	): Promise<{ blob: Blob; name: string | null }> {
+		const response = await call('GET', `/stories/${storyId}/export?format=${format}`);
+		return {
+			blob: await response.blob(),
+			name: fileNameOf(response.headers.get('Content-Disposition'))
+		};
+	},
 	deleteFrom: (storyId: string, messageId: string) =>
 		json<{ story: StoryWithMessages; hidden: number }>(
 			'DELETE',
