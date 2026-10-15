@@ -1,9 +1,9 @@
 """The context builder: what the model is sent, assembled from layers in a fixed order.
 
 The order is least volatile first — character, persona, directives, world, summaries, history,
-recalled memories, trackers, reminders, instruction — because a provider's prefix cache keeps
-everything up to the first byte that changed. The card never changes; the instruction changes
-every turn. Put retrieval in the middle and the cache would break on every turn.
+recalled memories, trackers, status, reminders, instruction — because a provider's prefix cache
+keeps everything up to the first byte that changed. The card never changes; the instruction
+changes every turn. Put retrieval in the middle and the cache would break on every turn.
 
 Pure functions over dataclasses: nothing here touches the database or the network, so every rule
 is tested with a real-size card in a few milliseconds.
@@ -111,6 +111,8 @@ class Layers:
     """Recalled turns, most relevant first (step 6)."""
     trackers: str | None = None
     """The meters, rendered (step 7)."""
+    status: str | None = None
+    """The status block's format and the state it holds, rendered (#172)."""
     reminders: str | None = None
     """The dials that ask to be repeated, rendered; sent under `REMINDERS_FRAME` (#167)."""
     instruction: str | None = None
@@ -197,6 +199,7 @@ ORDER = (
     "history",
     "memories",
     "trackers",
+    "status",
     "reminders",
     "instruction",
 )
@@ -236,6 +239,7 @@ def build(layers: Layers, *, budget: int | None = None, recall_percent: int = 10
     after = [
         fixed("memories", memories, memories_dropped),
         fixed("trackers", layers.trackers),
+        fixed("status", layers.status),
         fixed("reminders", layers.reminders and REMINDERS_FRAME + layers.reminders),
     ]
     instruction: ChatMessage | None = None

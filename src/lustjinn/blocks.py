@@ -24,7 +24,7 @@ from functools import lru_cache
 from importlib import resources
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lustjinn.models import (
@@ -33,6 +33,7 @@ from lustjinn.models import (
     Role,
     StatusField,
     StatusKind,
+    StatusPin,
     StatusScope,
     StatusValue,
     Story,
@@ -361,3 +362,112 @@ async def replay(session: AsyncSession, story: Story) -> None:
     for sequence, text in replies:
         _apply(session, story.id, stored, read(text, fields, name or ""), sequence)
     await session.flush()
+
+
+# --- sending it -------------------------------------------------------------------------------
+
+RECENT_TURNS = 12
+"""A character whose block was written within this many messages of the newest is in scene; a
+pinned character is always sent."""
+MOST_CHARACTERS = 12
+"""However many are in scene, the state sent has at most this many characters' blocks."""
+FRAME = (
+    "Every reply begins with a status block that keeps this story's state. First the scene "
+    "lines, then, for each character who speaks or acts in the reply, their name line followed "
+    "by their lines, placed right before that character's part of the reply and never inside "
+    "the prose. Write each line exactly in this shape, in this order, one line each:"
+)
+RULES = (
+    "Change a line only when the story changed it; otherwise write it as it stands below. Write "
+    "the scene lines once, at the top. Never write a block for the user."
+)
+STANDS = "Where things stand now:"
+
+
+def _prefix(field: StatusField) -> str:
+    return f"{field.icon} " if field.icon else ""
+
+
+def _shape(field: StatusField) -> str:
+    """The line the model is shown for a field: its icon and label, and what goes after."""
+    if field.kind == StatusKind.WORDS.value and field.words:
+        what = "one or more of: " + ", ".join(field.words)
+    else:
+        what = field.hint or "its value"
+    return f"{_prefix(field)}{field.label}: <{what}>"
+
+
+def render(
+    fields: Sequence[StatusField],
+    values: Sequence[StatusValue],
+    pinned: Sequence[str],
+    newest: int,
+) -> str | None:
+    """The status layer: the format to write and the state as it stands, or None when no field is
+    on. The scene's values are always sent; a character's only when they were written within
+    `RECENT_TURNS` of `newest` or they are pinned, at most `MOST_CHARACTERS` of them."""
+    on = sorted((f for f in fields if f.enabled), key=lambda f: f.position or 0)
+    if not on:
+        return None
+    scene = [f for f in on if f.scope == StatusScope.SCENE.value]
+    people = [f for f in on if f.scope == StatusScope.CHARACTER.value]
+    # The scene's lines first, then the name line and the character's, as they are to be written.
+    shape = [_shape(f) for f in scene]
+    if people:
+        shape += [f"{NAME_ICON} Name: <the character's name>", *(_shape(f) for f in people)]
+    lines = [FRAME, "", *shape, "", RULES]
+
+    held = {(v.field_key, v.subject_key): v for v in values}
+    stands = _stands(scene, "", held)
+    if stands:
+        stands.insert(0, "Scene")
+    # When each character last wrote a line, and how they were spelt: who is in scene.
+    last: dict[str, int] = {}
+    spelt: dict[str, str] = {}
+    keys = {f.key for f in people}
+    for value in values:
+        if value.subject_key and value.field_key in keys:
+            last[value.subject_key] = max(
+                last.get(value.subject_key, 0), value.updated_at_sequence or 0
+            )
+            spelt.setdefault(value.subject_key, value.subject)
+    wanted = [key for key in pinned if key in last]
+    in_scene = (key for key in last if last[key] >= newest - RECENT_TURNS and key not in wanted)
+    wanted += sorted(in_scene, key=lambda key: (-last[key], key))
+    for key in wanted[:MOST_CHARACTERS]:
+        theirs = _stands(people, key, held)
+        if theirs:
+            stands += [spelt[key], *theirs]
+    if stands:
+        lines += ["", STANDS, *stands]
+    return "\n".join(lines)
+
+
+def _stands(
+    fields: Sequence[StatusField], subject: str, held: dict[tuple[str, str], StatusValue]
+) -> list[str]:
+    """One subject's lines of the state, for the fields they have a value for."""
+    return [
+        f"- {f.label}: {held[(f.key, subject)].value}" for f in fields if (f.key, subject) in held
+    ]
+
+
+async def layer(session: AsyncSession, story: Story) -> str | None:
+    """The status layer for the next prompt, or None for a story with no field on."""
+    fields = await fields_of(session, story.id)
+    if not any(field.enabled for field in fields):
+        return None
+    values = list(
+        await session.scalars(select(StatusValue).where(StatusValue.story_id == story.id))
+    )
+    pins = list(
+        await session.scalars(
+            select(StatusPin.key).where(StatusPin.story_id == story.id).order_by(StatusPin.name)
+        )
+    )
+    newest = await session.scalar(
+        select(func.max(Message.sequence)).where(
+            Message.story_id == story.id, Message.deleted_at.is_(None)
+        )
+    )
+    return render(fields, values, pins, newest or 0)

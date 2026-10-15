@@ -347,6 +347,7 @@ async def compose(
     *,
     directives: str | None = None,
     trackers: str | None = None,
+    status: str | None = None,
     reminders: str | None = None,
     instruction: str | None = None,
     reply_tokens: int | None = None,
@@ -381,6 +382,7 @@ async def compose(
             history=turns,
             memories=memories,
             trackers=trackers,
+            status=status,
             reminders=reminders,
             instruction=instruction,
         )

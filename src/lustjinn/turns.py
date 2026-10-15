@@ -145,6 +145,7 @@ async def reply(
         await visible_messages(session, story.id),
         directives=directives,
         trackers=trackers.render(meters),
+        status=await blocks.layer(session, story),
         reminders=reminders,
         instruction=instruction,
         reply_tokens=ceiling,
