@@ -22,6 +22,9 @@ from lustjinn.models import (
     Embedding,
     Fact,
     Message,
+    StatusField,
+    StatusPin,
+    StatusValue,
     Story,
     Summary,
     Tracker,
@@ -186,6 +189,44 @@ async def branch(session: AsyncSession, source: Story, through: Message, name: s
     choices = await session.scalars(select(DialValue).where(DialValue.story_id == source.id))
     for choice in choices:
         session.add(DialValue(story_id=copy.id, key=choice.key, value=choice.value))
+
+    # The status block (#169): the fields, the pinned characters, and the values as they stand
+    # now — like the meters, not as they stood at the branch point, which nothing recorded.
+    for field in await session.scalars(
+        select(StatusField).where(StatusField.story_id == source.id)
+    ):
+        session.add(
+            StatusField(
+                story_id=copy.id,
+                key=field.key,
+                label=field.label,
+                icon=field.icon,
+                hint=field.hint,
+                kind=field.kind,
+                scope=field.scope,
+                words=field.words,
+                enabled=field.enabled,
+                position=field.position,
+            )
+        )
+    for pin in await session.scalars(select(StatusPin).where(StatusPin.story_id == source.id)):
+        session.add(StatusPin(story_id=copy.id, name=pin.name, key=pin.key))
+    for shown in await session.scalars(
+        select(StatusValue).where(StatusValue.story_id == source.id)
+    ):
+        session.add(
+            StatusValue(
+                story_id=copy.id,
+                field_key=shown.field_key,
+                subject=shown.subject,
+                subject_key=shown.subject_key,
+                value=shown.value,
+                by_hand=shown.by_hand,
+                updated_at_sequence=None
+                if shown.updated_at_sequence is None
+                else min(shown.updated_at_sequence, point),
+            )
+        )
 
     asides = await session.scalars(
         select(Aside).where(Aside.story_id == source.id, Aside.sequence <= point)

@@ -15,6 +15,9 @@ from lustjinn.models import (
     Embedding,
     Fact,
     Message,
+    StatusField,
+    StatusPin,
+    StatusValue,
     Story,
     Summary,
     Tracker,
@@ -50,6 +53,16 @@ async def a_story_with_a_memory(session: AsyncSession) -> tuple[Story, list[Mess
                 story_id=story.id, name="Trust", value=55, max=100, delta=5, updated_at_sequence=10
             ),
             DialValue(story_id=story.id, key="lust", value="3"),
+            StatusField(story_id=story.id, key="outfit", label="Outfit", scope="character"),
+            StatusValue(
+                story_id=story.id,
+                field_key="outfit",
+                subject="Isaure",
+                subject_key="isaure",
+                value="a grey dress",
+                updated_at_sequence=10,
+            ),
+            StatusPin(story_id=story.id, name="Isaure", key="isaure"),
             Aside(story_id=story.id, sequence=5, question="Who?", answer="Isaure."),
             Aside(story_id=story.id, sequence=9, question="Why?", answer="Because."),
         ]
@@ -121,6 +134,12 @@ async def test_a_branch_has_exactly_the_turns_and_memory_the_rules_allow(
     assert (meter.name, meter.value, meter.updated_at_sequence) == ("Trust", 55, 8)
     [dial] = await session.scalars(select(DialValue).where(DialValue.story_id == branch_id))
     assert (dial.key, dial.value) == ("lust", "3")
+    [field] = await session.scalars(select(StatusField).where(StatusField.story_id == branch_id))
+    [shown] = await session.scalars(select(StatusValue).where(StatusValue.story_id == branch_id))
+    [pin] = await session.scalars(select(StatusPin).where(StatusPin.story_id == branch_id))
+    assert (field.key, field.scope, field.enabled) == ("outfit", "character", True)
+    assert (shown.subject, shown.value, shown.updated_at_sequence) == ("Isaure", "a grey dress", 8)
+    assert pin.name == "Isaure"
     asides = list(await session.scalars(select(Aside).where(Aside.story_id == branch_id)))
     assert [a.question for a in asides] == ["Who?"]
     assert await ledger(session, Story(id=branch_id)) == []  # the branch starts at zero

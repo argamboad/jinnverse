@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "about": "The starter set of status fields, offered when a story is made and adopted by the ones a story keeps. A story stores only the fields it adopted or wrote itself. 'hint' is what the model is told to write on that line. The name line is not here: it is built in, because a character's block is found by it.",
+  "fields": [
+    {
+      "key": "time",
+      "label": "Day and time",
+      "icon": "📅",
+      "scope": "scene",
+      "kind": "text",
+      "hint": "the day and the time of day, as the story counts them"
+    },
+    {
+      "key": "place",
+      "label": "Place",
+      "icon": "📍",
+      "scope": "scene",
+      "kind": "text",
+      "hint": "where the scene is, briefly"
+    },
+    {
+      "key": "outfit",
+      "label": "Outfit",
+      "icon": "👗",
+      "scope": "character",
+      "kind": "text",
+      "hint": "what they are wearing now, briefly"
+    },
+    {
+      "key": "mood",
+      "label": "Mood",
+      "icon": "🎭",
+      "scope": "character",
+      "kind": "text",
+      "hint": "up to three words for how they feel now"
+    }
+  ]
+}
