@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from lustjinn import (
     asides,
+    blocks,
     commands,
     dials,
     directions,
@@ -165,6 +166,7 @@ async def reply(
     except ModelError as error:
         if restore is not None:
             restore.deleted_at = None
+            await blocks.replay(session, story)  # the reply is visible again, and so are its values
             await session.commit()
         # The send is not undone: it is stored, it is the reader's, and telling them it failed
         # outright is how the same message gets typed a second time.
@@ -200,6 +202,8 @@ async def reply(
     # stay in the stored text, as the donor left them: they reach history, summaries and
     # embeddings, and stripping them would be a change to a reply the model wrote.
     trackers.absorb(meters, stored.text, stored.sequence)
+    # The status block at the top of the reply, read into the state the next prompt carries.
+    await blocks.absorb(session, story, stored.text, stored.sequence)
     # Written whatever becomes of the reply: a reroll a second from now hides the message and
     # leaves this row where it is, which is the only way the total agrees with the invoice.
     session.add(ledger.row(story.id, SpendKind.REPLY, written, message_id=stored.id))
@@ -389,6 +393,9 @@ async def reroll(
     # invite the model to write it again. Hidden, not removed: it is still something the model
     # wrote, and the ledger row for it stays.
     last.deleted_at = datetime.now(UTC)
+    # What the hidden reply wrote into the status block goes with it, or a field the new reply
+    # leaves out would keep the rejected reply's value.
+    await blocks.replay(session, story)
     await session.commit()
     asked = body or Reroll()
     return streams.streamed(

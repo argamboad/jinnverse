@@ -15,6 +15,7 @@ from pydantic import BaseModel, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lustjinn import blocks
 from lustjinn.deps import Session
 from lustjinn.models import (
     Aside,
@@ -80,6 +81,8 @@ async def branch(session: AsyncSession, source: Story, through: Message, name: s
       here it never stopped being true.
     - Meters at the value they hold now, the one thing that cannot be rewound; dial choices as
       they stand, since a choice is configuration, not something the story did.
+    - The status block as it stood at the point: its fields and pins as they are, its values
+      read again from the copied replies, and those set by hand up to the point.
     - Questions asked up to the point. Never spend: the branch starts at zero.
     """
     point = through.sequence
@@ -190,8 +193,9 @@ async def branch(session: AsyncSession, source: Story, through: Message, name: s
     for choice in choices:
         session.add(DialValue(story_id=copy.id, key=choice.key, value=choice.value))
 
-    # The status block (#169): the fields, the pinned characters, and the values as they stand
-    # now — like the meters, not as they stood at the branch point, which nothing recorded.
+    # The status block (#169): the fields, the pinned characters, and the values set by hand up
+    # to the point. What the replies wrote is not copied but read again from the copied turns
+    # (below), so the copy holds the state as it stood at the point.
     for field in await session.scalars(
         select(StatusField).where(StatusField.story_id == source.id)
     ):
@@ -212,7 +216,11 @@ async def branch(session: AsyncSession, source: Story, through: Message, name: s
     for pin in await session.scalars(select(StatusPin).where(StatusPin.story_id == source.id)):
         session.add(StatusPin(story_id=copy.id, name=pin.name, key=pin.key))
     for shown in await session.scalars(
-        select(StatusValue).where(StatusValue.story_id == source.id)
+        select(StatusValue).where(
+            StatusValue.story_id == source.id,
+            StatusValue.by_hand.is_(True),
+            StatusValue.updated_at_sequence <= point,
+        )
     ):
         session.add(
             StatusValue(
@@ -221,12 +229,12 @@ async def branch(session: AsyncSession, source: Story, through: Message, name: s
                 subject=shown.subject,
                 subject_key=shown.subject_key,
                 value=shown.value,
-                by_hand=shown.by_hand,
-                updated_at_sequence=None
-                if shown.updated_at_sequence is None
-                else min(shown.updated_at_sequence, point),
+                by_hand=True,
+                updated_at_sequence=shown.updated_at_sequence,
             )
         )
+    await session.flush()
+    await blocks.replay(session, copy)
 
     asides = await session.scalars(
         select(Aside).where(Aside.story_id == source.id, Aside.sequence <= point)
@@ -283,7 +291,8 @@ async def cut(session: AsyncSession, story: Story, start: Message) -> Cut:
     memory of turns the story no longer has would tell the model about a scene that never
     happened in this version — so a summary that reaches the cut goes, a fact extracted from
     it goes (a pinned one stays: a person said it), and a fact those turns had retired is true
-    again. Meters cannot be rewound and keep their value; questions keep their answers.
+    again. Meters cannot be rewound and keep their value; questions keep their answers. The status
+    block is read again from the replies that remain.
     """
     now = datetime.now(UTC)
     doomed = list(
@@ -320,6 +329,9 @@ async def cut(session: AsyncSession, story: Story, start: Message) -> Cut:
             fact.valid_to_sequence = None
             reopened += 1
 
+    # The status block is read from the visible replies, so it is read again without these.
+    await session.flush()
+    await blocks.replay(session, story)
     await session.commit()
     return Cut(
         story=await read_story(story.id, session),

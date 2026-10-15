@@ -61,7 +61,7 @@ async def test_a_purged_story_leaves_no_text_in_any_table_and_its_spend_still_re
     assert report["embeddings"] == 7
     assert (report["summaries"], report["facts"], report["trackers"]) == (2, 4, 1)
     assert (report["asides"], report["dial_values"]) == (2, 1)
-    assert (report["status_fields"], report["status_values"], report["status_pins"]) == (1, 1, 1)
+    assert (report["status_fields"], report["status_values"], report["status_pins"]) == (1, 2, 1)
     assert report["ledger_rows_kept"] == 1
     assert Decimal(report["ledger_cost_kept"]) == Decimal("0.0002")
     assert set((await rows_of(session, story.id)).values()) == {0}

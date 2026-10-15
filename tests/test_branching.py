@@ -54,13 +54,23 @@ async def a_story_with_a_memory(session: AsyncSession) -> tuple[Story, list[Mess
             ),
             DialValue(story_id=story.id, key="lust", value="3"),
             StatusField(story_id=story.id, key="outfit", label="Outfit", scope="character"),
-            StatusValue(
+            StatusValue(  # set by hand before the branch point: carried
                 story_id=story.id,
                 field_key="outfit",
                 subject="Isaure",
                 subject_key="isaure",
+                value="a red coat",
+                updated_at_sequence=5,
+                by_hand=True,
+            ),
+            StatusValue(  # set by hand after it: the copy never had that turn
+                story_id=story.id,
+                field_key="outfit",
+                subject="Rowan Hale",
+                subject_key="rowan hale",
                 value="a grey dress",
                 updated_at_sequence=10,
+                by_hand=True,
             ),
             StatusPin(story_id=story.id, name="Isaure", key="isaure"),
             Aside(story_id=story.id, sequence=5, question="Who?", answer="Isaure."),
@@ -138,7 +148,7 @@ async def test_a_branch_has_exactly_the_turns_and_memory_the_rules_allow(
     [shown] = await session.scalars(select(StatusValue).where(StatusValue.story_id == branch_id))
     [pin] = await session.scalars(select(StatusPin).where(StatusPin.story_id == branch_id))
     assert (field.key, field.scope, field.enabled) == ("outfit", "character", True)
-    assert (shown.subject, shown.value, shown.updated_at_sequence) == ("Isaure", "a grey dress", 8)
+    assert (shown.subject, shown.value, shown.updated_at_sequence) == ("Isaure", "a red coat", 5)
     assert pin.name == "Isaure"
     asides = list(await session.scalars(select(Aside).where(Aside.story_id == branch_id)))
     assert [a.question for a in asides] == ["Who?"]
