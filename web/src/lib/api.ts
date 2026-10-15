@@ -166,6 +166,31 @@ export interface StorySpend {
 	cached_share: number | null;
 }
 
+/** One thing the story believes: who it is about, what, and for how long it held. */
+export interface Fact {
+	id: string;
+	subject: string;
+	text: string;
+	valid_from_sequence: number;
+	/** Null while the fact is live. */
+	valid_to_sequence: number | null;
+	/** Null when a person stated it. */
+	model: string | null;
+	pinned: boolean;
+	created_at: string;
+}
+
+/** What a memory rebuild did. */
+export interface Rebuilt {
+	dry_run: boolean;
+	summaries_removed: number;
+	facts_removed: number;
+	pinned_kept: number;
+	summaries_written: number;
+	facts_extracted: number;
+	messages_covered: number;
+}
+
 export interface SpendReport {
 	calls: number;
 	cost: string;
@@ -558,6 +583,10 @@ export const api = {
 	spend: (from?: string) =>
 		json<SpendReport>('GET', from ? `/spend?from_at=${encodeURIComponent(from)}` : '/spend'),
 	storySpend: (storyId: string) => json<StorySpend>('GET', `/stories/${storyId}/spend`),
+	/** What the story believes right now. */
+	facts: (storyId: string) => json<Fact[]>('GET', `/stories/${storyId}/facts`),
+	/** Throws the summaries and extracted facts away and writes them again: slow, and billed. */
+	rebuildMemory: (storyId: string) => json<Rebuilt>('POST', `/stories/${storyId}/memory/rebuild`),
 
 	/**
 	 * Sends what the reader typed and streams the reply: `onDelta` gets each piece of text as it

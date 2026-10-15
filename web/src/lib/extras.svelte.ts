@@ -8,6 +8,7 @@ import {
 	api,
 	type Audit,
 	type Dial,
+	type Fact,
 	type NewStatusField,
 	type Status,
 	type StatusFieldChanges,
@@ -24,6 +25,8 @@ export class Extras {
 	trackers = $state<Tracker[]>([]);
 	/** The status block's fields, what they hold and who is pinned; null until it is read. */
 	status = $state<Status | null>(null);
+	/** What the story believes right now (the live facts). */
+	facts = $state<Fact[]>([]);
 	audit = $state<Audit | null>(null);
 	spend = $state<StorySpend | null>(null);
 	loaded = $state(false);
@@ -55,13 +58,15 @@ export class Extras {
 
 	/** After a turn: the meters may have moved, the audit and the cost have a new line. */
 	async refresh() {
-		const [trackers, audit, spend, status] = await Promise.allSettled([
+		const [trackers, audit, spend, status, facts] = await Promise.allSettled([
 			api.trackers(this.storyId),
 			api.audit(this.storyId),
 			api.storySpend(this.storyId),
-			api.status(this.storyId)
+			api.status(this.storyId),
+			api.facts(this.storyId)
 		]);
 		if (trackers.status === 'fulfilled') this.trackers = trackers.value;
+		if (facts.status === 'fulfilled') this.facts = facts.value;
 		if (status.status === 'fulfilled') this.status = status.value;
 		if (audit.status === 'fulfilled') this.audit = audit.value;
 		if (spend.status === 'fulfilled') this.spend = spend.value;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseContext } from './audit';
+import { fade, layerLabel, parseContext, shares } from './audit';
 
 describe('parseContext', () => {
 	it('reads the layers, what was dropped, the total and the budget', () => {
@@ -28,5 +28,26 @@ describe('parseContext', () => {
 		expect(parseContext(null)).toBeNull();
 		expect(parseContext('')).toBeNull();
 		expect(parseContext('nonsense')).toBeNull();
+	});
+});
+
+describe('the prompt bar', () => {
+	it('shares the budget out by tokens, leaving the unused rest empty', () => {
+		const ctx = parseContext('character 600 · history 300 · total 900/3000');
+		expect(ctx).not.toBeNull();
+		expect(shares(ctx!)).toEqual([20, 10]);
+	});
+
+	it('shares the total when there was no budget, so the bar fills', () => {
+		const ctx = parseContext('character 300 · history 100 · total 400');
+		expect(shares(ctx!)).toEqual([75, 25]);
+	});
+
+	it('fades from full to faint and names history as recent turns', () => {
+		expect(fade(0, 4)).toBe(1);
+		expect(fade(3, 4)).toBeCloseTo(0.35);
+		expect(fade(0, 1)).toBe(1);
+		expect(layerLabel('history')).toBe('recent turns');
+		expect(layerLabel('world')).toBe('world');
 	});
 });

@@ -3,7 +3,7 @@
 	import DialControl from '#lib/DialControl.svelte';
 	import type { Extras } from '#lib/extras.svelte.ts';
 	import MetersPanel from '#lib/MetersPanel.svelte';
-	import { money } from '#lib/money.ts';
+	import PromptPanel from '#lib/PromptPanel.svelte';
 	import StatusPanel from '#lib/StatusPanel.svelte';
 
 	/** Beside the conversation: the dials, the meters, the status, the last prompt and the running
@@ -106,50 +106,7 @@
 		{:else if section === 'status'}
 			<StatusPanel {extras} />
 		{:else}
-			<div class="stack">
-				{#if extras.context}
-					{@const ctx = extras.context}
-					<h4>The last prompt</h4>
-					{#each ctx.layers as layer (layer.name)}
-						<div class="layer">
-							<span>{layer.name}{layer.dropped ? ` (${layer.dropped} dropped)` : ''}</span>
-							<span class="mono">{layer.tokens.toLocaleString()}</span>
-							<i
-								><b
-									style:width="{ctx.budget
-										? (layer.tokens / ctx.budget) * 100
-										: (layer.tokens / Math.max(ctx.total, 1)) * 100}%"
-								></b></i
-							>
-						</div>
-					{/each}
-					<p class="mono small total">
-						total {ctx.total.toLocaleString()}{ctx.budget
-							? ` / ${ctx.budget.toLocaleString()}`
-							: ''}
-						{#if extras.audit?.turns[0]?.prompt_tokens}
-							· billed {extras.audit.turns[0].prompt_tokens.toLocaleString()}
-						{/if}
-					</p>
-				{:else}
-					<p class="muted small">
-						No reply yet. After the first one, this shows what the prompt was built from.
-					</p>
-				{/if}
-				{#if extras.spend}
-					<h4>This story</h4>
-					<div class="cost">
-						<span>Calls</span><b>{extras.spend.calls}</b>
-						<span>Cost</span><b>{money(extras.spend.cost)}</b>
-						<span>Rerolled away</span><b class="warn">{money(extras.spend.discarded_cost)}</b>
-						{#if extras.spend.unpriced}<span>Unpriced calls</span><b>{extras.spend.unpriced}</b
-							>{/if}
-						{#if extras.spend.cached_share !== null}
-							<span>Cached share</span><b>{Math.round(extras.spend.cached_share * 100)}%</b>
-						{/if}
-					</div>
-				{/if}
-			</div>
+			<PromptPanel {extras} />
 		{/if}
 	</div>
 </div>
@@ -272,47 +229,5 @@
 		text-transform: uppercase;
 		color: var(--muted);
 		font-weight: 600;
-	}
-	.mono {
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-	}
-	.layer {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 2px 8px;
-		font-size: 0.82rem;
-		color: var(--fg-2);
-	}
-	.layer i {
-		grid-column: 1 / -1;
-		display: block;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--surface-2);
-		overflow: hidden;
-	}
-	.layer i b {
-		display: block;
-		height: 100%;
-		background: var(--gold-2);
-	}
-	.total {
-		color: var(--muted);
-	}
-	.cost {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 4px 12px;
-		font-size: 0.88rem;
-		color: var(--fg-2);
-		font-variant-numeric: tabular-nums;
-	}
-	.cost b {
-		font-weight: 600;
-		color: var(--fg);
-	}
-	.cost .warn {
-		color: var(--warn);
 	}
 </style>
