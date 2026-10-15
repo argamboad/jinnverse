@@ -42,7 +42,11 @@
 	/** Answers shown once and kept nowhere: `/ask`, `/recap`, a `/tracker` set. */
 	let notes = $state<{ id: number; title: string; text: string }[]>([]);
 	let rerollOpen = $state(false);
+	/** The turn the sheet is about, and whether it is showing. */
 	let menuFor = $state<Message | null>(null);
+	let turnOpen = $state(false);
+	/** Whether the reader has opened a turn's sheet once: until then a line says how. */
+	let hintSeen = $state(true);
 	/** The story's own sheet, opened from the title. */
 	let storyOpen = $state(false);
 	let extras = $state<Extras | null>(null);
@@ -67,12 +71,38 @@
 		return parts.join(' · ');
 	});
 
+	const HINT_KEY = 'lustjinn-turn-hint';
+
+	function openTurn(message: Message) {
+		menuFor = message;
+		cutConfirm = false;
+		turnOpen = true;
+		hintSeen = true;
+		try {
+			localStorage.setItem(HINT_KEY, '1');
+		} catch {
+			/* a private window: the hint shows again next time */
+		}
+	}
+
+	/** The hover pill's "Cut back to here": the turn's sheet, already on the confirmation. */
+	function askCut(message: Message) {
+		menuFor = message;
+		cutConfirm = true;
+		turnOpen = true;
+	}
+
 	function openPanel(tab: typeof panelTab = 'dials') {
 		panelTab = tab;
 		panelOpen = true;
 	}
 
 	onMount(async () => {
+		try {
+			hintSeen = localStorage.getItem(HINT_KEY) === '1';
+		} catch {
+			hintSeen = false;
+		}
 		// `?tab=meters` (and the others) open the sheet on that tab.
 		const tab = page.url.searchParams.get('tab');
 		if (tab === 'dials' || tab === 'meters' || tab === 'status' || tab === 'prompt') openPanel(tab);
@@ -196,7 +226,7 @@
 
 	async function branchFrom(message: Message) {
 		if (!story) return;
-		menuFor = null;
+		turnOpen = false;
 		try {
 			const copy = await api.branch(id, message.id);
 			stories.touch(copy);
@@ -228,13 +258,13 @@
 		} catch (error) {
 			toasts.show('danger', 'Could not cut', error instanceof Error ? error.message : undefined);
 		} finally {
-			menuFor = null;
+			turnOpen = false;
 			cutConfirm = false;
 		}
 	}
 
 	async function copyText(message: Message) {
-		menuFor = null;
+		turnOpen = false;
 		try {
 			await navigator.clipboard.writeText(message.text);
 			toasts.show('ok', 'Copied');
@@ -319,7 +349,10 @@
 					{message}
 					newest={newestReply?.id === message.id && !busy}
 					onreroll={() => (rerollOpen = true)}
-					onmenu={() => (menuFor = message)}
+					onmenu={() => openTurn(message)}
+					onbranch={() => branchFrom(message)}
+					oncut={() => askCut(message)}
+					oncopy={() => copyText(message)}
 				/>
 			{/each}
 			{#each notes as n (n.id)}
@@ -342,6 +375,9 @@
 			{#if pendingReply !== null}
 				<MessageView message={{ role: 'assistant', text: pendingReply }} streaming />
 			{/if}
+			{#if !hintSeen && visible.length > 0 && !busy}
+				<p class="hint">Hold any turn to branch, cut or copy</p>
+			{/if}
 		{/if}
 	</main>
 
@@ -360,7 +396,7 @@
 </Sheet>
 
 <Sheet
-	open={menuFor !== null}
+	bind:open={turnOpen}
 	title="Turn {menuFor?.sequence ?? ''}"
 	hint={menuFor?.role === 'user' ? 'yours' : story?.character_name}
 >
@@ -376,7 +412,7 @@
 				<button type="button" class="btn" onclick={() => menuFor && copyText(menuFor)}
 					>Copy the text</button
 				>
-				<button type="button" class="btn ghost" onclick={() => (menuFor = null)}>Close</button>
+				<button type="button" class="btn ghost" onclick={() => (turnOpen = false)}>Close</button>
 			</div>
 		{:else}
 			<p class="muted">
@@ -434,6 +470,18 @@
 	.center {
 		text-align: center;
 		padding: 32px 16px;
+	}
+	.hint {
+		align-self: center;
+		font-size: 0.7rem;
+		color: var(--muted);
+		padding-top: 2px;
+	}
+	/* A mouse has the hover pill; the line is for a finger. */
+	@media (hover: hover) and (pointer: fine) {
+		.hint {
+			display: none;
+		}
 	}
 	.problem {
 		color: var(--danger);
