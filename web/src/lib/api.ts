@@ -48,6 +48,8 @@ export interface Story {
 	created_at: string;
 	last_message_at: string | null;
 	last_message_preview: string | null;
+	/** Visible turns the reader has taken; 0 for a story not started. */
+	turns: number;
 }
 
 export interface StoryWithMessages extends Story {

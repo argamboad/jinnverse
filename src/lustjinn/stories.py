@@ -46,6 +46,9 @@ class StoryOut(BaseModel):
     """When the newest visible message was sent; None for a story with no messages yet."""
     last_message_preview: str | None
     """The start of that message, for a list that shows the latest line under each name."""
+    turns: int
+    """How many visible turns the reader has taken; 0 for a story that has not been started
+    (an opening the character wrote does not count)."""
 
 
 class MessageOut(BaseModel):
@@ -79,6 +82,16 @@ def _stories(story_id: uuid.UUID | None = None):
         .limit(1)
         .lateral("newest")
     )
+    # A scalar subquery: one number per story, counted where it is read.
+    turns = (
+        select(func.count())
+        .where(
+            Message.story_id == Story.id,
+            Message.deleted_at.is_(None),
+            Message.role == Role.USER,
+        )
+        .scalar_subquery()
+    )
     query = (
         select(
             Story.id,
@@ -91,6 +104,7 @@ def _stories(story_id: uuid.UUID | None = None):
             newest.c.sent_at.label("last_message_at"),
             # The preview is cut in the database: only its first characters leave it.
             func.left(newest.c.text, PREVIEW_LENGTH).label("last_message_preview"),
+            turns.label("turns"),
         )
         .join(Character, Story.character_id == Character.id)
         .outerjoin(Persona, Story.persona_id == Persona.id)

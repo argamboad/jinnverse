@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Story } from './api.ts';
-import { initial, when } from './storyList.ts';
+import { initial, when, whoLine } from './storyList.ts';
 
 const now = Date.parse('2026-10-15T12:00:00Z');
 
@@ -15,6 +15,7 @@ function story(over: Partial<Story> = {}): Story {
 		created_at: '2026-10-01T09:00:00Z',
 		last_message_at: null,
 		last_message_preview: null,
+		turns: 0,
 		...over
 	};
 }
@@ -25,6 +26,19 @@ describe('initial', () => {
 	});
 	it('falls back to a question mark for a nameless character', () => {
 		expect(initial(story({ character_name: '  ' }))).toBe('?');
+	});
+});
+
+describe('whoLine', () => {
+	it('names the character, the persona and the turn', () => {
+		expect(whoLine(story({ character_name: 'Mara Vell', persona_name: 'Rowan', turns: 7 }))).toBe(
+			'Mara Vell · as Rowan · turn 7'
+		);
+	});
+	it('says not started for a story the reader has not written to, and leaves out no persona', () => {
+		expect(whoLine(story({ character_name: 'Iseult', persona_name: null }))).toBe(
+			'Iseult · not started'
+		);
 	});
 });
 

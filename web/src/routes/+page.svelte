@@ -3,39 +3,20 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import StoryList from '#lib/StoryList.svelte';
 	import Tabs from '#lib/Tabs.svelte';
-	import { api } from '#lib/api.ts';
 	import { stories } from '#lib/stories.svelte.ts';
 
 	let query = $state('');
-	let monthCost = $state<string | null>(null);
 	let pulling = $state(0); // pull-to-refresh distance
 
+	// The month's spend lives on You now; this bar only counts.
 	const sub = $derived.by(() => {
 		const n = stories.list?.length;
-		const count = n === undefined ? '' : n === 1 ? '1 story' : `${n} stories`;
-		return monthCost ? `${count} · ${monthCost} this month` : count;
+		return n === undefined ? '' : n === 1 ? '1 story' : `${n} stories`;
 	});
 
 	onMount(() => {
 		void stories.refresh();
-		void loadMonth();
 	});
-
-	async function loadMonth() {
-		const now = new Date();
-		const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-		try {
-			const report = await api.spend(first);
-			monthCost = money(report.cost);
-		} catch {
-			monthCost = null; // the header can do without it
-		}
-	}
-
-	function money(cost: string): string {
-		const n = Number(cost);
-		return n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`;
-	}
 
 	// --- pull to refresh -------------------------------------------------------------------
 	let pullStart: number | null = null;

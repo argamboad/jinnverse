@@ -119,6 +119,27 @@ async def test_the_list_carries_who_is_in_each_story(
     assert (story["character_name"], story["persona_name"]) == ("Elena", "Traveller")
 
 
+async def test_the_list_counts_the_readers_visible_turns_and_not_the_openings_or_replies(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    started = await a_story(session, name="Started")
+    await a_message(session, started, "An opening.", role=Role.ASSISTANT)
+    await a_message(session, started, "First turn.")
+    await a_message(session, started, "A reply.", role=Role.ASSISTANT)
+    await a_message(session, started, "Second turn.")
+    cut = await a_message(session, started, "Third turn, cut back.")
+    cut.deleted_at = datetime.now(UTC)
+    unstarted = await a_story(session, name="Unstarted")
+    await a_message(session, unstarted, "Only an opening.", role=Role.ASSISTANT)
+    await session.commit()
+
+    listed = {story["name"]: story for story in (await client.get("/stories")).json()}
+
+    assert listed["Started"]["turns"] == 2
+    assert listed["Unstarted"]["turns"] == 0
+    assert (await client.get(f"/stories/{started.id}")).json()["turns"] == 2
+
+
 async def test_the_preview_is_the_start_of_the_newest_visible_message(
     client: httpx2.AsyncClient, session: AsyncSession
 ) -> None:

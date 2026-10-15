@@ -4,7 +4,7 @@
 	import { rank } from '#lib/fuzzy.ts';
 	import { Media, MOUSE } from '#lib/media.svelte.ts';
 	import { stories } from '#lib/stories.svelte.ts';
-	import { initial, when } from '#lib/storyList.ts';
+	import { initial, when, whoLine } from '#lib/storyList.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	/** The stories as rows, best match of `query` first: one list for the Stories screen and the
@@ -140,9 +140,12 @@
 					<div class="name">
 						<span>{story.name}</span>
 					</div>
-					<div class="preview prose">
-						{story.last_message_preview ?? `With ${story.character_name}. Nothing said yet.`}
-					</div>
+					{#if !rail}<div class="line">{whoLine(story)}</div>{/if}
+					{#if story.turns > 0 && story.last_message_preview}
+						<div class="preview prose">{story.last_message_preview}</div>
+					{:else if rail}
+						<div class="preview muted">Nothing said yet</div>
+					{/if}
 				</div>
 				<div class="when">{when(story)}</div>
 			</a>
@@ -229,6 +232,13 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.line {
+		font-size: 0.74rem;
+		color: var(--muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.preview {
 		color: var(--fg-2);
 		font-size: 0.88rem;
@@ -243,6 +253,7 @@
 		font-size: 0.72rem;
 		color: var(--muted);
 		padding-top: 2px;
+		white-space: nowrap;
 	}
 	.confirm {
 		display: flex;
