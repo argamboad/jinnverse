@@ -23,6 +23,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
+from urllib.parse import quote
 
 import certifi
 import httpx2
@@ -298,6 +299,50 @@ class Tracker(BaseModel):
     updated_at_sequence: int | None = None
 
 
+class StatusField(BaseModel):
+    """One line of the status block a story's replies open with."""
+
+    key: str
+    label: str
+    icon: str | None = None
+    hint: str | None = None
+    kind: Literal["text", "words"] = "text"
+    scope: Literal["scene", "character"] = "scene"
+    words: list[str] | None = None
+    enabled: bool = True
+    position: int = 0
+
+
+class StatusStarter(BaseModel):
+    """A shipped starter field the story does not have yet."""
+
+    key: str
+    label: str
+    icon: str | None = None
+    hint: str | None = None
+    kind: Literal["text", "words"] = "text"
+    scope: Literal["scene", "character"] = "scene"
+
+
+class StatusValue(BaseModel):
+    field: str
+    who: str = ""
+    """Empty for the scene."""
+    value: str
+    by_hand: bool = False
+    seen: int | None = None
+    """The message that last wrote it."""
+
+
+class StatusBlock(BaseModel):
+    """A story's status block: its fields, what they hold, and who is pinned."""
+
+    fields: list[StatusField] = Field(default_factory=list[StatusField])
+    starters: list[StatusStarter] = Field(default_factory=list[StatusStarter])
+    values: list[StatusValue] = Field(default_factory=list[StatusValue])
+    pins: list[str] = Field(default_factory=list[str])
+
+
 class TurnAudit(BaseModel):
     sequence: int
     sent_at: datetime
@@ -475,6 +520,7 @@ _facts = TypeAdapter(list[Fact])
 _dials = TypeAdapter(list[Dial])
 _story_dials = TypeAdapter(list[StoryDial])
 _trackers = TypeAdapter(list[Tracker])
+_starters = TypeAdapter(list[StatusStarter])
 _specs = TypeAdapter(list[Spec])
 _shortcodes = TypeAdapter(list[Shortcode])
 _done = TypeAdapter[TurnDone | AsideDone | Said | Failed](Done)
@@ -648,6 +694,69 @@ class Api:
     async def trackers(self, story_id: uuid.UUID) -> list[Tracker]:
         return _trackers.validate_python(
             await self._request("GET", f"/stories/{story_id}/trackers")
+        )
+
+    # -- the status block ---------------------------------------------------------------------
+    # Every change answers with the whole block, so a screen draws one response.
+
+    async def status_starters(self) -> list[StatusStarter]:
+        """The shipped starter fields, which need no story: the new-story form offers them."""
+        return _starters.validate_python(await self._request("GET", "/status-starters"))
+
+    async def status_block(self, story_id: uuid.UUID) -> StatusBlock:
+        return StatusBlock.model_validate(await self._request("GET", f"/stories/{story_id}/status"))
+
+    async def adopt_status_fields(self, story_id: uuid.UUID, keys: list[str]) -> StatusBlock:
+        return StatusBlock.model_validate(
+            await self._request("POST", f"/stories/{story_id}/status/adopt", json={"keys": keys})
+        )
+
+    async def add_status_field(
+        self,
+        story_id: uuid.UUID,
+        label: str,
+        *,
+        scope: str = "character",
+        words: list[str] | None = None,
+    ) -> StatusBlock:
+        body: dict[str, object] = {
+            "label": label,
+            "scope": scope,
+            "kind": "words" if words else "text",
+            "words": words or None,
+        }
+        return StatusBlock.model_validate(
+            await self._request("POST", f"/stories/{story_id}/status/fields", json=body)
+        )
+
+    async def change_status_field(
+        self, story_id: uuid.UUID, key: str, **changes: object
+    ) -> StatusBlock:
+        return StatusBlock.model_validate(
+            await self._request(
+                "PATCH", f"/stories/{story_id}/status/fields/{quote(key, safe='')}", json=changes
+            )
+        )
+
+    async def remove_status_field(self, story_id: uuid.UUID, key: str) -> StatusBlock:
+        return StatusBlock.model_validate(
+            await self._request(
+                "DELETE", f"/stories/{story_id}/status/fields/{quote(key, safe='')}"
+            )
+        )
+
+    async def set_status_pins(self, story_id: uuid.UUID, names: list[str]) -> StatusBlock:
+        return StatusBlock.model_validate(
+            await self._request("PUT", f"/stories/{story_id}/status/pins", json={"names": names})
+        )
+
+    async def set_status_value(
+        self, story_id: uuid.UUID, field: str, who: str, value: str
+    ) -> StatusBlock:
+        """What a field holds, for the scene (``who`` empty) or one character; blank clears it."""
+        body = {"field": field, "who": who or None, "value": value}
+        return StatusBlock.model_validate(
+            await self._request("PUT", f"/stories/{story_id}/status/values", json=body)
         )
 
     async def audit(self, story_id: uuid.UUID) -> Audit:
