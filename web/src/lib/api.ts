@@ -82,6 +82,8 @@ export interface Entry {
 	preview: string;
 	/** The owner's short note; a list shows it in place of the preview when there is one. */
 	description: string | null;
+	/** How many live stories use it; 0 for a snippet. */
+	used: number;
 }
 
 export interface EntryFull extends Entry {

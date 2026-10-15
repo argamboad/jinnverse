@@ -356,6 +356,37 @@ async def test_the_default_persona_counts_as_used_by_every_story_that_names_none
     assert "The headland" in refused.json()["detail"]
 
 
+async def test_the_list_counts_the_live_stories_that_use_each_entry(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    elena = await a_character(session, name="Elena")
+    mira = await a_character(session, name="Mira")
+    await a_character(session, name="Unused")
+    keeper = await a_persona(session, name="Keeper")
+    allan = await a_persona(session, name="Allan")
+    await a_snippet(session)
+    session.add(Story(name="One", character_id=elena.id, persona_id=allan.id))
+    session.add(Story(name="Two", character_id=elena.id))  # names no persona: the default's
+    session.add(Story(name="Three", character_id=mira.id))
+    gone = Story(name="Gone", character_id=mira.id, persona_id=allan.id)
+    gone.deleted_at = datetime.now(UTC)
+    session.add(gone)
+    session.add(AppSettings(default_persona_id=keeper.id))
+    await session.commit()
+
+    def counts(shelf: str) -> dict[str, int]:
+        return {e["name"]: e["used"] for e in listed[shelf]}
+
+    listed = {
+        shelf: (await client.get(f"/library/{shelf}")).json()
+        for shelf in ("characters", "personas", "snippets")
+    }
+
+    assert counts("characters") == {"Elena": 2, "Mira": 1, "Unused": 0}
+    assert counts("personas") == {"Allan": 1, "Keeper": 2}
+    assert all(used == 0 for used in counts("snippets").values())
+
+
 async def test_deleting_the_default_persona_nobody_plays_as_clears_the_default(
     client: httpx2.AsyncClient, session: AsyncSession
 ) -> None:
