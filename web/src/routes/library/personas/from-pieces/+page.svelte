@@ -15,16 +15,20 @@
 	import { pieceBlurb } from '#lib/library.ts';
 	import {
 		VOICES,
-		count,
+		builderLine,
+		groupSlots,
 		hasText,
 		isNeeded,
 		keeping,
 		missingSentence,
 		randomFor,
-		toggled
+		toggled,
+		type SlotGroup
 	} from '#lib/personaBuilder.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
+	/** Building a persona from pieces: a checklist of slots, each opening its pool in a sheet,
+	 * and the persona as the server joins it, one tap away. */
 	/** Where to go once the persona is made: back to the new-story form when it came from there. */
 	const then = $derived(page.url.searchParams.get('then'));
 
@@ -32,14 +36,17 @@
 	let slots = $state<Slot[]>([]);
 	let pool = $state<Piece[]>([]);
 	let picks = $state<Picks>({});
-	/** The slot whose pool is open. */
-	let open = $state<string | null>(null);
 	let loaded = $state(false);
+	let view = $state<'slots' | 'read'>('slots');
+
+	/** The row whose pool is open in the slot sheet. */
+	let group = $state<SlotGroup | null>(null);
+	let groupOpen = $state(false);
 
 	let preview = $state<PersonaPreview | null>(null);
 	let previewError = $state<string | null>(null);
-	let reading = $state(false);
 	let libraryName = $state('');
+	let renaming = $state(false);
 	let busy = $state(false);
 
 	let sheetOpen = $state(false);
@@ -50,7 +57,8 @@
 	let shortName = $state('');
 	let saving = $state(false);
 
-	const picked = $derived(count(picks));
+	const groups = $derived(groupSlots(slots));
+	const shelvedAs = $derived(libraryName.trim() || preview?.name || null);
 	const sheetReady = $derived(
 		sheetSlot?.key === 'name'
 			? fullName.trim().length > 0 && shortName.trim().length > 0
@@ -138,8 +146,16 @@
 		return pool.filter((p) => p.slot === slot);
 	}
 
-	function pieceById(id: string): Piece | undefined {
-		return pool.find((p) => p.id === id);
+	function pickedIn(g: SlotGroup): Piece[] {
+		return g.slots.flatMap((s) =>
+			(picks[s.key] ?? [])
+				.map((id) => pool.find((p) => p.id === id))
+				.filter((p): p is Piece => p !== undefined)
+		);
+	}
+
+	function neededIn(g: SlotGroup): boolean {
+		return g.slots.some((s) => isNeeded(s.key));
 	}
 
 	async function changeVoice(next: Voice) {
@@ -161,16 +177,25 @@
 		picks = toggled(picks, slot, id);
 	}
 
-	function random(slot: Slot) {
-		const id = randomFor(
-			piecesOf(slot.key).map((p) => p.id),
-			Math.random()
-		);
-		if (id === null) {
-			toasts.show('info', `No ${slot.label.toLowerCase()} piece yet`, 'Write the first one.');
+	/** A piece at random for each slot of the row; says so when the row has nothing to pick. */
+	function randomRow(g: SlotGroup) {
+		const next = { ...picks };
+		let any = false;
+		for (const slot of g.slots) {
+			const id = randomFor(
+				piecesOf(slot.key).map((p) => p.id),
+				Math.random()
+			);
+			if (id !== null) {
+				next[slot.key] = [id];
+				any = true;
+			}
+		}
+		if (!any) {
+			toasts.show('info', `No ${g.label.toLowerCase()} piece yet`, 'Write the first one.');
 			return;
 		}
-		picks = { ...picks, [slot.key]: [id] };
+		picks = next;
 	}
 
 	function randomAll() {
@@ -186,7 +211,13 @@
 		picks = next;
 	}
 
+	function openRow(g: SlotGroup) {
+		group = g;
+		groupOpen = true;
+	}
+
 	function writeNew(slot: Slot) {
+		groupOpen = false;
 		sheetSlot = slot;
 		pieceName = '';
 		pieceText = '';
@@ -222,8 +253,8 @@
 						});
 			pool = [...pool, made];
 			picks = toggled(picks, slot.key, made.id);
-			open = slot.key;
 			sheetOpen = false;
+			groupOpen = group !== null; // back to the row's pool, with the new piece picked
 			toasts.show('ok', `${made.name} is in the pool`, 'It is picked, and stays for next time.');
 		} catch (error) {
 			toasts.show(
@@ -262,137 +293,188 @@
 </script>
 
 <div class="screen">
-	<AppBar title="Build a persona" back={then === 'new' ? '/new' : '/library'}>
+	<AppBar
+		title="Build a persona"
+		sub={loaded ? builderLine(slots, picks) : undefined}
+		back={then === 'new' ? '/new' : '/library'}
+	>
 		{#snippet actions()}
-			<button type="button" class="link" onclick={randomAll}>Random all</button>
+			<button type="button" class="pill" onclick={randomAll}>Fill the rest at random</button>
 		{/snippet}
 	</AppBar>
-	<div class="layout">
-		<main class="slots">
-			<div class="seg" role="tablist" aria-label="Voice">
-				{#each VOICES as v (v.id)}
-					<button
-						type="button"
-						role="tab"
-						aria-selected={voice === v.id}
-						onclick={() => changeVoice(v.id)}>{v.label}</button
-					>
-				{/each}
-			</div>
-			{#if !loaded}
-				<p class="muted">Reading the pieces…</p>
-			{/if}
-			{#each slots as slot (slot.key)}
-				{@const options = piecesOf(slot.key)}
-				{@const chosen = picks[slot.key] ?? []}
-				<section class="slot" aria-label={slot.label}>
-					<div class="head">
-						<button
-							type="button"
-							class="title"
-							aria-expanded={open === slot.key}
-							onclick={() => (open = open === slot.key ? null : slot.key)}
-						>
-							<h2>{slot.label}</h2>
-							{#if isNeeded(slot.key) && !chosen.length}<span class="chip warn">needed</span>{/if}
-						</button>
-						<button
-							type="button"
-							class="dice"
-							aria-label="Pick a {slot.label.toLowerCase()} piece at random"
-							onclick={() => random(slot)}>⚄</button
-						>
-					</div>
-					{#if chosen.length}
-						<div class="chips">
-							{#each chosen as id (id)}
-								{@const piece = pieceById(id)}
-								{#if piece}
-									<button
-										type="button"
-										class="chip gold pickedchip"
-										aria-label="Take back {piece.name}"
-										onclick={() => toggle(slot.key, id)}
-										>✓ {piece.name} <span aria-hidden="true">×</span></button
-									>
-								{/if}
-							{/each}
-						</div>
-					{:else}
-						<p class="muted none">
-							{isNeeded(slot.key) ? 'Pick one' : 'None picked — optional'}
-						</p>
-					{/if}
-					{#if open === slot.key}
-						<div class="options" role="group" aria-label="{slot.label} pieces">
-							{#each options as piece (piece.id)}
-								{@const on = chosen.includes(piece.id)}
-								{@const shown = pieceBlurb(piece)}
-								<div class="optrow">
-									<button
-										type="button"
-										class="opt"
-										role="checkbox"
-										aria-checked={on}
-										onclick={() => toggle(slot.key, piece.id)}
-									>
-										<span class="dot" aria-hidden="true"></span>
-										<span class="what">
-											<b>{piece.name}</b>
-											<small class:prose={!shown.note}>{shown.text}</small>
-										</span>
-									</button>
-									<a class="editlink" href="/library/pieces/{piece.id}?back=builder">Edit</a>
-								</div>
-							{/each}
-							{#if !options.length}
-								<p class="muted">Nothing here yet.</p>
-							{/if}
-							<button type="button" class="link new" onclick={() => writeNew(slot)}
-								>+ New {slot.label.toLowerCase()} piece</button
-							>
-						</div>
-					{/if}
-				</section>
-			{/each}
-		</main>
-		<aside class="side">
-			<div class="pv">
+	<div class="controls">
+		<div class="seg" role="radiogroup" aria-label="Voice">
+			{#each VOICES as v (v.id)}
 				<button
 					type="button"
-					class="pvhead"
-					aria-expanded={reading}
-					onclick={() => (reading = !reading)}
+					role="radio"
+					aria-checked={voice === v.id}
+					onclick={() => changeVoice(v.id)}>{v.label}</button
 				>
-					<b>The persona · {picked} {picked === 1 ? 'piece' : 'pieces'}</b>
-					<span aria-hidden="true">{reading ? '⌃' : '⌄'}</span>
-				</button>
-				{#if previewError}
-					<p class="muted">{previewError}</p>
-				{:else if preview}
-					<p class="prose text" class:full={reading}>{preview.text}</p>
-				{:else}
-					<p class="muted">Pick a piece to see the persona.</p>
-				{/if}
-			</div>
-		</aside>
+			{/each}
+		</div>
+		<div class="seg" role="tablist" aria-label="View">
+			<button
+				type="button"
+				role="tab"
+				aria-selected={view === 'slots'}
+				onclick={() => (view = 'slots')}>Slots</button
+			>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={view === 'read'}
+				onclick={() => (view = 'read')}>Read it</button
+			>
+		</div>
 	</div>
+	<main>
+		{#if !loaded}
+			<p class="muted">Reading the pieces…</p>
+		{:else if view === 'read'}
+			{#if previewError}
+				<p class="muted">{previewError}</p>
+			{:else if preview}
+				<p class="prose persona">{preview.text}</p>
+			{:else}
+				<p class="muted">Pick a piece to see the persona.</p>
+			{/if}
+		{:else}
+			{#each groups as g (g.key)}
+				{@const chosen = pickedIn(g)}
+				<div class="row">
+					<button
+						type="button"
+						class="open"
+						aria-haspopup="dialog"
+						aria-label="{g.label}: {chosen.length
+							? chosen.map((p) => p.name).join(', ')
+							: 'nothing picked'}"
+						onclick={() => openRow(g)}
+					>
+						<span class="what">
+							<span
+								class="label"
+								class:picked={chosen.length > 0}
+								class:needed={!chosen.length && neededIn(g)}>{g.label}</span
+							>
+							{#if chosen.length}
+								<span class="value">{chosen.map((p) => p.name).join(', ')}</span>
+							{:else}
+								<span class="value muted"
+									>{g.slots.length > 1
+										? `One paragraph, up to ${g.slots.length} pieces`
+										: 'Pick one, or leave it'}</span
+								>
+							{/if}
+						</span>
+						<span class="chev" aria-hidden="true">›</span>
+					</button>
+					<button type="button" class="random" onclick={() => randomRow(g)}>Random</button>
+				</div>
+			{/each}
+		{/if}
+	</main>
 	<footer class="foot">
-		<label class="field">
-			<span>Library name</span>
+		{#if renaming}
 			<input
 				class="input"
 				type="text"
+				aria-label="Library name"
 				bind:value={libraryName}
 				maxlength="200"
 				placeholder={preview?.name ?? 'from the name piece'}
+				onblur={() => (renaming = false)}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === 'Escape') renaming = false;
+				}}
 			/>
-		</label>
+		{:else}
+			<span class="shelved">
+				<span class="muted small">Will be shelved as</span>
+				<span class="name"
+					><span class="mono">{shelvedAs ?? 'the name piece'}</span>
+					<button type="button" class="change" onclick={() => (renaming = true)}>change</button
+					></span
+				>
+			</span>
+		{/if}
 		<button class="btn primary" type="button" onclick={make} disabled={busy}>
 			{busy ? 'Making…' : 'Make persona'}
 		</button>
 	</footer>
 </div>
+
+<Sheet
+	bind:open={groupOpen}
+	title={group?.label ?? 'Slot'}
+	hint={group
+		? `${neededIn(group) ? 'needed · ' : ''}${voice} voice · ${group.slots.reduce((n, s) => n + piecesOf(s.key).length, 0)} pieces`
+		: undefined}
+	max="86%"
+>
+	{#if group}
+		<p class="muted intro">
+			{neededIn(group)
+				? 'A persona is not made without it. Picks apply as you tap.'
+				: 'Optional. Picks apply as you tap; a picked piece shows its whole paragraph.'}
+		</p>
+		{#each group.slots as slot (slot.key)}
+			{@const options = piecesOf(slot.key)}
+			{@const chosen = picks[slot.key] ?? []}
+			<section class="pool" aria-label="{slot.label} pieces">
+				{#if group.slots.length > 1}<h4>{slot.label}</h4>{/if}
+				{#each options as piece (piece.id)}
+					{@const on = chosen.includes(piece.id)}
+					{@const shown = pieceBlurb(piece)}
+					<div class="opt" class:on>
+						<button
+							type="button"
+							class="pick"
+							role="checkbox"
+							aria-checked={on}
+							onclick={() => toggle(slot.key, piece.id)}
+						>
+							<span class="dot" aria-hidden="true"></span>
+							<span class="text">
+								<b>{piece.name}</b>
+								{#if on}
+									<small class="prose full">{piece.text}</small>
+								{:else}
+									<small class:prose={!shown.note}>{shown.text}</small>
+								{/if}
+							</span>
+						</button>
+						{#if on}
+							<a class="edit" href="/library/pieces/{piece.id}?back=builder">Edit the piece</a>
+						{/if}
+					</div>
+				{/each}
+				{#if !options.length}
+					<p class="muted">Nothing here in the {voice} voice yet.</p>
+				{/if}
+				{#if group.slots.length > 1}
+					<button type="button" class="link" onclick={() => writeNew(slot)}
+						>+ Write a new {slot.label.toLowerCase()} piece</button
+					>
+				{/if}
+			</section>
+		{/each}
+		<div class="sheetfoot">
+			<button type="button" class="btn ghost" onclick={() => group && randomRow(group)}
+				>Random</button
+			>
+			{#if group.slots.length === 1}
+				<button
+					type="button"
+					class="btn ghost gold"
+					onclick={() => group && writeNew(group.slots[0])}>+ Write a new one</button
+				>
+			{/if}
+			<button type="button" class="btn primary" onclick={() => (groupOpen = false)}>Done</button>
+		</div>
+	{/if}
+</Sheet>
 
 <Sheet
 	bind:open={sheetOpen}
@@ -436,34 +518,33 @@
 
 <style>
 	.screen {
-		min-height: 100%;
+		height: 100%;
 		display: flex;
 		flex-direction: column;
 	}
-	.link {
+	.pill {
 		appearance: none;
-		border: 0;
-		background: transparent;
-		color: var(--gold-text);
-		font-weight: 600;
-		font-size: 0.85rem;
-		padding: 8px;
+		display: inline-flex;
+		align-items: center;
 		min-height: 36px;
+		padding: 0 12px;
+		border-radius: var(--r-pill);
+		border: 1px solid var(--line-strong);
+		background: transparent;
+		color: var(--fg-2);
+		font-weight: 600;
+		font-size: 0.82rem;
+		white-space: nowrap;
 	}
-	.layout {
-		flex: 1;
-		display: grid;
-		gap: 14px;
-		align-content: start;
-		padding: 12px 12px 8px;
+	.controls {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 14px 0;
 		width: 100%;
 		max-width: 720px;
 		margin: 0 auto;
-	}
-	.slots {
-		display: grid;
-		gap: 10px;
-		align-content: start;
 	}
 	.seg {
 		display: inline-flex;
@@ -472,7 +553,6 @@
 		border-radius: var(--r-pill);
 		background: var(--surface-2);
 		border: 1px solid var(--line);
-		width: max-content;
 	}
 	.seg button {
 		appearance: none;
@@ -481,108 +561,182 @@
 		color: var(--fg-2);
 		font-size: 0.85rem;
 		font-weight: 500;
-		padding: 6px 16px;
-		min-height: 34px;
+		padding: 6px 14px;
+		min-height: 32px;
 		border-radius: var(--r-pill);
 	}
+	.seg button[aria-checked='true'],
 	.seg button[aria-selected='true'] {
 		background: var(--gold);
 		color: var(--gold-ink);
 	}
-	.slot {
+	main {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
 		display: grid;
-		gap: 8px;
-		padding: 10px 12px;
-		border-radius: var(--r-m);
-		background: var(--surface);
-		border: 1px solid var(--line);
+		align-content: start;
+		padding: 12px 14px 24px;
+		width: 100%;
+		max-width: 720px;
+		margin: 0 auto;
 	}
-	.head {
-		display: flex;
+	.persona {
+		font-size: 0.98rem;
+		line-height: 1.6;
+		white-space: pre-line;
+		color: var(--fg);
+	}
+	/* A row: the button that opens the slot's pool covers it, and Random sits on top of it. */
+	.row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto 20px;
 		align-items: center;
-		gap: 8px;
+		border-bottom: 1px solid var(--line);
 	}
-	.title {
+	.row:last-child {
+		border-bottom: 0;
+	}
+	.open {
+		grid-column: 1 / -1;
+		grid-row: 1;
 		appearance: none;
 		border: 0;
 		background: transparent;
-		padding: 4px 0;
-		min-height: 36px;
-		display: flex;
+		color: inherit;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 8px;
-		flex: 1;
+		gap: 10px;
 		text-align: left;
+		padding: 12px 2px;
+		min-height: 56px;
 	}
-	h2 {
-		font-size: 0.78rem;
-		letter-spacing: 0.12em;
+	.what {
+		display: grid;
+		gap: 1px;
+		min-width: 0;
+		padding-right: 72px; /* room for Random, which sits over the row */
+	}
+	.label {
+		font-size: 0.72rem;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
+		color: var(--muted);
+		font-weight: 600;
+	}
+	.label.picked {
 		color: var(--gold-text);
 	}
-	.dice {
+	.label.needed {
+		color: var(--warn);
+	}
+	.value {
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.value.muted {
+		font-weight: 400;
+	}
+	.chev {
+		color: var(--muted);
+	}
+	.random {
+		grid-column: 2;
+		grid-row: 1;
+		position: relative;
+		z-index: 1;
 		appearance: none;
 		border: 0;
 		background: transparent;
-		color: var(--muted);
-		font-size: 1.3rem;
-		width: 40px;
-		height: 36px;
-		border-radius: var(--r-s);
+		color: var(--gold-text);
+		font-size: 0.76rem;
+		font-weight: 600;
+		padding: 4px 6px;
+		min-height: 32px;
+		margin-right: 8px;
 	}
-	.chips {
+	.foot {
+		flex: none;
 		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 16px calc(14px + var(--safe-bottom));
+		border-top: 1px solid var(--line);
+		background: var(--bg);
+		width: 100%;
+		max-width: 720px;
+		margin: 0 auto;
 	}
-	.pickedchip {
-		appearance: none;
-		border: 1px solid var(--gold);
-		font-size: 0.85rem;
-		min-height: 30px;
+	.foot .input {
+		flex: 1;
+		min-height: 44px;
+		padding: 8px 12px;
 	}
-	.none {
-		font-size: 0.85rem;
-	}
-	.options {
-		display: grid;
-		gap: 6px;
-	}
-	.optrow {
-		display: flex;
-		gap: 6px;
-		align-items: stretch;
-	}
-	.optrow .opt {
+	.shelved {
 		flex: 1;
 		min-width: 0;
-	}
-	.editlink {
 		display: grid;
-		place-items: center;
-		padding: 0 10px;
-		border-radius: var(--r-s);
-		border: 1px solid var(--line);
-		background: var(--bg);
+	}
+	.shelved .small {
+		font-size: 0.74rem;
+	}
+	.shelved .name {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.mono {
+		font-family: var(--font-mono);
+		font-size: 0.9rem;
+	}
+	.change {
+		appearance: none;
+		border: 0;
+		background: transparent;
 		color: var(--gold-text);
 		font-size: 0.78rem;
 		font-weight: 600;
-		text-decoration: none;
+		padding: 2px 4px;
+	}
+	.intro {
+		font-size: 0.8rem;
+		line-height: 1.4;
+	}
+	.pool {
+		display: grid;
+		gap: 8px;
+	}
+	.pool h4 {
+		font-size: 0.72rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--muted);
+		font-weight: 600;
 	}
 	.opt {
+		display: grid;
+		border-radius: 12px;
+		border: 1px solid var(--line);
+		background: var(--bg);
+		overflow: hidden;
+	}
+	.opt.on {
+		border-color: var(--gold);
+		box-shadow: 0 0 0 3px var(--gold-soft);
+	}
+	.pick {
 		appearance: none;
 		display: flex;
 		gap: 10px;
 		align-items: flex-start;
 		text-align: left;
-		padding: 10px;
-		border-radius: var(--r-s);
-		border: 1px solid var(--line);
-		background: var(--bg);
-	}
-	.opt[aria-checked='true'] {
-		border-color: var(--gold);
-		box-shadow: 0 0 0 3px var(--gold-soft);
+		padding: 12px;
+		border: 0;
+		background: transparent;
+		color: var(--fg);
 	}
 	.dot {
 		width: 16px;
@@ -592,16 +746,16 @@
 		border-radius: 50%;
 		border: 1.5px solid var(--muted);
 	}
-	.opt[aria-checked='true'] .dot {
+	.opt.on .dot {
 		border-color: var(--gold);
 		background: radial-gradient(circle, var(--gold) 45%, transparent 50%);
 	}
-	.what {
+	.text {
 		min-width: 0;
 		display: grid;
 		gap: 2px;
 	}
-	.what small {
+	.text small {
 		color: var(--fg-2);
 		font-size: 0.85rem;
 		display: -webkit-box;
@@ -610,53 +764,44 @@
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
-	.new {
-		justify-self: start;
+	.text small.full {
+		display: block;
+		font-size: 0.88rem;
+		line-height: 1.45;
+		white-space: pre-line;
 	}
-	.pv {
-		display: grid;
-		gap: 6px;
-		padding: 10px 12px;
-		border-radius: var(--r-m);
-		background: var(--surface-2);
-		border: 1px solid var(--line);
+	.edit {
+		justify-self: end;
+		color: var(--gold-text);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-decoration: none;
+		padding: 0 18px 10px;
 	}
-	.pvhead {
+	.link {
 		appearance: none;
+		justify-self: start;
 		border: 0;
 		background: transparent;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		text-align: left;
-		padding: 2px 0;
-		min-height: 32px;
+		color: var(--gold-text);
+		font-weight: 600;
+		font-size: 0.82rem;
+		padding: 6px 0;
 	}
-	.text {
-		color: var(--fg-2);
-		font-size: 0.9rem;
-		white-space: pre-line;
-		display: -webkit-box;
-		-webkit-line-clamp: 4;
-		line-clamp: 4;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-	.text.full {
-		display: block;
-		overflow: visible;
-	}
-	.foot {
+	.sheetfoot {
 		position: sticky;
-		bottom: 0;
-		display: grid;
-		gap: 10px;
-		padding: 10px 12px calc(12px + var(--safe-bottom));
-		background: var(--bg);
+		bottom: calc(-18px - var(--safe-bottom));
+		display: flex;
+		gap: 8px;
+		padding: 8px 0 4px;
+		background: var(--surface);
 		border-top: 1px solid var(--line);
-		width: 100%;
-		max-width: 720px;
-		margin: 0 auto;
+	}
+	.sheetfoot .btn.ghost {
+		flex: 1;
+	}
+	.sheetfoot .gold {
+		color: var(--gold-text);
 	}
 	.sheetform {
 		display: grid;
@@ -671,19 +816,5 @@
 	}
 	.small {
 		font-size: 0.8rem;
-	}
-	@media (min-width: 900px) {
-		.layout {
-			max-width: var(--frame);
-			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-			align-items: start;
-		}
-		.side {
-			position: sticky;
-			top: 70px;
-		}
-		.foot {
-			max-width: var(--frame);
-		}
 	}
 </style>
