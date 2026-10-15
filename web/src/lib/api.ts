@@ -198,6 +198,7 @@ export interface SpendReport {
 	cost: string;
 	discarded_cost: string;
 	unpriced: number;
+	cached_share: number | null;
 	by_story: StorySpend[];
 }
 
