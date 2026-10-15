@@ -13,12 +13,15 @@
 		commands = [],
 		snippets = [],
 		busy = false,
+		split = false,
 		onsend,
 		oncarryon
 	}: {
 		commands?: Command[];
 		snippets?: EntryFull[];
 		busy?: boolean;
+		/** The wide workspace: Carry on and Send are two buttons, not one that changes. */
+		split?: boolean;
 		onsend: (text: string) => void;
 		oncarryon: () => void;
 	} = $props();
@@ -149,7 +152,7 @@
 	}
 </script>
 
-<div class="composer">
+<div class="composer" class:split>
 	{#if commandMatches.length > 0}
 		<div class="palette" role="listbox" aria-label="Commands">
 			{#each commandMatches as command, i (command.name)}
@@ -208,26 +211,50 @@
 			onclick={grow}
 			onkeyup={grow}
 			rows="1"
-			placeholder="Write your turn, / for a command, : for a snippet"
+			placeholder={split
+				? 'Write your turn · / for a command · : for a snippet'
+				: 'Write your turn, / for a command, : for a snippet'}
 			aria-label="Your turn"
 			disabled={busy}
 			enterkeyhint="send"></textarea>
-		<button
-			type="button"
-			class="send"
-			class:carry={empty}
-			onclick={send}
-			disabled={busy}
-			aria-label={empty ? 'Carry on' : 'Send'}
-		>
-			{#if empty}
-				<span class="carry-label">Carry on ›</span>
-			{:else}
-				<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
-					><path d="M12 4l7 7-1.4 1.4L13 7.8V20h-2V7.8l-4.6 4.6L5 11z" fill="currentColor" /></svg
+		{#if split}
+			<div class="pair">
+				{#if empty}
+					<button type="button" class="send carry" onclick={oncarryon} disabled={busy}
+						>Carry on ›</button
+					>
+				{/if}
+				<button
+					type="button"
+					class="send"
+					class:dim={empty}
+					onclick={send}
+					disabled={busy || empty}
+					aria-label="Send"
 				>
-			{/if}
-		</button>
+					<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+						><path d="M12 4l7 7-1.4 1.4L13 7.8V20h-2V7.8l-4.6 4.6L5 11z" fill="currentColor" /></svg
+					>
+				</button>
+			</div>
+		{:else}
+			<button
+				type="button"
+				class="send"
+				class:carry={empty}
+				onclick={send}
+				disabled={busy}
+				aria-label={empty ? 'Carry on' : 'Send'}
+			>
+				{#if empty}
+					<span class="carry-label">Carry on ›</span>
+				{:else}
+					<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+						><path d="M12 4l7 7-1.4 1.4L13 7.8V20h-2V7.8l-4.6 4.6L5 11z" fill="currentColor" /></svg
+					>
+				{/if}
+			</button>
+		{/if}
 	</div>
 </div>
 
@@ -238,6 +265,13 @@
 		border-top: 1px solid var(--line);
 		background: color-mix(in srgb, var(--bg) 90%, transparent);
 		backdrop-filter: blur(12px);
+	}
+	/* The workspace's composer has no bar of its own: it sits in the pane under the meters. */
+	.composer.split {
+		padding: 0 24px 14px;
+		border-top: 0;
+		background: transparent;
+		backdrop-filter: none;
 	}
 	.box {
 		display: grid;
@@ -315,6 +349,13 @@
 	}
 	.send:disabled {
 		opacity: 0.6;
+	}
+	.send.dim:disabled {
+		opacity: 0.45;
+	}
+	.pair {
+		display: flex;
+		gap: 6px;
 	}
 	.palette {
 		position: absolute;

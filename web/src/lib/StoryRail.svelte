@@ -70,7 +70,7 @@
 	}
 </script>
 
-<div class="rail">
+<div class="rail" class:compact>
 	<nav class="tabs" class:compact aria-label="Story panel">
 		{#each sections as s (s.id)}
 			<button type="button" class:on={section === s.id} onclick={() => (section = s.id)}
@@ -79,236 +79,268 @@
 		{/each}
 	</nav>
 
-	{#if !extras.loaded}
-		<p class="muted small">Reading…</p>
-	{:else if section === 'dials'}
-		<div class="stack big">
-			{#if compact}
-				<p class="muted lead">Saved as you touch them; reach the story from its next turn.</p>
-			{/if}
-			{#each setDials as sd (sd.key)}
-				{@const dial = extras.dial(sd.key)}
-				{#if dial}
-					<DialControl
-						{dial}
-						setting={sd}
-						{compact}
-						onset={(value) => extras.setDial(sd.key, value)}
-						onclear={() => clear(sd.key)}
-					/>
+	<div class="body" class:compact>
+		{#if !extras.loaded}
+			<p class="muted small">Reading…</p>
+		{:else if section === 'dials'}
+			<div class="stack big">
+				{#if compact}
+					<p class="muted lead">Saved as you touch them; reach the story from its next turn.</p>
 				{/if}
-			{/each}
-			{#if unsetDials.length > 0}
-				<div class="unset">
-					<h4>Not set · following the card</h4>
-					{#each unsetDials as sd (sd.key)}
-						{@const dial = extras.dial(sd.key)}
-						{#if dial}
-							{#if expanded === sd.key}
-								<div class="open" transition:slide={{ duration: 150 }}>
-									<DialControl
-										{dial}
-										setting={sd}
-										{compact}
-										onset={(value) => {
-											expanded = null;
-											void extras.setDial(sd.key, value);
-										}}
-										onclear={() => clear(sd.key)}
-										oncollapse={() => (expanded = null)}
-									/>
-								</div>
-							{:else}
-								<button type="button" class="row" onclick={() => (expanded = sd.key)}>
-									<span>{dial.title}</span><span class="set">Set ›</span>
-								</button>
+				{#each setDials as sd (sd.key)}
+					{@const dial = extras.dial(sd.key)}
+					{#if dial}
+						<DialControl
+							{dial}
+							setting={sd}
+							{compact}
+							onset={(value) => extras.setDial(sd.key, value)}
+							onclear={() => clear(sd.key)}
+						/>
+					{/if}
+				{/each}
+				{#if unsetDials.length > 0}
+					<div class="unset">
+						<h4>Not set · following the card</h4>
+						{#each unsetDials as sd (sd.key)}
+							{@const dial = extras.dial(sd.key)}
+							{#if dial}
+								{#if expanded === sd.key}
+									<div class="open" transition:slide={{ duration: 150 }}>
+										<DialControl
+											{dial}
+											setting={sd}
+											{compact}
+											onset={(value) => {
+												expanded = null;
+												void extras.setDial(sd.key, value);
+											}}
+											onclear={() => clear(sd.key)}
+											oncollapse={() => (expanded = null)}
+										/>
+									</div>
+								{:else}
+									<button type="button" class="row" onclick={() => (expanded = sd.key)}>
+										<span>{dial.title}</span><span class="set">Set ›</span>
+									</button>
+								{/if}
 							{/if}
-						{/if}
-					{/each}
-				</div>
-			{/if}
-			{#if !compact}
-				<p class="muted small">
-					A dial reaches the prompt or the sampler from the next turn, never the transcript. This
-					story only.
-				</p>
-			{/if}
-		</div>
-	{:else if section === 'meters'}
-		<div class="stack">
-			{#if extras.trackers.length === 0 && !adding}
-				<p class="muted small">
-					No meters. A meter is a number the story keeps — trust, heat, suspicion — that the model
-					moves a little each turn and the app reads back. A meter the model can see is a meter it
-					writes towards.
-				</p>
-			{/if}
-			{#each extras.trackers as t (t.id)}
-				<div class="meter">
-					<div class="mhead">
-						<b>{t.name}</b>
-						<span class="mono">
-							{trim(t.value)}/{trim(t.max)}
-							{#if t.delta !== 0}
-								<span class:up={t.delta > 0} class:down={t.delta < 0}
-									>{t.delta > 0 ? '+' : ''}{trim(t.delta)}</span
-								>
-							{/if}
-						</span>
+						{/each}
 					</div>
-					<div class="bar"><i style:width="{bar(t.value, t.max)}%"></i></div>
-					<div class="mfoot">
-						<span class="muted"
-							>{t.note ?? t.means ?? '—'}{t.updated_at_sequence
-								? ` · turn ${t.updated_at_sequence}`
-								: ''}</span
-						>
-						{#if setting === t.name}
-							<form
-								class="setrow"
-								onsubmit={(e) => {
-									e.preventDefault();
-									extras.setTracker(t.name, setTo);
-									setting = null;
-								}}
-							>
-								<input
-									class="input tiny"
-									id="set-{t.id}"
-									type="number"
-									min="0"
-									max={t.max}
-									step="any"
-									bind:value={setTo}
-									aria-label="New value"
-								/>
-								<button type="submit" class="btn tiny primary">Set</button>
-								<button type="button" class="btn tiny ghost" onclick={() => (setting = null)}
-									>Cancel</button
-								>
-							</form>
-						{:else}
-							<span class="acts">
-								<button
-									type="button"
-									class="link"
-									onclick={() => {
-										setting = t.name;
-										setTo = t.value;
-									}}>Set</button
-								>
-								<button
-									type="button"
-									class="link danger"
-									onclick={() => extras.removeTracker(t.name)}>Remove</button
-								>
+				{/if}
+				{#if !compact}
+					<p class="muted small">
+						A dial reaches the prompt or the sampler from the next turn, never the transcript. This
+						story only.
+					</p>
+				{/if}
+			</div>
+		{:else if section === 'meters'}
+			<div class="stack">
+				{#if extras.trackers.length === 0 && !adding}
+					<p class="muted small">
+						No meters. A meter is a number the story keeps — trust, heat, suspicion — that the model
+						moves a little each turn and the app reads back. A meter the model can see is a meter it
+						writes towards.
+					</p>
+				{/if}
+				{#each extras.trackers as t (t.id)}
+					<div class="meter">
+						<div class="mhead">
+							<b>{t.name}</b>
+							<span class="mono">
+								{trim(t.value)}/{trim(t.max)}
+								{#if t.delta !== 0}
+									<span class:up={t.delta > 0} class:down={t.delta < 0}
+										>{t.delta > 0 ? '+' : ''}{trim(t.delta)}</span
+									>
+								{/if}
 							</span>
-						{/if}
-					</div>
-				</div>
-			{/each}
-			{#if adding}
-				<form class="add" onsubmit={add}>
-					<label class="field"
-						><span>Name</span><input
-							class="input"
-							id="meter-name"
-							type="text"
-							bind:value={name}
-							maxlength="120"
-							required
-							placeholder="Trust"
-						/></label
-					>
-					<div class="two">
-						<label class="field"
-							><span>Starts at</span><input
-								class="input"
-								id="meter-start"
-								type="number"
-								step="any"
-								min="0"
-								bind:value={start}
-							/></label
-						>
-						<label class="field"
-							><span>Out of</span><input
-								class="input"
-								id="meter-max"
-								type="number"
-								step="any"
-								min="1"
-								bind:value={max}
-							/></label
-						>
-					</div>
-					<label class="field"
-						><span>What it measures (optional)</span><input
-							class="input"
-							id="meter-means"
-							type="text"
-							bind:value={means}
-							maxlength="500"
-							placeholder="how far she trusts Rowan"
-						/></label
-					>
-					<div class="two">
-						<button type="submit" class="btn primary">Add meter</button>
-						<button type="button" class="btn ghost" onclick={() => (adding = false)}>Cancel</button>
-					</div>
-				</form>
-			{:else}
-				<button type="button" class="btn ghost" onclick={() => (adding = true)}>Add a meter</button>
-			{/if}
-		</div>
-	{:else if section === 'status'}
-		<StatusPanel {extras} />
-	{:else}
-		<div class="stack">
-			{#if extras.context}
-				{@const ctx = extras.context}
-				<h4>The last prompt</h4>
-				{#each ctx.layers as layer (layer.name)}
-					<div class="layer">
-						<span>{layer.name}{layer.dropped ? ` (${layer.dropped} dropped)` : ''}</span>
-						<span class="mono">{layer.tokens.toLocaleString()}</span>
-						<i
-							><b
-								style:width="{ctx.budget
-									? (layer.tokens / ctx.budget) * 100
-									: (layer.tokens / Math.max(ctx.total, 1)) * 100}%"
-							></b></i
-						>
+						</div>
+						<div class="bar"><i style:width="{bar(t.value, t.max)}%"></i></div>
+						<div class="mfoot">
+							<span class="muted"
+								>{t.note ?? t.means ?? '—'}{t.updated_at_sequence
+									? ` · turn ${t.updated_at_sequence}`
+									: ''}</span
+							>
+							{#if setting === t.name}
+								<form
+									class="setrow"
+									onsubmit={(e) => {
+										e.preventDefault();
+										extras.setTracker(t.name, setTo);
+										setting = null;
+									}}
+								>
+									<input
+										class="input tiny"
+										id="set-{t.id}"
+										type="number"
+										min="0"
+										max={t.max}
+										step="any"
+										bind:value={setTo}
+										aria-label="New value"
+									/>
+									<button type="submit" class="btn tiny primary">Set</button>
+									<button type="button" class="btn tiny ghost" onclick={() => (setting = null)}
+										>Cancel</button
+									>
+								</form>
+							{:else}
+								<span class="acts">
+									<button
+										type="button"
+										class="link"
+										onclick={() => {
+											setting = t.name;
+											setTo = t.value;
+										}}>Set</button
+									>
+									<button
+										type="button"
+										class="link danger"
+										onclick={() => extras.removeTracker(t.name)}>Remove</button
+									>
+								</span>
+							{/if}
+						</div>
 					</div>
 				{/each}
-				<p class="mono small total">
-					total {ctx.total.toLocaleString()}{ctx.budget ? ` / ${ctx.budget.toLocaleString()}` : ''}
-					{#if extras.audit?.turns[0]?.prompt_tokens}
-						· billed {extras.audit.turns[0].prompt_tokens.toLocaleString()}
-					{/if}
-				</p>
-			{:else}
-				<p class="muted small">
-					No reply yet. After the first one, this shows what the prompt was built from.
-				</p>
-			{/if}
-			{#if extras.spend}
-				<h4>This story</h4>
-				<div class="cost">
-					<span>Calls</span><b>{extras.spend.calls}</b>
-					<span>Cost</span><b>{money(extras.spend.cost)}</b>
-					<span>Rerolled away</span><b class="warn">{money(extras.spend.discarded_cost)}</b>
-					{#if extras.spend.unpriced}<span>Unpriced calls</span><b>{extras.spend.unpriced}</b>{/if}
-					{#if extras.spend.cached_share !== null}
-						<span>Cached share</span><b>{Math.round(extras.spend.cached_share * 100)}%</b>
-					{/if}
-				</div>
-			{/if}
-		</div>
-	{/if}
+				{#if adding}
+					<form class="add" onsubmit={add}>
+						<label class="field"
+							><span>Name</span><input
+								class="input"
+								id="meter-name"
+								type="text"
+								bind:value={name}
+								maxlength="120"
+								required
+								placeholder="Trust"
+							/></label
+						>
+						<div class="two">
+							<label class="field"
+								><span>Starts at</span><input
+									class="input"
+									id="meter-start"
+									type="number"
+									step="any"
+									min="0"
+									bind:value={start}
+								/></label
+							>
+							<label class="field"
+								><span>Out of</span><input
+									class="input"
+									id="meter-max"
+									type="number"
+									step="any"
+									min="1"
+									bind:value={max}
+								/></label
+							>
+						</div>
+						<label class="field"
+							><span>What it measures (optional)</span><input
+								class="input"
+								id="meter-means"
+								type="text"
+								bind:value={means}
+								maxlength="500"
+								placeholder="how far she trusts Rowan"
+							/></label
+						>
+						<div class="two">
+							<button type="submit" class="btn primary">Add meter</button>
+							<button type="button" class="btn ghost" onclick={() => (adding = false)}
+								>Cancel</button
+							>
+						</div>
+					</form>
+				{:else}
+					<button type="button" class="btn ghost" onclick={() => (adding = true)}
+						>Add a meter</button
+					>
+				{/if}
+			</div>
+		{:else if section === 'status'}
+			<StatusPanel {extras} />
+		{:else}
+			<div class="stack">
+				{#if extras.context}
+					{@const ctx = extras.context}
+					<h4>The last prompt</h4>
+					{#each ctx.layers as layer (layer.name)}
+						<div class="layer">
+							<span>{layer.name}{layer.dropped ? ` (${layer.dropped} dropped)` : ''}</span>
+							<span class="mono">{layer.tokens.toLocaleString()}</span>
+							<i
+								><b
+									style:width="{ctx.budget
+										? (layer.tokens / ctx.budget) * 100
+										: (layer.tokens / Math.max(ctx.total, 1)) * 100}%"
+								></b></i
+							>
+						</div>
+					{/each}
+					<p class="mono small total">
+						total {ctx.total.toLocaleString()}{ctx.budget
+							? ` / ${ctx.budget.toLocaleString()}`
+							: ''}
+						{#if extras.audit?.turns[0]?.prompt_tokens}
+							· billed {extras.audit.turns[0].prompt_tokens.toLocaleString()}
+						{/if}
+					</p>
+				{:else}
+					<p class="muted small">
+						No reply yet. After the first one, this shows what the prompt was built from.
+					</p>
+				{/if}
+				{#if extras.spend}
+					<h4>This story</h4>
+					<div class="cost">
+						<span>Calls</span><b>{extras.spend.calls}</b>
+						<span>Cost</span><b>{money(extras.spend.cost)}</b>
+						<span>Rerolled away</span><b class="warn">{money(extras.spend.discarded_cost)}</b>
+						{#if extras.spend.unpriced}<span>Unpriced calls</span><b>{extras.spend.unpriced}</b
+							>{/if}
+						{#if extras.spend.cached_share !== null}
+							<span>Cached share</span><b>{Math.round(extras.spend.cached_share * 100)}%</b>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
+	.rail.compact {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+	.rail.compact .tabs {
+		margin: 12px 16px 0;
+		flex: none;
+	}
+	.body {
+		display: grid;
+		gap: 14px;
+		align-content: start;
+		min-width: 0;
+	}
+	.body.compact {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		padding: 14px 16px 16px;
+		gap: 18px;
+	}
 	.rail {
 		display: grid;
 		gap: 14px;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import Composer from '#lib/Composer.svelte';
 	import MessageView from '#lib/MessageView.svelte';
@@ -9,6 +9,8 @@
 	import RerollSheet from '#lib/RerollSheet.svelte';
 	import Sheet from '#lib/Sheet.svelte';
 	import StatusStrip from '#lib/StatusStrip.svelte';
+	import StoriesRail from '#lib/StoriesRail.svelte';
+	import StoryHead from '#lib/StoryHead.svelte';
 	import StoryRail from '#lib/StoryRail.svelte';
 	import StorySheet from '#lib/StorySheet.svelte';
 	import {
@@ -23,6 +25,8 @@
 	} from '#lib/api.ts';
 	import { readEmoji } from '#lib/emoji.ts';
 	import { Extras } from '#lib/extras.svelte.ts';
+	import { Media, WIDE } from '#lib/media.svelte.ts';
+	import { money } from '#lib/money.ts';
 	import { expandEmoji } from '#lib/shortcodes.ts';
 	import { stories } from '#lib/stories.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
@@ -54,6 +58,10 @@
 	let panelOpen = $state(false);
 	let panelTab = $state<'dials' | 'meters' | 'status' | 'prompt'>('dials');
 	let cutConfirm = $state(false);
+	/** From 1100 px the story sits in a workspace: the stories rail, the conversation, the column. */
+	const wideWindow = new Media(WIDE);
+	const wide = $derived(wideWindow.current);
+	let head: StoryHead | undefined = $state();
 	let composer: Composer | undefined = $state();
 	let scroller: HTMLElement | undefined = $state();
 	let noteId = 1;
@@ -92,34 +100,73 @@
 		turnOpen = true;
 	}
 
+	/** The Dials sheet on a phone; on a wide window the column is already there, so only its tab changes. */
 	function openPanel(tab: typeof panelTab = 'dials') {
 		panelTab = tab;
-		panelOpen = true;
+		if (!wide) panelOpen = true;
 	}
 
-	onMount(async () => {
+	// Widening the window past the workspace's breakpoint hands the sheets' work to the column.
+	$effect(() => {
+		if (wide) {
+			panelOpen = false;
+			storyOpen = false;
+		}
+	});
+
+	onMount(() => {
 		try {
 			hintSeen = localStorage.getItem(HINT_KEY) === '1';
 		} catch {
 			hintSeen = false;
 		}
+	});
+
+	// The workspace's rail changes the story under this page without leaving it, so the page
+	// reads the story again whenever the id changes, not only when it opens.
+	let shownId = '';
+	$effect(() => {
+		const target = id;
+		if (target && target !== shownId) {
+			shownId = target;
+			untrack(() => void openStory(target));
+		}
+	});
+
+	async function openStory(target: string) {
+		story = null;
+		problem = null;
+		extras = null;
+		notes = [];
+		pendingSent = null;
+		pendingReply = null;
+		replacing = null;
+		turnOpen = false;
+		storyOpen = false;
+		panelOpen = false;
 		// `?tab=meters` (and the others) open the sheet on that tab.
 		const tab = page.url.searchParams.get('tab');
 		if (tab === 'dials' || tab === 'meters' || tab === 'status' || tab === 'prompt') openPanel(tab);
 		try {
-			[story, commands] = await Promise.all([api.story(id), api.commands()]);
+			const [found, known] = await Promise.all([api.story(target), api.commands()]);
+			if (target !== id) return; // another story was opened while this one was read
+			story = found;
+			commands = known;
 			void readEmoji(api.emoji); // once per session; until then nothing expands
-			api
-				.snippets()
-				.then((found) => (snippets = found))
-				.catch(() => undefined);
-			extras = new Extras(id);
+			if (snippets.length === 0) {
+				api
+					.snippets()
+					.then((list) => (snippets = list))
+					.catch(() => undefined);
+			}
+			extras = new Extras(target);
 			void extras.load();
 			await scrollToEnd(false);
 		} catch (error) {
-			problem = error instanceof Error ? error.message : 'The story could not be read.';
+			if (target === id)
+				problem = error instanceof Error ? error.message : 'The story could not be read.';
 		}
-	});
+	}
 
 	async function scrollToEnd(smooth = true) {
 		await tick();
@@ -144,13 +191,15 @@
 	/** Runs one streamed call and folds what it ends with into the story. */
 	async function run(call: (onDelta: (t: string) => void) => Promise<Done>) {
 		if (!story) return;
+		const started = id;
 		pendingReply = '';
 		try {
 			const done = await call((piece) => {
-				pendingReply = (pendingReply ?? '') + piece;
+				if (id === started) pendingReply = (pendingReply ?? '') + piece;
 				void scrollToEnd();
 			});
-			finish(done);
+			// The reader may have opened another story from the rail while this one was answering.
+			if (id === started) finish(done);
 		} catch (error) {
 			if (error instanceof ApiError) toasts.show('danger', 'Refused', error.message, 8000);
 			else if (error instanceof Unreachable)
@@ -305,86 +354,125 @@
 	);
 </script>
 
-<div class="screen">
-	<AppBar
-		title={story?.name ?? 'Story'}
-		{sub}
-		back="/"
-		ontitle={story ? () => (storyOpen = true) : undefined}
-		titleOpen={storyOpen}
-	>
-		{#snippet actions()}
-			<button
-				class="dials"
-				class:on={panelOpen}
-				type="button"
-				aria-expanded={panelOpen}
-				onclick={() => openPanel()}><span aria-hidden="true">◐</span>Dials</button
-			>
-		{/snippet}
-	</AppBar>
-
-	{#if extras}
-		<StatusStrip
-			status={extras.status}
-			newest={visible.at(-1)?.sequence ?? 0}
-			onopen={() => openPanel('status')}
-		/>
-	{/if}
-
-	<main class="convo" bind:this={scroller}>
-		{#if problem}
-			<p class="problem">{problem}</p>
-		{:else if !story}
-			<p class="muted center">Opening the story…</p>
+<div class={wide ? 'workspace' : 'screen'}>
+	{#if wide}<StoriesRail current={id} />{/if}
+	<div class="pane" class:wide>
+		{#if wide}
+			<header class="bar">
+				<button type="button" class="title" onclick={() => head?.focus()}>
+					<h1>{story?.name ?? 'Story'}</h1>
+					<span class="sub">{sub}</span>
+				</button>
+				<span class="grow"></span>
+				{#if extras?.spend}<span class="cost mono">{money(extras.spend.cost)} this story</span>{/if}
+			</header>
 		{:else}
-			{#if story.messages.length === 0 && !pendingSent}
-				<p class="muted center">
-					Nothing has been said yet. Write the first turn, or carry on to let {story.character_name}
-					begin.
-				</p>
-			{/if}
-			{#each visible as message (message.id)}
-				<MessageView
-					{message}
-					newest={newestReply?.id === message.id && !busy}
-					onreroll={() => (rerollOpen = true)}
-					onmenu={() => openTurn(message)}
-					onbranch={() => branchFrom(message)}
-					oncut={() => askCut(message)}
-					oncopy={() => copyText(message)}
-				/>
-			{/each}
-			{#each notes as n (n.id)}
-				<aside class="note">
-					{#if n.title}<b>{n.title}</b>{/if}
-					<p class="prose">{n.text}</p>
-					<footer>
-						<span class="muted">shown once, not stored</span>
-						<button
-							type="button"
-							class="link"
-							onclick={() => (notes = notes.filter((x) => x.id !== n.id))}>Dismiss</button
-						>
-					</footer>
-				</aside>
-			{/each}
-			{#if pendingSent !== null}
-				<MessageView message={{ role: 'user', text: pendingSent }} />
-			{/if}
-			{#if pendingReply !== null}
-				<MessageView message={{ role: 'assistant', text: pendingReply }} streaming />
-			{/if}
-			{#if !hintSeen && visible.length > 0 && !busy}
-				<p class="hint">Hold any turn to branch, cut or copy</p>
-			{/if}
+			<AppBar
+				title={story?.name ?? 'Story'}
+				{sub}
+				back="/"
+				ontitle={story ? () => (storyOpen = true) : undefined}
+				titleOpen={storyOpen}
+			>
+				{#snippet actions()}
+					<button
+						class="dials"
+						class:on={panelOpen}
+						type="button"
+						aria-expanded={panelOpen}
+						onclick={() => openPanel()}><span aria-hidden="true">◐</span>Dials</button
+					>
+				{/snippet}
+			</AppBar>
 		{/if}
-	</main>
 
-	{#if extras}
-		<MeterStrip trackers={extras.trackers} onopen={() => openPanel('meters')} />
+		{#if extras}
+			<StatusStrip
+				status={extras.status}
+				newest={visible.at(-1)?.sequence ?? 0}
+				onopen={() => openPanel('status')}
+			/>
+		{/if}
+
+		<main class="convo" bind:this={scroller}>
+			{#if problem}
+				<p class="problem">{problem}</p>
+			{:else if !story}
+				<p class="muted center">Opening the story…</p>
+			{:else}
+				{#if story.messages.length === 0 && !pendingSent}
+					<p class="muted center">
+						Nothing has been said yet. Write the first turn, or carry on to let {story.character_name}
+						begin.
+					</p>
+				{/if}
+				{#each visible as message (message.id)}
+					<MessageView
+						{message}
+						newest={newestReply?.id === message.id && !busy}
+						onreroll={() => (rerollOpen = true)}
+						onmenu={() => openTurn(message)}
+						onbranch={() => branchFrom(message)}
+						oncut={() => askCut(message)}
+						oncopy={() => copyText(message)}
+					/>
+				{/each}
+				{#each notes as n (n.id)}
+					<aside class="note">
+						{#if n.title}<b>{n.title}</b>{/if}
+						<p class="prose">{n.text}</p>
+						<footer>
+							<span class="muted">shown once, not stored</span>
+							<button
+								type="button"
+								class="link"
+								onclick={() => (notes = notes.filter((x) => x.id !== n.id))}>Dismiss</button
+							>
+						</footer>
+					</aside>
+				{/each}
+				{#if pendingSent !== null}
+					<MessageView message={{ role: 'user', text: pendingSent }} />
+				{/if}
+				{#if pendingReply !== null}
+					<MessageView message={{ role: 'assistant', text: pendingReply }} streaming />
+				{/if}
+				{#if !hintSeen && visible.length > 0 && !busy}
+					<p class="hint">Hold any turn to branch, cut or copy</p>
+				{/if}
+			{/if}
+		</main>
+
+		{#if extras}
+			<MeterStrip trackers={extras.trackers} onopen={() => openPanel('meters')} />
+		{/if}
+		<Composer
+			bind:this={composer}
+			{commands}
+			{snippets}
+			{busy}
+			split={wide}
+			onsend={send}
+			oncarryon={carryOn}
+		/>
+	</div>
+	{#if wide}
+		<aside class="column" aria-label="Dials">
+			{#if story}
+				<StoryHead
+					bind:this={head}
+					{story}
+					canBranch={newestReply !== null}
+					onrename={rename}
+					onbranch={() => newestReply && branchFrom(newestReply)}
+					ondelete={deleteStory}
+				/>
+			{/if}
+			<div class="railbody">
+				{#if extras}<StoryRail {extras} bind:section={panelTab} compact />{/if}
+			</div>
+		</aside>
 	{/if}
-	<Composer bind:this={composer} {commands} {snippets} {busy} onsend={send} oncarryon={carryOn} />
 </div>
 
 <RerollSheet bind:open={rerollOpen} onreroll={reroll} />
@@ -450,6 +538,76 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
+	}
+	.pane {
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	/* The workspace, 1100 px and up: no centred frame, three panes the height of the window. */
+	.workspace {
+		height: 100%;
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr) 340px;
+	}
+	.pane.wide {
+		--strip-x: 24px;
+	}
+	.pane.wide .convo {
+		padding: 16px 24px 10px;
+		gap: 10px;
+	}
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 0 20px;
+		min-height: 62px;
+		border-bottom: 1px solid var(--line);
+	}
+	.bar .title {
+		appearance: none;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		min-width: 0;
+		display: grid;
+		padding: 0;
+	}
+	.bar h1 {
+		font-size: 1.05rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bar .sub {
+		font-size: 0.74rem;
+		color: var(--muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bar .grow {
+		flex: 1;
+	}
+	.bar .cost {
+		font-size: 0.74rem;
+		color: var(--muted);
+	}
+	.column {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		min-width: 0;
+		background: var(--bg-2);
+		border-left: 1px solid var(--line);
+	}
+	.railbody {
+		flex: 1;
+		min-height: 0;
 	}
 	.convo {
 		flex: 1;
