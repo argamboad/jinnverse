@@ -5,6 +5,7 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import { api, ApiError, type Defaults, type Entry, type StatusStarter } from '#lib/api.ts';
 	import { blurb } from '#lib/library.ts';
+	import Prose from '#lib/Prose.svelte';
 	import { scopeNote } from '#lib/status.ts';
 	import { stories } from '#lib/stories.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
@@ -16,18 +17,26 @@
 	let personaId = $state<string>(''); // '' means the default persona
 	let name = $state('');
 	let busy = $state(false);
+	/** What each picked character opens on, read once when it is first picked. */
+	let openings = $state<Record<string, string | null>>({});
 	/** The shipped status fields, offered unticked: a story has none until the reader asks. */
 	let starters = $state<StatusStarter[]>([]);
 	let ticked = $state<string[]>([]);
+	/** The opening shows its first lines; this lets the rest out. */
+	let wholeOpening = $state(false);
 
 	const character = $derived(characters?.find((c) => c.id === characterId) ?? null);
-	const ready = $derived(characterId !== null && name.trim().length > 0 && !busy);
-	/** The note of the persona that will play: the picked one, or the default when none is. */
-	const personaNote = $derived(
-		(
-			personas.find((p) => p.id === (personaId || defaults?.default_persona_id))?.description ?? ''
-		).trim()
+	const opening = $derived(characterId ? (openings[characterId] ?? null) : null);
+	/** The persona that will play: the picked one, or the default when none is. */
+	const playing = $derived(
+		personas.find((p) => p.id === (personaId || defaults?.default_persona_id)) ?? null
 	);
+	/** The default persona is the first row; the rest follow in the library's order. */
+	const defaultPersona = $derived(
+		personas.find((p) => p.id === defaults?.default_persona_id) ?? null
+	);
+	const others = $derived(personas.filter((p) => p.id !== defaults?.default_persona_id));
+	const ready = $derived(characterId !== null && name.trim().length > 0 && !busy);
 
 	onMount(async () => {
 		try {
@@ -36,7 +45,7 @@
 				api.personas(),
 				api.defaults()
 			]);
-			if (characters.length === 1) characterId = characters[0].id;
+			if (characters.length === 1) pick(characters[0]);
 			// Back from building a persona: it is the one picked.
 			const built = page.url.searchParams.get('persona');
 			if (built && personas.some((p) => p.id === built)) personaId = built;
@@ -55,8 +64,15 @@
 
 	function pick(entry: Entry) {
 		characterId = entry.id;
+		wholeOpening = false;
 		if (!name.trim())
 			name = `${entry.name}, ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`;
+		if (!(entry.id in openings)) {
+			api
+				.entry('characters', entry.id)
+				.then((full) => (openings[entry.id] = full.opening?.trim() || null))
+				.catch(() => (openings[entry.id] = null));
+		}
 	}
 
 	async function create(event: SubmitEvent) {
@@ -97,142 +113,201 @@
 <div class="screen">
 	<AppBar title="New story" back="/" />
 	<form onsubmit={create}>
-		<section>
-			<h2>Who with</h2>
-			{#if characters === null}
-				<p class="muted">Reading the library…</p>
-			{:else if characters.length === 0}
-				<p class="muted">The library has no characters yet. Add one in the library first.</p>
-			{:else}
-				<div class="cards" role="radiogroup" aria-label="Character">
-					{#each characters as entry (entry.id)}
+		<div class="fields">
+			<section>
+				<h2>Who with</h2>
+				{#if characters === null}
+					<p class="muted">Reading the library…</p>
+				{:else if characters.length === 0}
+					<p class="muted">The library has no characters yet. Add one in the library first.</p>
+				{:else}
+					<div class="cards" role="radiogroup" aria-label="Character">
+						{#each characters as entry (entry.id)}
+							<button
+								type="button"
+								class="card"
+								role="radio"
+								aria-checked={characterId === entry.id}
+								onclick={() => pick(entry)}
+							>
+								<span class="tile">{entry.name.charAt(0).toUpperCase()}</span>
+								<span class="text">
+									<b>{entry.name}</b>
+									<small class:prose={!blurb(entry).note}>{blurb(entry).text}</small>
+								</span>
+							</button>
+						{/each}
+					</div>
+					{#if opening}
+						<div class="opens">
+							<span class="eyebrow-line">Opens on</span>
+							<div class="text-clip" class:whole={wholeOpening}>
+								<Prose text={opening} />
+							</div>
+							<button type="button" class="more" onclick={() => (wholeOpening = !wholeOpening)}
+								>{wholeOpening ? 'Show less' : 'Show all'}</button
+							>
+						</div>
+					{/if}
+				{/if}
+			</section>
+			<section>
+				<h2>As</h2>
+				<div class="rows" role="radiogroup" aria-label="Persona">
+					{#if defaultPersona}
+						{@render row(defaultPersona, '', true)}
+					{:else}
 						<button
 							type="button"
-							class="card"
+							class="row"
 							role="radio"
-							aria-checked={characterId === entry.id}
-							onclick={() => pick(entry)}
+							aria-checked={personaId === ''}
+							onclick={() => (personaId = '')}
 						>
-							<span class="who">{entry.name.charAt(0).toUpperCase()}</span>
-							<span class="text">
-								<b>{entry.name}</b>
-								<small class:prose={!blurb(entry).note}>{blurb(entry).text}</small>
-							</span>
+							<span class="tile small">·</span>
+							<span class="text"><b>Nobody in particular</b></span>
 						</button>
+					{/if}
+					{#each others as persona (persona.id)}
+						{@render row(persona, persona.id, false)}
 					{/each}
-				</div>
-			{/if}
-		</section>
-		<section>
-			<h2>Who you are</h2>
-			<label class="field">
-				<span>Persona</span>
-				<select class="input" id="persona" bind:value={personaId}>
-					<option value="">
-						{defaults?.default_persona_name
-							? `Default: ${defaults.default_persona_name}`
-							: 'Nobody in particular'}
-					</option>
-					{#each personas as persona (persona.id)}
-						<option value={persona.id}>{persona.name}</option>
-					{/each}
-				</select>
-			</label>
-			{#if personaNote}<p class="muted note">{personaNote}</p>{/if}
-			<a class="build" href="/library/personas/from-pieces?then=new"
-				>Build a new persona from pieces</a
-			>
-		</section>
-		{#if starters.length > 0}
-			<section>
-				<h2>Status block</h2>
-				<p class="muted note">
-					Lines the model writes at the top of each reply, and the app keeps. Change them any time
-					from the story’s Dials, on the Status tab.
-				</p>
-				<div class="ticks">
-					{#each starters as starter (starter.key)}
-						<label class="tick">
-							<input type="checkbox" bind:group={ticked} value={starter.key} />
-							<span class="ic" aria-hidden="true">{starter.icon ?? '·'}</span>
-							<span class="grow">
-								<b>{starter.label}</b>
-								<small>{scopeNote(starter)}</small>
-							</span>
-						</label>
-					{/each}
+					<a class="row build" href="/library/personas/from-pieces?then=new">
+						<span class="tile small plus" aria-hidden="true">+</span>
+						<span>Build a new persona from pieces</span>
+						<span class="muted" aria-hidden="true">›</span>
+					</a>
 				</div>
 			</section>
-		{/if}
-		<section>
-			<h2>Call it</h2>
-			<label class="field">
-				<span>Story name</span>
+			<section>
+				<h2>Called</h2>
 				<input
 					class="input"
 					id="story-name"
 					type="text"
+					aria-label="Story name"
 					bind:value={name}
 					maxlength="200"
 					placeholder="First night at the Heron"
 					required
 				/>
-			</label>
-		</section>
+				<small class="muted">You can rename it any time from the story’s title.</small>
+			</section>
+			{#if starters.length > 0}
+				<section>
+					<h2>Status block</h2>
+					<p class="muted note">
+						Lines the model writes at the top of each reply, and the app keeps. Change them any time
+						from the story’s Dials, on the Status tab.
+					</p>
+					<div class="ticks">
+						{#each starters as starter (starter.key)}
+							<label class="tick">
+								<input type="checkbox" bind:group={ticked} value={starter.key} />
+								<span class="ic" aria-hidden="true">{starter.icon ?? '·'}</span>
+								<span class="grow">
+									<b>{starter.label}</b>
+									<small>{scopeNote(starter)}</small>
+								</span>
+							</label>
+						{/each}
+					</div>
+				</section>
+			{/if}
+		</div>
 		<div class="foot">
 			<button class="btn primary" type="submit" disabled={!ready}>
-				{busy ? 'Starting…' : character ? `Start with ${character.name}` : 'Start'}
+				{busy
+					? 'Starting…'
+					: character
+						? `Start with ${character.name}${playing ? ` as ${playing.name}` : ''}`
+						: 'Start'}
 			</button>
 		</div>
 	</form>
 </div>
 
+{#snippet row(persona: Entry, value: string, isDefault: boolean)}
+	<button
+		type="button"
+		class="row"
+		role="radio"
+		aria-checked={personaId === value}
+		onclick={() => (personaId = value)}
+	>
+		<span class="tile small">{persona.name.charAt(0).toUpperCase()}</span>
+		<span class="text">
+			<b>{persona.name}</b>
+			<small class:prose={!blurb(persona).note}>{blurb(persona).text}</small>
+		</span>
+		{#if isDefault}<span class="chip gold">default</span>{/if}
+	</button>
+{/snippet}
+
 <style>
 	.screen {
-		min-height: 100%;
+		height: 100%;
 		display: flex;
 		flex-direction: column;
 	}
 	form {
 		flex: 1;
-		display: grid;
-		gap: 24px;
-		align-content: start;
-		padding: 16px 16px calc(24px + var(--safe-bottom));
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
 		max-width: 640px;
 		width: 100%;
 		margin: 0 auto;
 	}
+	/* Only the strip of cards scrolls sideways; the form scrolls up and down. */
+	.fields {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		display: grid;
+		gap: 22px;
+		align-content: start;
+		padding: 16px 16px 24px;
+	}
 	section {
 		display: grid;
 		gap: 10px;
+		min-width: 0;
 	}
 	h2 {
 		font-size: 0.8rem;
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: var(--gold-text);
+		font-weight: 600;
 	}
 	.cards {
-		display: grid;
+		display: flex;
 		gap: 8px;
+		overflow-x: auto;
+		scrollbar-width: none;
+		min-width: 0;
+		padding: 4px 2px;
 	}
 	.card {
+		appearance: none;
+		flex: none;
+		width: 132px;
 		display: grid;
-		grid-template-columns: 44px 1fr;
-		gap: 12px;
-		align-items: center;
+		gap: 8px;
+		align-content: start;
 		text-align: left;
 		padding: 12px;
 		border-radius: var(--r-m);
 		background: var(--surface);
 		border: 1px solid var(--line);
 	}
-	.card[aria-checked='true'] {
+	.card[aria-checked='true'],
+	.row[aria-checked='true'] {
 		border-color: var(--gold);
 		box-shadow: 0 0 0 3px var(--gold-soft);
 	}
-	.who {
+	.tile {
 		width: 44px;
 		height: 44px;
 		border-radius: 12px;
@@ -243,27 +318,113 @@
 		font-size: 1.25rem;
 		color: var(--gold-text);
 	}
+	.tile.small {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		font-size: 1.1rem;
+	}
+	.card[aria-checked='true'] .tile,
+	.row[aria-checked='true'] .tile {
+		background: var(--gold-soft);
+	}
 	.text {
 		min-width: 0;
 		display: grid;
 		gap: 2px;
 	}
-	.text small {
+	.card .text b {
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+	.card .text small {
 		color: var(--fg-2);
-		font-size: 0.85rem;
+		font-size: 0.78rem;
+		line-height: 1.3;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
-	.build {
-		justify-self: start;
-		font-size: 0.85rem;
+	.opens {
+		display: grid;
+		gap: 4px;
+		padding: 0 2px;
+		justify-items: start;
+	}
+	.text-clip {
+		--prose-size: 0.9rem;
+		--prose-leading: 1.5;
+		color: var(--fg-2);
+		max-height: 6.8rem;
+		overflow: hidden;
+		-webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+		mask-image: linear-gradient(to bottom, #000 70%, transparent);
+	}
+	.text-clip.whole {
+		max-height: none;
+		-webkit-mask-image: none;
+		mask-image: none;
+	}
+	.eyebrow-line {
+		font-size: 0.72rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--muted);
 		font-weight: 600;
-		text-decoration: none;
+	}
+	.more {
+		appearance: none;
+		border: 0;
+		background: transparent;
 		color: var(--gold-text);
-		padding: 6px 0;
+		font-weight: 600;
+		font-size: 0.8rem;
+		padding: 4px 0;
+	}
+	.rows {
+		display: grid;
+		gap: 8px;
+	}
+	.row {
+		appearance: none;
+		display: grid;
+		grid-template-columns: 36px 1fr auto;
+		gap: 12px;
+		align-items: center;
+		text-align: left;
+		padding: 10px 12px;
+		border-radius: 14px;
+		background: var(--surface);
+		border: 1px solid var(--line);
+		color: inherit;
+		text-decoration: none;
+	}
+	.row .text small {
+		color: var(--fg-2);
+		font-size: 0.82rem;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.row.build {
+		background: transparent;
+		border-style: dashed;
+		border-color: var(--line-strong);
+		color: var(--gold-text);
+		font-weight: 600;
+		font-size: 0.9rem;
+	}
+	.row.build .plus {
+		background: transparent;
+		font-size: 1.2rem;
+		font-family: var(--font-ui);
+	}
+	small.muted {
+		font-size: 0.74rem;
 	}
 	.ticks {
 		display: grid;
@@ -299,6 +460,13 @@
 		font-size: 0.75rem;
 	}
 	.foot {
+		flex: none;
 		display: grid;
+		padding: 10px 16px calc(14px + var(--safe-bottom));
+		border-top: 1px solid var(--line);
+		background: var(--bg);
+	}
+	.foot .btn {
+		min-height: 48px;
 	}
 </style>
