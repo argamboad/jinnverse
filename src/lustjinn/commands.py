@@ -72,6 +72,13 @@ COMMANDS: tuple[Spec, ...] = (
         "Set a meter by hand. The value is the last word, so a name of several words works",
         "write",
     ),
+    Spec(
+        "status",
+        "/status [<who>: ]<field> = <value>",
+        "Set a line of the status block by hand: a scene field alone, a character's with their "
+        "name first. A blank value clears it. A reply written later takes over",
+        "write",
+    ),
 )
 
 

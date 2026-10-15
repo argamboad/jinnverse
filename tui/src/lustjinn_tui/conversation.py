@@ -42,6 +42,7 @@ from lustjinn_tui.api import (
     Message,
     Said,
     SignedOutError,
+    StatusBlock,
     Story,
     StorySpend,
     TurnDone,
@@ -59,6 +60,7 @@ from lustjinn_tui.panes import AskScreen, TextPaneScreen
 from lustjinn_tui.regenerate import RegenerateScreen
 from lustjinn_tui.settings import ChatSettingsScreen
 from lustjinn_tui.status import Kind
+from lustjinn_tui.statusblock import StatusBlockScreen, scene_line
 from lustjinn_tui.textfmt import fit
 from lustjinn_tui.transcript import Transcript
 from lustjinn_tui.view import View
@@ -77,6 +79,7 @@ class ConversationScreen(View):
         Hint(">", "Carry on"),
         Hint("G", "Regenerate reply"),
         Hint("S", "Settings"),
+        Hint("T", "Status block"),
         Hint("B", "Branch from here"),
         Hint("Del", "Delete from here"),
         Hint("C", "Copy"),
@@ -124,6 +127,7 @@ class ConversationScreen(View):
         Binding("greater_than_sign", "carry_on", "Carry on", show=False),
         Binding("g,G,ctrl+g", "regenerate", "Regenerate", show=False),
         Binding("s,S", "settings", "Settings", show=False),
+        Binding("t,T", "status_block", "Status block", show=False),
         Binding("b,B", "branch", "Branch", show=False),
         Binding("delete", "delete_from", "Delete from here", show=False),
         Binding("c,C", "copy", "Copy", show=False),
@@ -147,6 +151,7 @@ class ConversationScreen(View):
         self._mode: Mode = "read"
         self._query = ""
         self._spend: StorySpend | None = None
+        self._block: StatusBlock | None = None
         self._persona_label = story.persona_name or "no persona"
         self._pending_label: str | None = None
         self._pending_since = 0.0
@@ -178,6 +183,11 @@ class ConversationScreen(View):
                 "Regenerate the reply", "the newest one, with a reason", self.action_regenerate
             ),
             PaletteCommand("Reply settings", "the dials", self.action_settings),
+            PaletteCommand(
+                "Status block",
+                "the lines each reply opens with: on, off, new",
+                self.action_status_block,
+            ),
             PaletteCommand(
                 "Search this story", "find words in this conversation", self.action_search
             ),
@@ -323,11 +333,26 @@ class ConversationScreen(View):
             if defaults is not None and defaults.default_persona_name:
                 self._persona_label = f"{defaults.default_persona_name} (the default)"
         await self._refresh_spend()
+        await self._refresh_block()
         self._loaded = True
         self._show_header()
         yours = sum(1 for m in self.messages if m.role == "user")
         replies = sum(1 for m in self.messages if m.role == "assistant")
         self.status(f"{yours} from you, {replies} replies.", Kind.SUCCESS)
+
+    async def _refresh_block(self) -> None:
+        """The status block for the header's scene line. Like the ledger, never allowed to break
+        the screen it decorates: a block that cannot be read is a header without that line."""
+        try:
+            self._block = await self.lustjinn.api.status_block(self.story.id)
+        except ApiError, UnreachableError:
+            self._block = None
+        self._show_header()
+
+    def on_screen_resume(self) -> None:
+        """Back from the status block (or settings): the scene line may have changed."""
+        if self._loaded:
+            self.run_worker(self._refresh_block, exclusive=False)
 
     async def _refresh_spend(self) -> None:
         """Never allowed to break the screen it decorates: a ledger that cannot be read is a
@@ -374,6 +399,11 @@ class ConversationScreen(View):
             who = Content(self.story.character_name).markup
             as_whom = Content(self._persona_label).markup
             lines.append(f"[$muted]{who}  ·  as {as_whom}[/]")
+        if self._block is not None:
+            newest = self.messages[-1].sequence if self.messages else 0
+            scene = scene_line(self._block, newest)
+            if scene:
+                lines.append(f"[$muted]{Content(scene).markup}[/]")
         spend = self._spend
         if spend is not None and spend.calls:
             line = f"[$warning]${spend.cost:.4f}[/]"
@@ -710,6 +740,11 @@ class ConversationScreen(View):
             return
         self.lustjinn.push_screen(ChatSettingsScreen(self.story))
 
+    def action_status_block(self) -> None:
+        if self._mode != "read":
+            return
+        self.lustjinn.push_screen(StatusBlockScreen(self.story.id, self.story.name))
+
     def regenerate(self, reason: str, instructions: str | None) -> None:
         replacing = self.messages[-1].id
         self._begin_turn(
@@ -784,6 +819,7 @@ class ConversationScreen(View):
         else:
             self.status("Reply received.", Kind.SUCCESS)
         self.run_worker(self._refresh_spend, exclusive=False)
+        self.run_worker(self._refresh_block, exclusive=False)
 
     def _answered(self, done: AsideDone) -> None:
         """A question answered out of character: the draft goes only now — a question that
@@ -810,6 +846,7 @@ class ConversationScreen(View):
             )
         else:
             self.status(said.text, Kind.SUCCESS)
+            self.run_worker(self._refresh_block, exclusive=False)  # a /status may have set a line
 
     def _failed(self, failed: Failed) -> None:
         """The model did not answer. The reader's message, when it was stored, is in the
@@ -953,6 +990,7 @@ class ConversationScreen(View):
                 f"Deleted {cut.hidden} message(s). {len(self.messages)} remain.", Kind.SUCCESS
             )
             await self._refresh_spend()
+            await self._refresh_block()
 
         self.lustjinn.push_screen(
             ConfirmScreen(

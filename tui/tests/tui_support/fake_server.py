@@ -202,6 +202,24 @@ class FakeServer:
         self.model_fails: str | None = None  # the model's failure, as the API's error event
         self.facts: dict[str, list[dict[str, Any]]] = {}  # story id -> facts
         self.trackers: dict[str, list[dict[str, Any]]] = {}
+        self.status_starters: list[dict[str, Any]] = [
+            {
+                "key": key,
+                "label": label,
+                "icon": icon,
+                "hint": None,
+                "kind": "text",
+                "scope": scope,
+            }
+            for key, label, icon, scope in (
+                ("time", "Day and time", "📅", "scene"),
+                ("place", "Place", "📍", "scene"),
+                ("outfit", "Outfit", "👗", "character"),
+                ("mood", "Mood", "🎭", "character"),
+            )
+        ]
+        # story id -> {"fields": [...], "values": [...], "pins": [...]}
+        self.status_blocks: dict[str, dict[str, Any]] = {}
         self.audits: dict[str, dict[str, Any]] = {}
         self.answer = "She is twenty-nine; the story said so in the second scene."
         self.commands_unreadable = False  # GET /commands fails, as on a cold start
@@ -359,6 +377,8 @@ class FakeServer:
             return self._search(request)
         if path == "/dials":
             return httpx2.Response(200, json=self.pack)
+        if path == "/status-starters":
+            return httpx2.Response(200, json=self.status_starters)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {path}."})
 
     @staticmethod
@@ -416,6 +436,8 @@ class FakeServer:
             )
         if len(parts) >= 3 and parts[2] == "dials":
             return self._dials(found, parts, request)
+        if len(parts) >= 3 and parts[2] == "status":
+            return self._status(found, parts, request)
         if len(parts) == 3 and parts[2] == "export":
             return self._export(found, request)
         if len(parts) == 3 and parts[2] == "spend":
@@ -817,6 +839,95 @@ class FakeServer:
             return httpx2.Response(422, json={"detail": f"{dial['title']} takes something else."})
         values[dial["key"]] = accepted
         return httpx2.Response(200, json=self._dial_out(dial, values))
+
+    def _status(
+        self, found: dict[str, Any], parts: list[str], request: httpx2.Request
+    ) -> httpx2.Response:
+        """The status block's routes, as the API answers them: every change with the whole block."""
+        block = self.status_blocks.setdefault(found["id"], {"fields": [], "values": [], "pins": []})
+        fields: list[dict[str, Any]] = block["fields"]
+
+        def whole() -> httpx2.Response:
+            have = {f["key"] for f in fields}
+            return httpx2.Response(
+                200,
+                json={
+                    "fields": sorted(fields, key=lambda f: f["position"]),
+                    "starters": [s for s in self.status_starters if s["key"] not in have],
+                    "values": block["values"],
+                    "pins": block["pins"],
+                },
+            )
+
+        def find(ref: str) -> dict[str, Any] | None:
+            wanted = ref.strip().casefold()
+            return next((f for f in fields if wanted in (f["key"], f["label"].casefold())), None)
+
+        body: dict[str, Any] = json.loads(request.content) if request.content else {}
+        if len(parts) == 3 and request.method == "GET":
+            return whole()
+        if parts[3:] == ["adopt"] and request.method == "POST":
+            for starter in self.status_starters:
+                if starter["key"] in body["keys"]:
+                    existing = find(starter["key"])
+                    if existing is not None:
+                        existing["enabled"] = True
+                    else:
+                        fields.append(
+                            {**starter, "words": None, "enabled": True, "position": len(fields)}
+                        )
+            return whole()
+        if parts[3:] == ["fields"] and request.method == "POST":
+            key = re.sub(r"[^a-z0-9]+", "-", body["label"].casefold()).strip("-")
+            fields.append(
+                {
+                    "key": key,
+                    "label": body["label"],
+                    "icon": body.get("icon"),
+                    "hint": body.get("hint"),
+                    "kind": body.get("kind", "text"),
+                    "scope": body.get("scope", "scene"),
+                    "words": body.get("words"),
+                    "enabled": True,
+                    "position": len(fields),
+                }
+            )
+            return httpx2.Response(201, json=whole().json())
+        if len(parts) == 5 and parts[3] == "fields":
+            field = find(parts[4])
+            if field is None:
+                return httpx2.Response(404, json={"detail": "This story has no such field."})
+            if request.method == "PATCH":
+                field.update({k: v for k, v in body.items() if k in field})
+            else:
+                fields.remove(field)
+                block["values"] = [v for v in block["values"] if v["field"] != field["key"]]
+            return whole()
+        if parts[3:] == ["pins"] and request.method == "PUT":
+            block["pins"] = list(dict.fromkeys(body["names"]))
+            return whole()
+        if parts[3:] == ["values"] and request.method == "PUT":
+            field = find(body["field"])
+            if field is None:
+                return httpx2.Response(
+                    404, json={"detail": f"This story has no status field called {body['field']}."}
+                )
+            who = body.get("who") or ""
+            block["values"] = [
+                v for v in block["values"] if (v["field"], v["who"]) != (field["key"], who)
+            ]
+            if (body.get("value") or "").strip():
+                block["values"].append(
+                    {
+                        "field": field["key"],
+                        "who": who,
+                        "value": body["value"].strip(),
+                        "by_hand": True,
+                        "seen": len(found["messages"]),
+                    }
+                )
+            return whole()
+        return httpx2.Response(404, json={"detail": "Nothing answers that."})
 
     def _export(self, found: dict[str, Any], request: httpx2.Request) -> httpx2.Response:
         fmt = request.url.params.get("format", "markdown")

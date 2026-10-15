@@ -28,6 +28,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column, relationship
 
 
@@ -306,6 +307,86 @@ class Tracker(Base):
     rule: Mapped[str | None] = mapped_column(Text)
     updated_at_sequence: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StatusKind(StrEnum):
+    TEXT = "text"
+    """Anything the model writes: a place, an outfit, a date and time."""
+    WORDS = "words"
+    """One or more words from the field's own list (`Guarded | Teasing`): any other is dropped."""
+
+
+class StatusScope(StrEnum):
+    SCENE = "scene"
+    """One value for the whole scene: the day and time, the place."""
+    CHARACTER = "character"
+    """One value for each named character: the outfit, the mood."""
+
+
+class StatusField(Base):
+    """One line of the status block a story's replies open with (#169). A story has only the
+    fields it adopted; none enabled means no block, the story as it always was."""
+
+    __tablename__ = "status_fields"
+    __table_args__ = (
+        UniqueConstraint("story_id", "key", name="uq_status_fields_story_key"),
+        CheckConstraint("kind IN ('text', 'words')", name="kind"),
+        CheckConstraint("scope IN ('scene', 'character')", name="scope"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    story_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stories.id", ondelete="RESTRICT"))
+    key: Mapped[str] = mapped_column(String(60))
+    """A lowercase slug, unchanging; the label can be renamed, the key cannot."""
+    label: Mapped[str] = mapped_column(String(60))
+    icon: Mapped[str | None] = mapped_column(String(8))
+    hint: Mapped[str | None] = mapped_column(String(200))
+    """What to write, in a few words, for the model: `what they are wearing now, briefly`."""
+    kind: Mapped[str] = mapped_column(String(10), default=StatusKind.TEXT.value)
+    scope: Mapped[str] = mapped_column(String(10), default=StatusScope.SCENE.value)
+    words: Mapped[list[str] | None] = mapped_column(JSONB)
+    """The allowed words of a `words` field; None on a text field."""
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    position: Mapped[int] = mapped_column(default=0, server_default="0")
+
+
+class StatusValue(Base):
+    """The current value of one field, for the scene or for one named character."""
+
+    __tablename__ = "status_values"
+    __table_args__ = (
+        UniqueConstraint(
+            "story_id", "field_key", "subject_key", name="uq_status_values_story_field_subject"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    story_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stories.id", ondelete="RESTRICT"))
+    field_key: Mapped[str] = mapped_column(String(60))
+    subject: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    """Whose it is, as the model wrote the name; empty for the scene."""
+    subject_key: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    """The subject lowercased and trimmed, which is what names are matched on."""
+    value: Mapped[str] = mapped_column(Text)
+    updated_at_sequence: Mapped[int | None]
+    """The newest message when it last changed; how recently a character appeared."""
+    by_hand: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    """Set by the owner, not read from a reply: a replay of the transcript keeps it unless a
+    later reply writes the field."""
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StatusPin(Base):
+    """A character whose state is always sent, however long since they last appeared."""
+
+    __tablename__ = "status_pins"
+    __table_args__ = (UniqueConstraint("story_id", "key", name="uq_status_pins_story_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    story_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stories.id", ondelete="RESTRICT"))
+    name: Mapped[str] = mapped_column(String(120))
+    key: Mapped[str] = mapped_column(String(120))
+    """The name lowercased and trimmed."""
 
 
 class Message(Base):

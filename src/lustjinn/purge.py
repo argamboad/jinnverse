@@ -1,9 +1,10 @@
 """Erasing a story for good. Delete only hides; this is the real erasure.
 
 A purge removes the story and every row that carries its text — messages, their embeddings,
-summaries, facts, meters, questions, dial choices — and keeps the ledger. The spend rows hold no
-story text, the money left the account whatever became of the story, and dropping them would
-make every report for that month wrong; they report under "(purged)" from then on.
+summaries, facts, meters, questions, dial choices, status blocks — and keeps the ledger. The
+spend rows hold no story text, the money left the account whatever became of the story, and
+dropping them would make every report for that month wrong; they report under "(purged)" from
+then on.
 
 It erases only a story already deleted: two deliberate acts, not one. And it is the one path on
 which the append-only trigger stands aside, by a setting local to this transaction, which the
@@ -26,6 +27,9 @@ from lustjinn.models import (
     Fact,
     Message,
     Spend,
+    StatusField,
+    StatusPin,
+    StatusValue,
     Story,
     Summary,
     Tracker,
@@ -44,6 +48,9 @@ class Purged(BaseModel):
     trackers: int
     asides: int
     dial_values: int
+    status_fields: int
+    status_values: int
+    status_pins: int
     ledger_rows_kept: int
     ledger_cost_kept: Decimal
 
@@ -69,6 +76,9 @@ async def purge(session: AsyncSession, story: Story) -> Purged:
         ("trackers", Tracker),
         ("asides", Aside),
         ("dial_values", DialValue),
+        ("status_fields", StatusField),
+        ("status_values", StatusValue),
+        ("status_pins", StatusPin),
     ):
         counts[name] = (
             await session.scalar(select(func.count()).where(table.story_id == story.id)) or 0

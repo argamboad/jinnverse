@@ -229,6 +229,67 @@ export interface NewTracker {
 	rule?: string | null;
 }
 
+export type StatusKind = 'text' | 'words';
+export type StatusScope = 'scene' | 'character';
+
+/** One line of the status block a story's replies open with. */
+export interface StatusField {
+	key: string;
+	label: string;
+	icon: string | null;
+	hint: string | null;
+	kind: StatusKind;
+	scope: StatusScope;
+	words: string[] | null;
+	enabled: boolean;
+	position: number;
+}
+
+/** A shipped starter field the story does not have yet. */
+export interface StatusStarter {
+	key: string;
+	label: string;
+	icon: string | null;
+	hint: string | null;
+	kind: StatusKind;
+	scope: StatusScope;
+}
+
+export interface StatusValue {
+	field: string;
+	/** Empty for the scene. */
+	who: string;
+	value: string;
+	by_hand: boolean;
+	/** The message that last wrote it. */
+	seen: number | null;
+}
+
+export interface Status {
+	fields: StatusField[];
+	starters: StatusStarter[];
+	values: StatusValue[];
+	pins: string[];
+}
+
+export interface NewStatusField {
+	label: string;
+	icon?: string | null;
+	hint?: string | null;
+	kind?: StatusKind;
+	scope?: StatusScope;
+	words?: string[] | null;
+}
+
+export interface StatusFieldChanges {
+	label?: string;
+	icon?: string | null;
+	hint?: string | null;
+	words?: string[];
+	enabled?: boolean;
+	position?: number;
+}
+
 export interface TurnAudit {
 	sequence: number;
 	sent_at: string;
@@ -403,6 +464,20 @@ export const api = {
 		call('DELETE', `/stories/${storyId}/trackers/${encodeURIComponent(name)}`).then(
 			() => undefined
 		),
+	statusStarters: () => json<StatusStarter[]>('GET', '/status-starters'),
+	status: (storyId: string) => json<Status>('GET', `/stories/${storyId}/status`),
+	adoptStatus: (storyId: string, keys: string[]) =>
+		json<Status>('POST', `/stories/${storyId}/status/adopt`, { keys }),
+	addStatusField: (storyId: string, body: NewStatusField) =>
+		json<Status>('POST', `/stories/${storyId}/status/fields`, body),
+	changeStatusField: (storyId: string, key: string, body: StatusFieldChanges) =>
+		json<Status>('PATCH', `/stories/${storyId}/status/fields/${encodeURIComponent(key)}`, body),
+	removeStatusField: (storyId: string, key: string) =>
+		json<Status>('DELETE', `/stories/${storyId}/status/fields/${encodeURIComponent(key)}`),
+	setStatusPins: (storyId: string, names: string[]) =>
+		json<Status>('PUT', `/stories/${storyId}/status/pins`, { names }),
+	setStatusValue: (storyId: string, field: string, who: string | null, value: string | null) =>
+		json<Status>('PUT', `/stories/${storyId}/status/values`, { field, who, value }),
 	audit: (storyId: string) => json<Audit>('GET', `/stories/${storyId}/audit`),
 	characters: () => json<Entry[]>('GET', '/library/characters'),
 	personas: () => json<Entry[]>('GET', '/library/personas'),

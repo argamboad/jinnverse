@@ -3,8 +3,9 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
-	import { api, ApiError, type Defaults, type Entry } from '#lib/api.ts';
+	import { api, ApiError, type Defaults, type Entry, type StatusStarter } from '#lib/api.ts';
 	import { blurb } from '#lib/library.ts';
+	import { scopeNote } from '#lib/status.ts';
 	import { stories } from '#lib/stories.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
@@ -15,6 +16,9 @@
 	let personaId = $state<string>(''); // '' means the default persona
 	let name = $state('');
 	let busy = $state(false);
+	/** The shipped status fields, offered unticked: a story has none until the reader asks. */
+	let starters = $state<StatusStarter[]>([]);
+	let ticked = $state<string[]>([]);
 
 	const character = $derived(characters?.find((c) => c.id === characterId) ?? null);
 	const ready = $derived(characterId !== null && name.trim().length > 0 && !busy);
@@ -36,6 +40,10 @@
 			// Back from building a persona: it is the one picked.
 			const built = page.url.searchParams.get('persona');
 			if (built && personas.some((p) => p.id === built)) personaId = built;
+			api
+				.statusStarters()
+				.then((found) => (starters = found))
+				.catch(() => undefined); // the section simply does not appear
 		} catch (error) {
 			toasts.show(
 				'danger',
@@ -62,6 +70,17 @@
 				persona_id: personaId || null
 			});
 			stories.touch(story);
+			if (ticked.length > 0) {
+				try {
+					await api.adoptStatus(story.id, ticked);
+				} catch {
+					toasts.show(
+						'info',
+						'The story started without its status lines',
+						'Add them in the story’s settings, on the Status tab.'
+					);
+				}
+			}
 			await goto(`/story/${story.id}`);
 		} catch (error) {
 			toasts.show(
@@ -124,6 +143,27 @@
 				>Build a new persona from pieces</a
 			>
 		</section>
+		{#if starters.length > 0}
+			<section>
+				<h2>Status block</h2>
+				<p class="muted note">
+					Lines the model writes at the top of each reply, and the app keeps. Change them any time
+					in the story’s settings.
+				</p>
+				<div class="ticks">
+					{#each starters as starter (starter.key)}
+						<label class="tick">
+							<input type="checkbox" bind:group={ticked} value={starter.key} />
+							<span class="ic" aria-hidden="true">{starter.icon ?? '·'}</span>
+							<span class="grow">
+								<b>{starter.label}</b>
+								<small>{scopeNote(starter)}</small>
+							</span>
+						</label>
+					{/each}
+				</div>
+			</section>
+		{/if}
 		<section>
 			<h2>Call it</h2>
 			<label class="field">
@@ -224,6 +264,39 @@
 		text-decoration: none;
 		color: var(--gold-text);
 		padding: 6px 0;
+	}
+	.ticks {
+		display: grid;
+		gap: 6px;
+	}
+	.tick {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 12px;
+		border-radius: var(--r-s);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		min-height: 48px;
+	}
+	.tick input {
+		accent-color: var(--gold);
+		width: 20px;
+		height: 20px;
+		flex: none;
+	}
+	.tick .ic {
+		width: 22px;
+		text-align: center;
+		color: var(--gold-text);
+	}
+	.tick .grow {
+		display: grid;
+		gap: 1px;
+	}
+	.tick small {
+		color: var(--muted);
+		font-size: 0.75rem;
 	}
 	.foot {
 		display: grid;

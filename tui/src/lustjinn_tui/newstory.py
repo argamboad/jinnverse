@@ -31,7 +31,7 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
-from lustjinn_tui.api import Built, Defaults, Entry, Story
+from lustjinn_tui.api import ApiError, Built, Defaults, Entry, Story, UnreachableError
 from lustjinn_tui.builder import PersonaBuilderScreen
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.conversation import ConversationScreen
@@ -123,6 +123,83 @@ class Picker(Widget, can_focus=True):
         self.refresh()
 
 
+class Ticks(Widget, can_focus=True):
+    """One field with several choices that can each be ticked: a label and the choices in a row,
+    ``←`` and ``→`` to move, ``Space`` to tick. The choices start unticked: a story has the status
+    lines it asks for and no others."""
+
+    DEFAULT_CSS = """
+    Ticks { height: 1; width: 1fr; }
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("left", "step(-1)", "Previous", show=False),
+        Binding("right", "step(1)", "Next", show=False),
+        Binding("space", "tick", "Tick", show=False),
+        Binding("enter", "submit", "Next field", show=False),
+    ]
+
+    class Submitted(Message):
+        def __init__(self, ticks: Ticks) -> None:
+            super().__init__()
+            self.ticks = ticks
+
+        @property
+        def control(self) -> Ticks:
+            return self.ticks
+
+    def __init__(self, label: str, *, id: str) -> None:
+        super().__init__(id=id)
+        self.label = label
+        self._choices: list[tuple[str, str]] = []
+        self.ticked: set[str] = set()
+        self.index = 0
+
+    def set_choices(self, choices: list[tuple[str, str]]) -> None:
+        """``(key, text)`` pairs, in the order shown."""
+        self._choices = choices
+        self.ticked &= {key for key, _text in choices}
+        self.index = min(self.index, max(0, len(choices) - 1))
+        self.refresh()
+
+    @property
+    def keys(self) -> list[str]:
+        """The ticked choices' keys, in the order shown."""
+        return [key for key, _text in self._choices if key in self.ticked]
+
+    def action_step(self, delta: int) -> None:
+        if self._choices:
+            self.index = (self.index + delta) % len(self._choices)
+            self.refresh()
+
+    def action_tick(self) -> None:
+        if not self._choices:
+            return
+        key = self._choices[self.index][0]
+        self.ticked ^= {key}
+        self.refresh()
+
+    def action_submit(self) -> None:
+        self.post_message(self.Submitted(self))
+
+    def render(self) -> Content:
+        label_role = "$accent" if self.has_focus else "$muted"
+        parts: list[str] = []
+        for i, (key, text) in enumerate(self._choices):
+            box = "\\[x]" if key in self.ticked else "\\[ ]"
+            role = "$accent" if self.has_focus and i == self.index else "$foreground"
+            parts.append(f"[{role}]{box} {Content(text).markup}[/]")
+        hint = "  [$muted]← → Space[/]" if self.has_focus else ""
+        label = Content(self.label.ljust(LABEL_WIDTH)).markup
+        return Content.from_markup(f"[{label_role}]{label}[/]{'  '.join(parts)}{hint}")
+
+    def on_focus(self) -> None:
+        self.refresh()
+
+    def on_blur(self) -> None:
+        self.refresh()
+
+
 class Panel(Vertical):
     """A caption over a rule over scrolling text: one half of the preview under the form."""
 
@@ -175,6 +252,7 @@ class NewStoryScreen(View):
     HINTS: ClassVar[tuple[Hint, ...]] = (
         Hint("Tab", "Next field"),
         Hint("←→", "Pick"),
+        Hint("Space", "Tick a status line"),
         Hint("PgUp/PgDn", "Read the panel"),
         Hint("Ctrl+B", "Build a persona"),
         Hint("Ctrl+S", "Create"),
@@ -214,6 +292,7 @@ class NewStoryScreen(View):
                 yield Input(placeholder="how it appears in your list", id="name", compact=True)
             yield Picker("Character", ["(reading the library…)"], id="pick-character")
             yield Picker("Persona", ["(default)"], id="pick-persona")
+            yield Ticks("Status", id="status-lines")
             yield Hairline()
         with Horizontal(id="panels"):
             yield Panel("Character preview", id="world")
@@ -222,7 +301,21 @@ class NewStoryScreen(View):
     def on_mount(self) -> None:
         self.query_one("#world", Panel).display = False
         self.query_one("#persona-text", Panel).display = False
+        self.query_one("#status-lines", Ticks).display = False
         self.run_worker(self._read_library, exclusive=True)
+        self.run_worker(self._read_starters, exclusive=False)
+
+    async def _read_starters(self) -> None:
+        """The shipped status lines, offered unticked. Without them the row simply is not there:
+        the form is as it always was."""
+        try:
+            starters = await self.lustjinn.api.status_starters()
+        except ApiError, UnreachableError:
+            return
+        if starters:
+            ticks = self.query_one("#status-lines", Ticks)
+            ticks.set_choices([(s.key, s.label) for s in starters])
+            ticks.display = True
 
     # -- the pickers ----------------------------------------------------------------------------
 
@@ -315,9 +408,13 @@ class NewStoryScreen(View):
         """Enter walks the fields, because that is what typing a form feels like; on the last
         one it creates."""
         if event.picker.id == "pick-persona":
-            self.action_create()
+            self.action_create()  # the status lines are optional: Tab reaches them, Enter starts
         else:
             self.lustjinn.action_focus_next()
+
+    @on(Ticks.Submitted)
+    def _ticks_entered(self) -> None:
+        self.action_create()
 
     def action_page(self, direction: int) -> None:
         """The page keys read whichever half the focus is on: the persona while the persona is
@@ -379,6 +476,13 @@ class NewStoryScreen(View):
         )
         if started is None:
             return
+        keys = self.query_one("#status-lines", Ticks).keys
+        if keys:
+            # The story exists either way; a refusal here only means it starts without them.
+            await self.lustjinn.call(
+                "Adding the status lines",
+                self.lustjinn.api.adopt_status_fields(started.id, keys),
+            )
         self._open(started)
 
     def _open(self, story: Story) -> None:

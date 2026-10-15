@@ -90,6 +90,7 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row(">", "Carry on with no prompt from you"),
             Row("G", "Regenerate the last reply, with a reason"),
             Row("S", "The dials"),
+            Row("T", "The status block: the lines each reply opens with"),
             Row("B", "Branch from the selected message"),
             Row("Del", "Delete from the selected message onwards"),
             Row("/", "Search inside this story"),

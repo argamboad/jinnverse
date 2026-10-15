@@ -8,6 +8,9 @@ import {
 	api,
 	type Audit,
 	type Dial,
+	type NewStatusField,
+	type Status,
+	type StatusFieldChanges,
 	type StoryDial,
 	type StorySpend,
 	type Tracker
@@ -19,6 +22,8 @@ export class Extras {
 	pack = $state<Dial[]>([]);
 	dials = $state<StoryDial[]>([]);
 	trackers = $state<Tracker[]>([]);
+	/** The status block's fields, what they hold and who is pinned; null until it is read. */
+	status = $state<Status | null>(null);
 	audit = $state<Audit | null>(null);
 	spend = $state<StorySpend | null>(null);
 	loaded = $state(false);
@@ -50,12 +55,14 @@ export class Extras {
 
 	/** After a turn: the meters may have moved, the audit and the cost have a new line. */
 	async refresh() {
-		const [trackers, audit, spend] = await Promise.allSettled([
+		const [trackers, audit, spend, status] = await Promise.allSettled([
 			api.trackers(this.storyId),
 			api.audit(this.storyId),
-			api.storySpend(this.storyId)
+			api.storySpend(this.storyId),
+			api.status(this.storyId)
 		]);
 		if (trackers.status === 'fulfilled') this.trackers = trackers.value;
+		if (status.status === 'fulfilled') this.status = status.value;
 		if (audit.status === 'fulfilled') this.audit = audit.value;
 		if (spend.status === 'fulfilled') this.spend = spend.value;
 	}
@@ -110,6 +117,46 @@ export class Extras {
 		} catch (error) {
 			toasts.show('danger', 'Meter not set', error instanceof Error ? error.message : undefined);
 		}
+	}
+
+	/** Runs one change to the status block; the API answers with the whole state, which replaces
+	 * ours. Returns whether it worked. */
+	private async changeStatus(call: Promise<Status>, failed: string): Promise<boolean> {
+		try {
+			this.status = await call;
+			return true;
+		} catch (error) {
+			toasts.show('danger', failed, error instanceof Error ? error.message : undefined);
+			return false;
+		}
+	}
+
+	adoptStarters(keys: string[]) {
+		return this.changeStatus(api.adoptStatus(this.storyId, keys), 'Field not added');
+	}
+
+	addField(body: NewStatusField) {
+		return this.changeStatus(api.addStatusField(this.storyId, body), 'Field not added');
+	}
+
+	changeField(key: string, body: StatusFieldChanges) {
+		return this.changeStatus(api.changeStatusField(this.storyId, key, body), 'Field not changed');
+	}
+
+	removeField(key: string) {
+		return this.changeStatus(api.removeStatusField(this.storyId, key), 'Field not deleted');
+	}
+
+	setPins(names: string[]) {
+		return this.changeStatus(api.setStatusPins(this.storyId, names), 'Pins not saved');
+	}
+
+	/** Sets what a field holds, for the scene (`who` empty) or one character; blank clears it. */
+	setStatusValue(field: string, who: string, value: string) {
+		return this.changeStatus(
+			api.setStatusValue(this.storyId, field, who || null, value),
+			'Value not set'
+		);
 	}
 
 	async removeTracker(name: string) {

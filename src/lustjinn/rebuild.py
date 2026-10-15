@@ -16,7 +16,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from lustjinn import dials, memory, trackers
+from lustjinn import blocks, dials, memory, trackers
 from lustjinn.deps import CurrentSettings, Model, Session
 from lustjinn.library import persona_of
 from lustjinn.models import Fact, Message, Story, Summary
@@ -89,6 +89,7 @@ async def rebuild(
     directives, reminders, knobs = await dials.of_story(session, story.id)
     ceiling = knobs.max_tokens or settings.max_tokens
     meters = trackers.render(await trackers.of(session, story.id))
+    status = await blocks.layer(session, story)
     history = list(
         await session.scalars(
             select(Message)
@@ -108,6 +109,7 @@ async def rebuild(
             history,
             directives=directives,
             trackers=meters,
+            status=status,
             reminders=reminders,
             reply_tokens=ceiling,
             retrieval=False,  # nothing is asked, so there is nothing to recall for

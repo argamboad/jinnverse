@@ -8,6 +8,7 @@
 	import MeterStrip from '#lib/MeterStrip.svelte';
 	import RerollSheet from '#lib/RerollSheet.svelte';
 	import Sheet from '#lib/Sheet.svelte';
+	import StatusStrip from '#lib/StatusStrip.svelte';
 	import {
 		api,
 		ApiError,
@@ -143,6 +144,7 @@
 				break;
 			case 'said':
 				note('', done.text);
+				void extras?.refresh(); // a /tracker or /status set changed what the strip shows
 				break;
 			case 'error':
 				toasts.show('danger', 'The model did not answer', done.detail, 10000);
@@ -210,6 +212,7 @@
 				'They are hidden, and the memory of them went with them.'
 			);
 			touchStoryList();
+			void extras?.refresh(); // the status block is read again from what remains
 		} catch (error) {
 			toasts.show('danger', 'Could not cut', error instanceof Error ? error.message : undefined);
 		} finally {
@@ -270,6 +273,14 @@
 			>
 		{/snippet}
 	</AppBar>
+
+	{#if extras}
+		<StatusStrip
+			status={extras.status}
+			newest={visible.at(-1)?.sequence ?? 0}
+			onopen={() => goto(`/story/${id}/settings?tab=status`)}
+		/>
+	{/if}
 
 	<main class="convo" bind:this={scroller}>
 		{#if problem}
