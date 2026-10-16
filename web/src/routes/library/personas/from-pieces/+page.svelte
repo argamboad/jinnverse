@@ -24,6 +24,7 @@
 		keeping,
 		missingSentence,
 		randomFor,
+		rowHint,
 		toggled,
 		type SlotGroup
 	} from '#lib/personaBuilder.ts';
@@ -367,11 +368,7 @@
 								{#if chosen.length}
 									<span class="value">{chosen.map((p) => p.name).join(', ')}</span>
 								{:else}
-									<span class="value muted"
-										>{g.slots.length > 1
-											? `One paragraph, up to ${g.slots.length} pieces`
-											: 'Pick one, or leave it'}</span
-									>
+									<span class="value muted">{rowHint(g)}</span>
 								{/if}
 							</span>
 							<span class="chev" aria-hidden="true">›</span>
@@ -399,7 +396,9 @@
 				<span class="shelved">
 					<span class="muted small">Will be shelved as</span>
 					<span class="name"
-						><span class="mono">{shelvedAs ?? 'the name piece'}</span>
+						>{#if shelvedAs}<span class="mono">{shelvedAs}</span>{:else}<span class="muted"
+								>from the name piece</span
+							>{/if}
 						<button type="button" class="change" onclick={() => (renaming = true)}>change</button
 						></span
 					>

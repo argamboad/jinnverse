@@ -10,6 +10,7 @@ import {
 	missing,
 	missingSentence,
 	randomFor,
+	rowHint,
 	toggled
 } from './personaBuilder.ts';
 
@@ -30,6 +31,14 @@ describe('the checklist', () => {
 			['home+vehicle+pets', 'Home · Vehicle · Pets', 3],
 			['humour', 'Humour', 1]
 		]);
+	});
+
+	it('asks for a needed slot, lets an optional one go, and counts a shared row', () => {
+		const [name, look, homeRow, humour] = groupSlots(SLOTS);
+		expect(rowHint(name)).toBe('Pick one');
+		expect(rowHint(look)).toBe('Pick one');
+		expect(rowHint(humour)).toBe('Pick one, or leave it');
+		expect(rowHint(homeRow)).toBe('One paragraph, up to 3 pieces');
 	});
 
 	it('counts the picked slots and says what is still needed', () => {
