@@ -548,7 +548,10 @@ class FakeServer:
         kind = parts[1][:-1]
         if len(parts) == 2 and request.method == "GET":
             summaries = [
-                {k: v for k, v in e.items() if k not in {"text", "opening", "used_by"}}
+                {
+                    **{k: v for k, v in e.items() if k not in {"text", "opening", "used_by"}},
+                    "used": len(self._users(parts[1], e)),
+                }
                 for e in shelf
             ]
             return httpx2.Response(200, json=summaries)
@@ -570,13 +573,8 @@ class FakeServer:
         if found is None:
             return httpx2.Response(404, json={"detail": "There is no such entry."})
         if len(parts) == 3 and request.method == "GET":
-            users = [
-                s["name"]
-                for s in self.stories
-                if (parts[1] == "characters" and s["character_id"] == found["id"])
-                or (parts[1] == "personas" and s["persona_id"] == found["id"])
-            ]
-            return httpx2.Response(200, json={**found, "used_by": users})
+            users = self._users(parts[1], found)
+            return httpx2.Response(200, json={**found, "used_by": users, "used": len(users)})
         if len(parts) == 3 and request.method == "PATCH":
             body = json.loads(request.content)
             if body["version"] != found["version"]:
@@ -601,12 +599,7 @@ class FakeServer:
                 found["preview"] = found["text"][:200]
             return httpx2.Response(200, json=found)
         if len(parts) == 3 and request.method == "DELETE":
-            users = [
-                s["name"]
-                for s in self.stories
-                if (parts[1] == "characters" and s["character_id"] == found["id"])
-                or (parts[1] == "personas" and s["persona_id"] == found["id"])
-            ]
+            users = self._users(parts[1], found)
             if users:
                 return httpx2.Response(
                     409,
@@ -618,6 +611,15 @@ class FakeServer:
             shelf.remove(found)
             return httpx2.Response(204)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _users(self, shelf: str, found: dict[str, Any]) -> list[str]:
+        """The live stories that use an entry, by name; none for a snippet, which is copied."""
+        return [
+            s["name"]
+            for s in self.stories
+            if (shelf == "characters" and s["character_id"] == found["id"])
+            or (shelf == "personas" and s["persona_id"] == found["id"])
+        ]
 
     def _counts(self) -> httpx2.Response:
         """The shelves as lists show them: names starting with an underscore are counted apart."""

@@ -1,7 +1,9 @@
 """The library: characters, personas and snippets, read and kept from the terminal
 (``Views/LibraryView.cs``).
 
-Three shelves across the top, the names down the left, the text on the right. ``N`` names a
+Three shelves across the top, the names down the left, the text on the right. Under each name,
+a line as the web's list has it: the version, how many stories use the entry, and its note or
+the start of its text. ``N`` names a
 new entry and opens it in the editor with a skeleton to fill in; ``Enter`` edits the text,
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
 while a live story uses it, and says which); ``D`` makes a persona the default.
@@ -60,6 +62,21 @@ KINDS: dict[Shelf, str] = {
 }
 VOICES: tuple[Voice, ...] = ("he", "she", "they", "any")
 Mode = Literal["list", "naming", "renaming", "describing", "shorting"]
+
+
+def about(entry: Entry, shelf: Shelf) -> str:
+    """The line under a name, as the web's list has it: the version, how many stories use the
+    entry (a snippet is copied when used, so it says only its version), then the owner's note,
+    or the first line of the text when there is none."""
+    parts = [f"v{entry.version}"]
+    if shelf != "snippets":
+        parts.append(f"in {count(entry.used, 'story', 'stories')}" if entry.used else "unused")
+    note = (entry.description or "").strip() or next(
+        (line.strip() for line in entry.preview.splitlines() if line.strip()), ""
+    )
+    if note:
+        parts.append(note)
+    return " · ".join(parts)
 
 
 class ConflictScreen(View):
@@ -295,6 +312,7 @@ class LibraryScreen(View):
         counted = await self.lustjinn.call("Counting the shelves", api.counts())
         if counted is not None:
             self._counts = counted
+        self.rows.rows_per_item = 1 if self.shelf == "pieces" else 2
         self.rows.set_items(listed, empty=f"No {self.kind}s yet — N starts one.")
         if select is not None:
             index = next((i for i, e in enumerate(listed) if e.id == select), -1)
@@ -315,8 +333,20 @@ class LibraryScreen(View):
         self.query_one("#tabs", Static).update(Content.from_markup("  ".join(parts)))
 
     def _row(self, entry: Entry, selected: bool, width: int) -> Content:
+        """Two rows: the name, then ``about`` under it, muted. A piece takes one: its name
+        already says its slot and its voice, and its note follows it."""
+        if isinstance(entry, PieceEntry):
+            return self._piece_row(entry, selected, width)
         marker = "★ " if self.shelf == "personas" and entry.id == self._default_persona else "  "
-        head = f"{marker}{entry.name}"
+        name = Content(pad(f"{marker}{entry.name}", width)).markup
+        line = Content(pad(f"  {about(entry, self.shelf)}", width)).markup
+        if selected:
+            return Content.from_markup(f"{SELECTION}{name}[/]\n{SELECTION}{line}[/]")
+        return Content.from_markup(f"{name}\n[$muted]{line}[/]")
+
+    @staticmethod
+    def _piece_row(entry: PieceEntry, selected: bool, width: int) -> Content:
+        head = f"  {entry.name}"
         if not entry.description:
             line = Content(pad(head, width)).markup
             return Content.from_markup(f"{SELECTION}{line}[/]" if selected else line)

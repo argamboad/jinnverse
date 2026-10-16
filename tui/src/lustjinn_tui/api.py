@@ -145,6 +145,8 @@ class Entry(BaseModel):
     preview: str
     description: str | None = None
     """The owner's short note; shown in place of the preview when there is one."""
+    used: int = 0
+    """How many live stories use it; always 0 for a snippet, which is copied, never used live."""
 
 
 class EntryFull(Entry):
