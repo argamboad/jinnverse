@@ -572,7 +572,7 @@
 		gap: 14px;
 		align-content: start;
 		padding: 14px 16px 24px;
-		max-width: 760px;
+		max-width: 960px;
 		width: 100%;
 	}
 	.libwide main {

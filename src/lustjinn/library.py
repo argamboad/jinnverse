@@ -197,6 +197,16 @@ class SetDefaults(BaseModel):
     default_persona_id: uuid.UUID | None
 
 
+def _blurb(shelf: Shelf[Any], entry: LibraryEntry) -> str:
+    """The start of what a list shows under a name when there is no description. For a
+    character that is its opening when it has one: every card opens with the same preamble, so
+    the card's first words tell the rows apart from nothing, while the opening is the story's
+    own first line (#206)."""
+    if isinstance(entry, Character) and entry.opening and entry.opening.strip():
+        return entry.opening.strip()[:PREVIEW_LENGTH]
+    return shelf.text_of(entry)[:PREVIEW_LENGTH]
+
+
 def _summary(shelf: Shelf[Any], entry: LibraryEntry, used: int = 0) -> EntrySummary:
     return EntrySummary(
         id=entry.id,
@@ -204,7 +214,7 @@ def _summary(shelf: Shelf[Any], entry: LibraryEntry, used: int = 0) -> EntrySumm
         hidden=entry.name.startswith("_"),
         version=entry.version,
         updated_at=entry.updated_at,
-        preview=shelf.text_of(entry)[:PREVIEW_LENGTH],
+        preview=_blurb(shelf, entry),
         description=entry.description,
         used=used,
     )

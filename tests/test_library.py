@@ -356,6 +356,25 @@ async def test_the_default_persona_counts_as_used_by_every_story_that_names_none
     assert "The headland" in refused.json()["detail"]
 
 
+async def test_a_characters_preview_is_its_opening_when_it_has_one(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    session.add(
+        Character(
+            name="Mara",
+            card="You are the narrator and every character of the world described below.",
+            opening="  The common room has emptied to the last two drinkers and the fire.  ",
+        )
+    )
+    session.add(Character(name="Tomas", card="You are the narrator. Tomas is a drover."))
+    await session.commit()
+
+    previews = {e["name"]: e["preview"] for e in (await client.get("/library/characters")).json()}
+
+    assert previews["Mara"] == "The common room has emptied to the last two drinkers and the fire."
+    assert previews["Tomas"] == "You are the narrator. Tomas is a drover."
+
+
 async def test_the_list_counts_the_live_stories_that_use_each_entry(
     client: httpx2.AsyncClient, session: AsyncSession
 ) -> None:
