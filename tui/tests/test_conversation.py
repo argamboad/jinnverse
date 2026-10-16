@@ -93,8 +93,8 @@ async def test_writing_sends_on_enter_and_the_reply_streams_in(
         await pilot.pause()
         assert screen.composer.display
         assert screen.focused is screen.composer
-        assert screen.legend.text.startswith(" Enter Send   Alt+Enter New line")
-        await pilot.press(*"Hello", "alt+enter", *"there")
+        assert screen.legend.text.startswith(" Enter Send   Ctrl+J New line")
+        await pilot.press(*"Hello", "ctrl+j", *"there")
         await pilot.pause()
         assert screen.composer.text == "Hello\nthere"
         assert "11 characters · 2 words" in str(screen.query_one("Caption").render())
@@ -108,6 +108,21 @@ async def test_writing_sends_on_enter_and_the_reply_streams_in(
         assert header(app).startswith("message 3/3")
         assert not screen.composer.display
         assert server.paths("POST")[-1].endswith("/send")
+
+
+async def test_the_other_new_line_keys_still_break_the_line_where_they_arrive(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """Ctrl+J is the one the hints name, because Windows Terminal hands over neither Alt+Enter
+    nor Shift+Enter (#209); a terminal that tells them from Enter still gets a line break."""
+    server.add("Tale", OPENING)
+    async with app.run_test(size=(100, 30)) as pilot:
+        screen = await open_story(app, pilot)
+        keys = ("ctrl+j", "alt+enter", "shift+enter", "ctrl+enter")
+        await pilot.press("i", "a", *[k for key in keys for k in (key, "b")])
+        await pilot.pause()
+        assert screen.composer.text == "a\nb\nb\nb\nb"
+        assert "POST" not in " ".join(server.paths())
 
 
 async def test_a_paste_with_line_breaks_is_text_not_a_send(

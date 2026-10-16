@@ -1,8 +1,14 @@
 """The composer: where a message is written (``Ui/TextInput.cs`` and the composer half of
 ``Views/ConversationView.cs``), on Textual's ``TextArea``.
 
-``Enter`` sends and ``Alt+Enter`` breaks the line, which is the convention every chat client
-uses — the common case should be one keystroke. A line break inside *pasted* text is part of the
+``Enter`` sends, which is the convention every chat client uses — the common case should be one
+keystroke — and ``Ctrl+J`` breaks the line. Chat clients break it on Shift+Enter or Alt+Enter,
+but in Windows Terminal neither arrives (#209): Alt+Enter is its full-screen key, and Textual
+reads a Windows console's keys as the characters they type, so Shift+Enter and Ctrl+Enter come
+in as the same ``\\r`` as Enter. Ctrl+J *is* the line-feed character, which every terminal hands
+over as a key of its own. The others still break the line where a terminal tells them apart.
+
+A line break inside *pasted* text is part of the
 message, never a send: getting that wrong sends half of whatever was pasted, which costs money
 and cannot be taken back. Textual delivers a paste as one ``Paste`` event (bracketed paste, when
 the terminal supports it), so the text area inserts it whole and ``Enter`` never sees it.
@@ -26,7 +32,9 @@ from textual.widgets import TextArea
 from lustjinn_tui import graphemes, shortcodes
 from lustjinn_tui.completion import Offer, Provider
 
-NEWLINE_KEYS: Final = frozenset({"alt+enter", "shift+enter", "ctrl+enter", "ctrl+j"})
+NEWLINE_KEY: Final = "ctrl+j"
+"""The one the hints name: it reaches the app in every terminal."""
+NEWLINE_KEYS: Final = frozenset({NEWLINE_KEY, "alt+enter", "shift+enter", "ctrl+enter"})
 
 
 def word_count(text: str) -> int:
@@ -186,7 +194,7 @@ class Composer(TextArea):
                 event.stop()
                 event.prevent_default()
                 return
-        # Enter sends and Alt+Enter breaks the line; on a phone the two change places.
+        # Enter sends and Ctrl+J breaks the line; on a phone the two change places.
         sends = event.key in NEWLINE_KEYS if self.newline_on_enter else event.key == "enter"
         breaks = event.key == "enter" if self.newline_on_enter else event.key in NEWLINE_KEYS
         if sends:
@@ -216,7 +224,7 @@ class Caption(Widget):
     Caption { height: 1; width: 1fr; }
     """
 
-    HINT: ClassVar[str] = "Enter sends · Alt+Enter for a new line"
+    HINT: ClassVar[str] = "Enter sends · Ctrl+J for a new line"
     PHONE_HINT: ClassVar[str] = "Enter is a new line"
 
     def __init__(self) -> None:

@@ -26,3 +26,5 @@ export class Media {
 export const WIDE = '(min-width: 1100px)';
 /** A mouse: hover works and the pointer is exact. */
 export const MOUSE = '(hover: hover) and (pointer: fine)';
+/** A finger: the main pointer is a touch screen, so the keyboard is the one on the screen. */
+export const TOUCH = '(pointer: coarse)';

@@ -20,7 +20,7 @@ from lustjinn_tui.theme import KEY
 class Button:
     label: str
     key: str
-    """The Textual key name a tap on it presses (``enter``, ``i``, ``alt+enter``)."""
+    """The Textual key name a tap on it presses (``enter``, ``i``, ``ctrl+j``)."""
     character: str | None = None
     """The character for a letter key, so the screen sees exactly what the keyboard sends."""
 

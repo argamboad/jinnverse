@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { Command, EntryFull } from '#lib/api.ts';
+	import { enterHint, sends } from '#lib/composer.ts';
+	import { Media, TOUCH } from '#lib/media.svelte.ts';
 	import { appendSnippet, searchEmoji, tokenAt } from '#lib/shortcodes.ts';
 	import type { Shortcode } from '#lib/emoji.ts';
 
@@ -7,7 +9,8 @@
 	 * Where the reader writes: a textarea that grows, a gold send button that becomes "Carry on"
 	 * when there is nothing to send, the command palette on a leading slash with what each
 	 * command costs, and the shortcode picker on a `:` — snippets from the library and emoji.
-	 * Enter sends; Shift+Enter is a new line.
+	 * On a desk Enter sends and Shift+Enter is a new line; on a touch keyboard Enter is a new line
+	 * and the button sends (`composer.ts`).
 	 */
 	let {
 		commands = [],
@@ -32,6 +35,7 @@
 	let selected = $state(0);
 	let picking = $state(false); // the : button opened the full snippet list
 
+	const touch = new Media(TOUCH);
 	const empty = $derived(text.trim().length === 0);
 
 	/** The palette shows while the first word is a slash command still being typed. */
@@ -145,7 +149,7 @@
 				return;
 			}
 		}
-		if (event.key === 'Enter' && !event.shiftKey) {
+		if (sends(event, touch.current)) {
 			event.preventDefault();
 			send();
 		}
@@ -216,7 +220,7 @@
 				: 'Write your turn, / for a command, : for a snippet'}
 			aria-label="Your turn"
 			disabled={busy}
-			enterkeyhint="send"></textarea>
+			enterkeyhint={enterHint(touch.current)}></textarea>
 		{#if split}
 			<div class="pair">
 				{#if empty}

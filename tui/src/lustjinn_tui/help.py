@@ -110,7 +110,7 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row("abc…", "After three letters, words from the dictionary; Tab takes one"),
             Row("/help", "Every command, with what each one costs"),
             Row("//", "Send a line that genuinely starts with a slash"),
-            Row("Alt+Enter", "New line"),
+            Row("Ctrl+J", "New line; also Alt+Enter or Shift+Enter, where they arrive"),
             Row("Ctrl+Z / Ctrl+Y", "Undo / redo"),
             Row("Esc", "Dismiss the completions; then stop writing, keeping the draft"),
         ),
@@ -144,7 +144,7 @@ SECTIONS: Final[tuple[Section, ...]] = (
     Section(
         "On a phone (under sixty columns)",
         (
-            Row("Enter", "A new line in the composer; Alt+Enter or the Send button sends"),
+            Row("Enter", "A new line in the composer; Ctrl+J or the Send button sends"),
             Row("‹  ⋯", "With the mouse on: back, and everything else the screen does"),
         ),
     ),
