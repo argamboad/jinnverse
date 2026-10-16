@@ -6,10 +6,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import func, select, true
+from sqlalchemy import RowMapping, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from lustjinn.blocks import prose_start
 from lustjinn.deps import Session
 from lustjinn.models import Character, Message, Persona, Role, Story
 
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/stories", tags=["stories"])
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 PREVIEW_LENGTH = 200
+PREVIEW_READ = 1200
+"""How much of the newest message the list reads to make its preview: enough to skip a status
+block (a dozen short lines) and still have a sentence or two of prose after it."""
 
 
 class NewStory(BaseModel):
@@ -103,7 +107,7 @@ def _stories(story_id: uuid.UUID | None = None):
             Story.created_at,
             newest.c.sent_at.label("last_message_at"),
             # The preview is cut in the database: only its first characters leave it.
-            func.left(newest.c.text, PREVIEW_LENGTH).label("last_message_preview"),
+            func.left(newest.c.text, PREVIEW_READ).label("last_message_text"),
             turns.label("turns"),
         )
         .join(Character, Story.character_id == Character.id)
@@ -117,12 +121,24 @@ def _stories(story_id: uuid.UUID | None = None):
     return query
 
 
+def preview(text: str | None) -> str | None:
+    """What a list shows under a story's name: the start of the newest message's prose, the
+    status block it may open with left out (#203)."""
+    return None if text is None else prose_start(text)[:PREVIEW_LENGTH]
+
+
+def _out(row: RowMapping) -> StoryOut:
+    """A row of `_stories()` as the API gives it."""
+    fields = dict(row)
+    return StoryOut(**fields, last_message_preview=preview(fields.pop("last_message_text")))
+
+
 async def _one(session: AsyncSession, story_id: uuid.UUID) -> StoryOut:
-    row = (await session.execute(_stories(story_id))).one_or_none()
+    row = (await session.execute(_stories(story_id))).mappings().one_or_none()
     if row is None:
         # A deleted story answers exactly like one that never existed.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "There is no story with that id.")
-    return StoryOut.model_validate(row)
+    return _out(row)
 
 
 async def visible_story(session: AsyncSession, story_id: uuid.UUID) -> Story:
@@ -181,8 +197,8 @@ async def create_story(new: NewStory, session: Session) -> StoryWithMessages:
 @router.get("")
 async def list_stories(session: Session) -> list[StoryOut]:
     """Every story that has not been deleted, the one played most recently first."""
-    rows = await session.execute(_stories())
-    return [StoryOut.model_validate(row) for row in rows]
+    rows = (await session.execute(_stories())).mappings()
+    return [_out(row) for row in rows]
 
 
 @router.get("/{story_id}")
