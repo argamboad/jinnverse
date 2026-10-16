@@ -305,4 +305,5 @@ async def test_e_in_the_builder_opens_the_piece_in_the_library_and_esc_comes_bac
         await pilot.press("escape")
         await pilot.pause(0.5)
         assert isinstance(app.screen, PersonaBuilderScreen)
-        assert [p.name for p in app.screen.piece_rows.items] == ["Skyline"]
+        # The shared row lists home, then vehicle, then pets (#218).
+        assert [p.name for p in app.screen.piece_rows.items] == ["Skyline", "Lupo"]
