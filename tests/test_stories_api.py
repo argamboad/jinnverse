@@ -155,6 +155,52 @@ async def test_the_preview_is_the_start_of_the_newest_visible_message(
     assert listed["last_message_preview"] == ("word " * 100)[:200]
 
 
+async def test_the_preview_starts_where_the_prose_does_after_a_status_block(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    story = await a_story(session)
+    await a_message(
+        session,
+        story,
+        "📅 Day and time: Monday morning, 9:36 AM\n📍 Place: the campus library\n"
+        "📛 Name: Peach\n👗 Outfit: an open robe\n\n*You push through the heavy glass doors.*",
+        role=Role.ASSISTANT,
+    )
+    await session.commit()
+
+    [listed] = (await client.get("/stories")).json()
+
+    assert listed["last_message_preview"] == "*You push through the heavy glass doors.*"
+
+
+async def test_a_reply_that_is_only_a_block_previews_as_its_first_line(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    story = await a_story(session)
+    await a_message(
+        session, story, "📅 Day and time: Monday\n📍 Place: the library", role=Role.ASSISTANT
+    )
+    await session.commit()
+
+    [listed] = (await client.get("/stories")).json()
+
+    assert listed["last_message_preview"] == "📅 Day and time: Monday"
+
+
+async def test_prose_with_a_colon_in_it_is_not_taken_for_a_block(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    story = await a_story(session)
+    await a_message(
+        session, story, 'Rowan asks: "And the Evening Star?"\nShe shrugs.', role=Role.ASSISTANT
+    )
+    await session.commit()
+
+    [listed] = (await client.get("/stories")).json()
+
+    assert listed["last_message_preview"].startswith('Rowan asks: "And the Evening Star?"')
+
+
 async def test_opening_a_story_returns_its_messages_in_order_without_the_hidden_ones(
     client: httpx2.AsyncClient, session: AsyncSession
 ) -> None:

@@ -13,6 +13,7 @@
 		mark = false,
 		ontitle,
 		titleOpen = false,
+		sections = true,
 		actions
 	}: {
 		title: string;
@@ -23,6 +24,8 @@
 		ontitle?: () => void;
 		/** The thing `ontitle` opens is showing: the block is lit and the arrow points up. */
 		titleOpen?: boolean;
+		/** The section pills on a wide screen; off where a rail beside the screen does their job. */
+		sections?: boolean;
 		actions?: Snippet;
 	} = $props();
 </script>
@@ -56,7 +59,7 @@
 	{/if}
 	<div class="grow"></div>
 	{#if actions}{@render actions()}{/if}
-	<SectionNav />
+	{#if sections}<SectionNav />{/if}
 </header>
 
 <style>

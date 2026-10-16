@@ -268,6 +268,36 @@ def read(reply: str, fields: Sequence[StatusField], default_subject: str = "") -
     return found
 
 
+def _starter_labels() -> frozenset[str]:
+    return frozenset(
+        {NAME_LABEL} | {s.label.casefold() for s in starters()} | {s.key for s in starters()}
+    )
+
+
+def is_block_line(raw: str) -> bool:
+    """Whether a line reads as a line of a status block when the story's own fields are not at
+    hand (the list's previews): `icon label: value` with an icon, or a label the shipped starter
+    set knows. A custom field without an icon is let through; a sentence with a colon in it
+    (`Rowan asks: …`) is prose, and is never taken for a block."""
+    match = LINE.match(NOISE.sub("", raw).strip())
+    if match is None:
+        return False
+    if match.group("icon"):
+        return True
+    label = (match.group("label") or "").casefold().strip()
+    return bool(label) and label in _starter_labels()
+
+
+def prose_start(reply: str) -> str:
+    """The reply from where its prose begins: the status block it opens with, if any, left out.
+    A reply that is only a block gives its first line, so a list still has something to show."""
+    lines = reply.splitlines()
+    for index, raw in enumerate(lines):
+        if raw.strip() and not is_block_line(raw):
+            return "\n".join(lines[index:]).strip()
+    return next((raw.strip() for raw in lines if raw.strip()), "")
+
+
 # --- storing it -------------------------------------------------------------------------------
 
 

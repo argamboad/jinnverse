@@ -27,6 +27,14 @@
 	const one = $derived(
 		shelf === 'characters' ? 'character' : shelf === 'personas' ? 'persona' : 'snippet'
 	);
+	/** The description's hint, one per shelf: what a note for the lists sounds like there. */
+	const descriptionHint = $derived(
+		shelf === 'characters'
+			? 'The innkeeper of the Gilded Heron'
+			: shelf === 'personas'
+				? 'A journeyman cooper, thirty, travelling between contracts'
+				: 'How the band is introduced'
+	);
 
 	/** The library is a workspace from here: the rail on the left, the editor beside it. */
 	const wideWindow = new Media('(min-width: 900px)');
@@ -380,7 +388,7 @@
 								id="entry-description"
 								type="text"
 								bind:value={description}
-								placeholder="The innkeeper of the Gilded Heron"
+								placeholder={descriptionHint}
 							/>
 						</label>
 					</div>
@@ -564,7 +572,7 @@
 		gap: 14px;
 		align-content: start;
 		padding: 14px 16px 24px;
-		max-width: 760px;
+		max-width: 960px;
 		width: 100%;
 	}
 	.libwide main {
@@ -589,9 +597,13 @@
 		display: grid;
 		gap: 14px;
 	}
-	.libwide .pair {
-		grid-template-columns: 1fr 1.4fr;
-		gap: 12px;
+	/* Name and description share a row only where there is room for a long name; the owner's
+	   names run long and the descriptions are mostly empty, so the name gets the wider column. */
+	@media (min-width: 1100px) {
+		.libwide .pair {
+			grid-template-columns: 1.4fr 1fr;
+			gap: 12px;
+		}
 	}
 	.spread {
 		display: flex;

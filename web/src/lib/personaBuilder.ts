@@ -103,6 +103,13 @@ export function builderLine(slots: Slot[], picks: Picks): string {
 	return `${picked} of ${slots.length} slots picked${needed ? ` · ${needed} needed` : ''}`;
 }
 
+/** What a checklist row says when nothing is picked in it: a needed slot asks, an optional one
+ * may be left, and a shared row says how many pieces it takes. */
+export function rowHint(group: SlotGroup): string {
+	if (group.slots.length > 1) return `One paragraph, up to ${group.slots.length} pieces`;
+	return group.slots.some((s) => isNeeded(s.key)) ? 'Pick one' : 'Pick one, or leave it';
+}
+
 /** One piece for the slot, chosen by `roll` (a number in [0, 1)); null when the slot has none. */
 export function randomFor(ids: string[], roll: number): string | null {
 	return ids.length ? ids[Math.min(ids.length - 1, Math.floor(roll * ids.length))] : null;

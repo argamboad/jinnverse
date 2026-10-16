@@ -161,3 +161,47 @@ deploy: the API first (it gained `turns` and `used`), then the web.
   SvelteKit; cancel it, and the browser asks when it must.
 - **The detail is a route; the master is a component beside it.** The URL stays the truth, and
   the layout is a question of width.
+
+## Postscript: what the staging review taught
+
+The three steps were merged and deployed, and the owner opened staging with their real library
+— fifty-three characters, names like *Anna Kistoff – Accidental Homewrecker*, cards that all
+open with the same page of instructions — and sent six screenshots back. Eight things were wrong
+that no dev server had shown, and they became one more small step (#200–#207). They are worth
+a page, because every one of them is a kind of mistake a dev server lets you make.
+
+**The same navigation on every screen.** The story and the library had become workspaces with a
+rail; the Stories page and two library screens (the builder, the pieces) were still the centred
+frame with the three pills. Each page had been correct on its own and wrong beside the others. A
+redesign is not done screen by screen; it is done when the screens agree, and the only way to see
+that is to walk the app, not the diff.
+
+**Real data has a shape the mock did not.** The mock's names were two words; the owner's run to
+forty characters and clipped in a field drawn at `1fr 1.4fr`. The mock's cards began with a
+sentence about the character; the owner's all begin with the same preamble, so a preview of the
+card's first words said nothing on fifty-three rows. The fix for the second was a rule on the
+server — a character previews its *opening* when it has one — and that rule is now the TUI's
+too, because both clients read the same field.
+
+**A placeholder is copy.** "The innkeeper of the Gilded Heron" was the right hint for a character
+and nonsense under a snippet; it had been typed once and rendered in three places. Copy that
+depends on where it is shown is a value per place, not a string.
+
+**A feature changes what other features show.** Step 11 made replies open with a status block;
+nothing in Step 11 touched the story list, and the list's preview had quietly become
+`📅 Day and time: …` on every story. The preview now starts where the prose does. When a step
+changes the shape of a thing, look at every place that thing is read.
+
+**Say "needed" once.** The builder lit a needed slot in the warning colour and, under it, offered
+to leave it. Two parts of one row written at different times, each right alone.
+
+And one lesson for the workshop rather than the product: `npm test` wedges the dev server exactly
+as `npm run check` does, because vitest boots the SvelteKit plugin, which rewrites the generated
+files the server watches. The order of work is now written down: edit, format, **stop the
+server**, check and test, start it again, look.
+
+::: dotnet
+This is the difference between a passing test suite and a smoke test on a staging slot with
+production-shaped data. The first proves each piece; only the second shows that the pieces are
+one app. Keep a copy of real (anonymised) data for staging, and walk it after every deploy.
+:::

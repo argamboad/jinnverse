@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
+	import StoriesRail from '#lib/StoriesRail.svelte';
 	import StoryList from '#lib/StoryList.svelte';
 	import Tabs from '#lib/Tabs.svelte';
+	import { Media, WIDE } from '#lib/media.svelte.ts';
 	import { stories } from '#lib/stories.svelte.ts';
+
+	/** From 1100 px this is the story workspace with no story open: the rail, and an empty pane.
+	 * Narrower windows keep the list as a screen of its own. */
+	const wide = new Media(WIDE);
 
 	let query = $state('');
 	let pulling = $state(0); // pull-to-refresh distance
@@ -36,48 +42,71 @@
 	}
 </script>
 
-<div class="screen">
-	<AppBar title="Stories" {sub} mark>
-		{#snippet actions()}
-			<a class="avatar" href="/you" aria-label="You">R</a>
-		{/snippet}
-	</AppBar>
-	<div class="search">
-		<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
-			><path
-				d="M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"
-				fill="currentColor"
-			/></svg
-		>
-		<input
-			id="story-search"
-			type="search"
-			placeholder="Search your stories"
-			bind:value={query}
-			autocomplete="off"
-		/>
+{#if wide.current}
+	<div class="workspace">
+		<StoriesRail />
+		<div class="pick">
+			<p class="muted">Pick a story, or <a href="/new">start one</a>.</p>
+		</div>
 	</div>
-	<main
-		class="list"
-		bind:this={scroller}
-		ontouchstart={touchstart}
-		ontouchmove={touchmove}
-		ontouchend={touchend}
-	>
-		{#if pulling > 0}
-			<div class="pull" style:height="{pulling}px" aria-hidden="true">
-				<span class:ready={pulling > 60}
-					>{pulling > 60 ? 'Let go to refresh' : 'Pull to refresh'}</span
-				>
-			</div>
-		{/if}
-		<StoryList {query} />
-	</main>
-	<a class="fab" href="/new" aria-label="New story">+</a>
-	<Tabs />
-</div>
+{:else}
+	<div class="screen">
+		<AppBar title="Stories" {sub} mark>
+			{#snippet actions()}
+				<a class="avatar" href="/you" aria-label="You">R</a>
+			{/snippet}
+		</AppBar>
+		<div class="search">
+			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
+				><path
+					d="M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"
+					fill="currentColor"
+				/></svg
+			>
+			<input
+				id="story-search"
+				type="search"
+				placeholder="Search your stories"
+				bind:value={query}
+				autocomplete="off"
+			/>
+		</div>
+		<main
+			class="list"
+			bind:this={scroller}
+			ontouchstart={touchstart}
+			ontouchmove={touchmove}
+			ontouchend={touchend}
+		>
+			{#if pulling > 0}
+				<div class="pull" style:height="{pulling}px" aria-hidden="true">
+					<span class:ready={pulling > 60}
+						>{pulling > 60 ? 'Let go to refresh' : 'Pull to refresh'}</span
+					>
+				</div>
+			{/if}
+			<StoryList {query} />
+		</main>
+		<a class="fab" href="/new" aria-label="New story">+</a>
+		<Tabs />
+	</div>
+{/if}
 
 <style>
+	.workspace {
+		height: 100%;
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+	}
+	.pick {
+		display: grid;
+		place-items: center;
+		padding: 24px;
+	}
+	.pick a {
+		font-weight: 600;
+		text-decoration: none;
+	}
 	.screen {
 		height: 100%;
 		display: flex;
