@@ -708,7 +708,12 @@ class FakeServer:
                     },
                 )
             made = self.piece(
-                body["slot"], body["name"], body["text"], body["voice"], body.get("short")
+                body["slot"],
+                body["name"],
+                body["text"],
+                body["voice"],
+                body.get("short"),
+                body.get("description"),
             )
             return httpx2.Response(201, json=made)
         if parts[1:] in (["preview"], ["build"]) and request.method == "POST":

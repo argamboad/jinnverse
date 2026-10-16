@@ -211,9 +211,12 @@ async def test_n_asks_for_a_slot_and_a_name_then_the_editor_and_keeps_the_piece(
         await pilot.pause()
         assert "slot" in screen.query_one("#name").placeholder  # type: ignore[attr-defined]
         await pilot.press(*"vehicle Scooter", "enter")
+        await pilot.pause(0.3)
+        await pilot.press(*"Red, a little dented", "enter")  # its description (#220)
         await pilot.pause(0.5)
         made = next(p for p in server.pieces if p["name"] == "Scooter")
         assert (made["slot"], made["voice"], made["text"]) == ("vehicle", "he", "He has a scooter.")
+        assert made["description"] == "Red, a little dented"
         assert "vehicle paragraph" in editor.handed[0]  # type: ignore[attr-defined]
         assert "Vehicle · Scooter (he)" in names(app)
 
@@ -224,20 +227,51 @@ async def test_n_takes_a_voice_after_the_slot(app: LustjinnApp, server: fake.Fak
     async with app.run_test(size=(110, 30)) as pilot:
         await open_pieces(app, pilot)
         await pilot.press("n", *"look she Her look", "enter")
+        await pilot.pause(0.3)
+        await pilot.press("enter")  # no description
         await pilot.pause(0.5)
         made = next(p for p in server.pieces if p["name"] == "Her look")
-        assert (made["slot"], made["voice"]) == ("look", "she")
+        assert (made["slot"], made["voice"], made["description"]) == ("look", "she", None)
 
 
-async def test_a_new_name_piece_is_its_name_and_needs_no_editor(
+async def test_a_new_name_piece_is_its_name_and_offers_its_first_word_as_the_short_form(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    async with app.run_test(size=(110, 30)) as pilot:
+        screen = await open_pieces(app, pilot)
+        await pilot.press("n", *"name Owen Quill", "enter")
+        await pilot.pause(0.3)
+        assert screen.query_one("#name").value == "Owen"  # type: ignore[attr-defined]
+        await pilot.press("enter", "enter")  # the offered short form, no description
+        await pilot.pause(0.5)
+        [made] = server.pieces
+        assert (made["slot"], made["text"], made["short"]) == ("name", "Owen Quill", "Owen")
+
+
+async def test_a_new_name_piece_takes_its_own_short_form_and_a_description(
     app: LustjinnApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(110, 30)) as pilot:
         await open_pieces(app, pilot)
         await pilot.press("n", *"name Owen Quill", "enter")
+        await pilot.pause(0.3)
+        await pilot.press(*"Quill", "enter")  # typing replaces the offered word
+        await pilot.pause(0.3)
+        await pilot.press(*"The pianist's name", "enter")
         await pilot.pause(0.5)
         [made] = server.pieces
-        assert (made["slot"], made["text"], made["short"]) == ("name", "Owen Quill", "Owen")
+        assert (made["short"], made["description"]) == ("Quill", "The pianist's name")
+
+
+async def test_esc_while_asking_creates_nothing(app: LustjinnApp, server: fake.FakeServer) -> None:
+    async with app.run_test(size=(110, 30)) as pilot:
+        screen = await open_pieces(app, pilot)
+        await pilot.press("n", *"name Owen Quill", "enter")
+        await pilot.pause(0.3)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert screen.status_line.text == "Cancelled."
+        assert server.pieces == []
 
 
 async def test_a_slot_that_does_not_exist_is_refused_with_the_list(

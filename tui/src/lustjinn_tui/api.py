@@ -942,11 +942,19 @@ class Api:
         return _pieces.validate_python(await self._request("GET", "/persona-pieces", params=params))
 
     async def create_piece(
-        self, slot: str, voice: Voice, name: str, text: str, short: str | None = None
+        self,
+        slot: str,
+        voice: Voice,
+        name: str,
+        text: str,
+        short: str | None = None,
+        description: str | None = None,
     ) -> Piece:
         body: dict[str, object] = {"slot": slot, "voice": voice, "name": name, "text": text}
         if short is not None:
             body["short"] = short
+        if description is not None:
+            body["description"] = description
         return Piece.model_validate(await self._request("POST", "/persona-pieces", json=body))
 
     @staticmethod
