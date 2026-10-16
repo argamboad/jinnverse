@@ -2,9 +2,11 @@
 
 Slots down the left, the pool of the selected slot on the right, the persona as it will read
 underneath. ``Space`` picks a piece (or takes it back), ``N`` writes a new one into the slot
-and keeps it in the pool, ``V`` changes the voice, ``R`` picks one at random, ``Ctrl+S`` names
-the persona and makes it. The server joins the pick into the persona's format
-(``src/lustjinn/persona_pieces.py``); this screen only chooses and shows what it answers.
+and keeps it in the pool, ``V`` changes the voice, ``R`` picks one at random, ``F`` fills every
+slot still empty at random, ``Ctrl+S`` names the persona and makes it. The caption counts the
+slots picked and the needed ones still empty, as the web's builder does. The server joins the
+pick into the persona's format (``src/lustjinn/persona_pieces.py``); this screen only chooses
+and shows what it answers.
 
 The persona that comes out is an ordinary library persona: the text is copied into it, so
 editing a piece later changes nothing already made. The screen that opened this one is told
@@ -58,6 +60,13 @@ piece): every persona opens with its name and its look, and a piece that writes 
 name piece. Every other slot is optional."""
 
 
+def builder_line(slots: list[Slot], picks: dict[str, list[uuid.UUID]]) -> str:
+    """How far the pick has got, in the web builder's words: ``3 of 12 slots picked · 1 needed``."""
+    picked = sum(1 for slot in slots if picks.get(slot.key))
+    needed = sum(1 for slot in NEEDED if not picks.get(slot))
+    return f"{picked} of {len(slots)} slots picked" + (f" · {needed} needed" if needed else "")
+
+
 class PersonaBuilderScreen(View):
     TITLE = "Build a persona"
     HINTS: ClassVar[tuple[Hint, ...]] = (
@@ -67,6 +76,7 @@ class PersonaBuilderScreen(View):
         Hint("E", "Edit piece"),
         Hint("V", "Voice"),
         Hint("R", "Random"),
+        Hint("F", "Fill the rest"),
         Hint("Ctrl+S", "Make it"),
         Hint("Esc", "Back"),
     )
@@ -84,6 +94,7 @@ class PersonaBuilderScreen(View):
         Binding("e,E", "edit_piece", "Edit the piece", show=False),
         Binding("v,V", "voice", "Voice", show=False),
         Binding("r,R", "random", "Random", show=False),
+        Binding("f,F", "fill", "Fill the rest", show=False),
         Binding("pageup", "page(-1)", "Read up", show=False),
         Binding("pagedown", "page(1)", "Read down", show=False),
         Binding("ctrl+s,ctrl+enter", "make", "Make it", show=False, priority=True),
@@ -122,7 +133,7 @@ class PersonaBuilderScreen(View):
         return self.HINTS if self._mode == "browse" else self.TYPING_HINTS
 
     def summary(self) -> str | None:
-        return count(sum(len(ids) for ids in self.picks.values()), "piece") + " picked"
+        return builder_line(self.slots, self.picks) if self.slots else None
 
     def commands(self) -> list[PaletteCommand]:
         return [
@@ -130,6 +141,9 @@ class PersonaBuilderScreen(View):
             PaletteCommand("New piece", "written into the selected slot", self.action_new_piece),
             PaletteCommand("Change the voice", "he, she or they", self.action_voice),
             PaletteCommand("Pick at random", "one piece for the selected slot", self.action_random),
+            PaletteCommand(
+                "Fill the rest at random", "a piece for every slot still empty", self.action_fill
+            ),
         ]
 
     def body(self) -> ComposeResult:
@@ -205,9 +219,13 @@ class PersonaBuilderScreen(View):
         await self._preview()
 
     def _show_caption(self) -> None:
+        """How far the pick has got, then the voice: on a wide screen the masthead has no room
+        for the summary, so the caption carries it."""
+        line = builder_line(self.slots, self.picks) if self.slots else ""
         self.query_one("#caption", Static).update(
             Content.from_markup(
-                f"[$muted]Voice[/]  {Content(self.voice).markup}   "
+                (f"[$accent]{Content(line).markup}[/]   " if line else "")
+                + f"[$muted]Voice[/]  {Content(self.voice).markup}   "
                 "[$muted]— pieces written in it, or in none, are offered[/]"
             )
         )
@@ -337,9 +355,28 @@ class PersonaBuilderScreen(View):
         self.picks[slot.key] = [choose(pieces).id]
         self._after_picking()
 
+    def action_fill(self) -> None:
+        """A piece at random for every slot still empty, as the web's "Fill the rest at random";
+        what is picked stays picked, and a slot with no piece in this voice stays empty."""
+        if self._mode != "browse" or not self.slots:
+            return
+        filled = 0
+        for slot in self.slots:
+            pieces = self.pool.get(slot.key, [])
+            if self.picks.get(slot.key) or not pieces:
+                continue
+            self.picks[slot.key] = [choose(pieces).id]
+            filled += 1
+        if not filled:
+            self.status("Every slot that has a piece in this voice is picked already.")
+            return
+        self._after_picking()
+        self.status(f"Filled {count(filled, 'empty slot')} at random.", Kind.SUCCESS)
+
     def _after_picking(self) -> None:
         self.slot_rows.refresh()
         self.piece_rows.refresh()
+        self._show_caption()
         self.refresh_summary()
         self.run_worker(self._preview, exclusive=True)
 

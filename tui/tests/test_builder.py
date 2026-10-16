@@ -107,7 +107,7 @@ async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
         assert preview(app) == (
             "Allan Sanlúcar is an athletic young man.\nAllan lives in a penthouse."
         )
-        assert built.summary() == "3 pieces picked"
+        assert built.summary() == "3 of 12 slots picked"
         rows = built.slot_rows.render().plain
         assert "✓ Identity and look" in rows
         assert "✓ Home" in rows
@@ -169,6 +169,54 @@ async def test_r_picks_one_piece_for_the_slot_at_random(
         await pilot.pause(0.2)
         assert [built.name_of("home", i) for i in built.picks["home"]] == ["Penthouse"]
         assert ids  # the pool was not touched
+
+
+def caption(app: LustjinnApp) -> str:
+    return str(screen(app).query_one("#caption").render())
+
+
+async def test_the_caption_counts_the_slots_picked_and_the_needed_ones_left(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """In the web builder's words (#217)."""
+    pool(server)
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        assert caption(app).startswith("0 of 12 slots picked · 2 needed   Voice  he")
+        await pick_in(pilot, 0)  # the name
+        assert caption(app).startswith("1 of 12 slots picked · 1 needed")
+        await pick_in(pilot, 1)  # the look
+        assert caption(app).startswith("2 of 12 slots picked   Voice")
+        assert built.summary() == "2 of 12 slots picked"
+
+
+async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
+    app: LustjinnApp, server: fake.FakeServer, monkeypatch: object
+) -> None:
+    pool(server)
+    server.piece("home", "Loft", "{short} lives in a loft.")
+    server.piece("look", "Lean", "{name} is lean.")
+    monkeypatch.setattr(builder, "choose", lambda pieces: pieces[-1])  # type: ignore[attr-defined]
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        await pick_in(pilot, 1)  # the look: Athletic, the first; F must leave it
+        await pilot.press("f")
+        await pilot.pause(0.3)
+        chosen = {slot: [built.name_of(slot, i) for i in ids] for slot, ids in built.picks.items()}
+        assert chosen == {
+            "name": ["Allan"],
+            "look": ["Athletic"],  # picked by hand, kept
+            "home": ["Penthouse"],  # the last of Loft and Penthouse, as the fixed choice says
+            "vehicle": ["Royal Enfield"],
+            "pets": ["Lupo"],
+        }  # the slots with no piece in this voice stay empty
+        assert built.status_line.text == "Filled 4 empty slots at random."
+        assert caption(app).startswith("5 of 12 slots picked   Voice")
+        await pilot.press("f")
+        await pilot.pause(0.2)
+        assert built.status_line.text == (
+            "Every slot that has a piece in this voice is picked already."
+        )
 
 
 async def test_n_writes_a_new_piece_in_the_editor_and_picks_it(
