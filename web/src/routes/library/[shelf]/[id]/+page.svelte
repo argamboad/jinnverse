@@ -597,9 +597,13 @@
 		display: grid;
 		gap: 14px;
 	}
-	.libwide .pair {
-		grid-template-columns: 1fr 1.4fr;
-		gap: 12px;
+	/* Name and description share a row only where there is room for a long name; the owner's
+	   names run long and the descriptions are mostly empty, so the name gets the wider column. */
+	@media (min-width: 1100px) {
+		.libwide .pair {
+			grid-template-columns: 1.4fr 1fr;
+			gap: 12px;
+		}
 	}
 	.spread {
 		display: flex;
