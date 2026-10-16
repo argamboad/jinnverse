@@ -50,7 +50,7 @@ from lustjinn_tui.api import (
 )
 from lustjinn_tui.commands import Command, Commands, Incomplete, Prose, Unknown, Unread
 from lustjinn_tui.completion import LIMIT, Completion, Offer, Strip
-from lustjinn_tui.composer import Caption, Composer
+from lustjinn_tui.composer import NEWLINE_KEY, Caption, Composer
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.export import ExportScreen
 from lustjinn_tui.hairline import Hairline
@@ -89,7 +89,7 @@ class ConversationScreen(View):
     )
     WRITE_HINTS: ClassVar[tuple[Hint, ...]] = (
         Hint("Enter", "Send"),
-        Hint("Alt+Enter", "New line"),
+        Hint("Ctrl+J", "New line"),
         Hint("Esc", "Cancel"),
     )
     SEARCH_HINTS: ClassVar[tuple[Hint, ...]] = (Hint("Enter", "Find"), Hint("Esc", "Cancel"))
@@ -98,7 +98,7 @@ class ConversationScreen(View):
         Hint("Esc", "Cancel"),
     )
     PHONE_WRITE_HINTS: ClassVar[tuple[Hint, ...]] = (
-        Hint("Alt+Enter", "Send"),
+        Hint("Ctrl+J", "Send"),
         Hint("Enter", "New line"),
         Hint("Esc", "Close"),
     )
@@ -109,7 +109,7 @@ class ConversationScreen(View):
         phone.Button("Carry on", "greater_than_sign", ">"),
     )
     WRITE_BUTTONS: ClassVar[tuple[phone.Button, ...]] = (
-        phone.Button("Send", "alt+enter"),
+        phone.Button("Send", NEWLINE_KEY),
         phone.Button("Close", "escape"),
     )
     AUTO_FOCUS: ClassVar[str | None] = ""

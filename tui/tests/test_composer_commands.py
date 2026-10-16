@@ -301,7 +301,7 @@ async def test_do_with_a_message_under_it_stores_the_message_only(
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
-        await pilot.press("i", *"/do skip to the evening", "alt+enter", "alt+enter", *"Fine.")
+        await pilot.press("i", *"/do skip to the evening", "ctrl+j", "ctrl+j", *"Fine.")
         await pilot.press("enter")
         await pilot.pause(0.3)
         assert [m.text for m in screen.messages] == [OPENING, "Fine.", server.reply]

@@ -119,8 +119,8 @@ async def test_on_a_phone_the_conversation_takes_the_width_and_enter_is_a_new_li
         await pilot.pause()
         assert screen.composer.text == "one\ntwo"
         assert "POST" not in " ".join(server.paths())
-        assert [h.key for h in screen.hints()] == ["Alt+Enter", "Enter", "Esc"]
-        await pilot.press("alt+enter")
+        assert [h.key for h in screen.hints()] == ["Ctrl+J", "Enter", "Esc"]
+        await pilot.press("ctrl+j")
         await pilot.pause(0.3)
         assert [m.text for m in screen.messages][-2] == "one\ntwo"
         await pilot.resize_terminal(100, 30)

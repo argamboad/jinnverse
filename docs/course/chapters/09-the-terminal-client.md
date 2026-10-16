@@ -298,7 +298,8 @@ the width (sixty percent by default, centred, never under forty columns) and on 
 it.
 
 `i` or `Enter` writes. The composer is a `TextArea` that posts `Send` on `Enter` and makes a
-line break on `Alt+Enter`; on a phone the two swap, because a phone keyboard has no `Alt`. A
+line break on `Ctrl+J` (it was `Alt+Enter` until step 16 found that Windows Terminal never hands
+it over); on a phone the two swap, because a touch keyboard's Enter is a new line everywhere. A
 paste with line breaks is text, not a send. The reply streams in under a pending row with a
 clock in the header; `Esc` keeps the draft, and a failed turn keeps it too. `>` carries on,
 `g` regenerates after asking for one of the donor's reasons, `b` branches, `Delete` cuts the
