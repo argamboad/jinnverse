@@ -152,6 +152,8 @@ class ConversationScreen(View):
         self._query = ""
         self._spend: StorySpend | None = None
         self._block: StatusBlock | None = None
+        self._card_version: int | None = None
+        """The version of the character's card the story reads, which is always the newest."""
         self._persona_label = story.persona_name or "no persona"
         self._pending_label: str | None = None
         self._pending_since = 0.0
@@ -334,6 +336,7 @@ class ConversationScreen(View):
                 self._persona_label = f"{defaults.default_persona_name} (the default)"
         await self._refresh_spend()
         await self._refresh_block()
+        await self._refresh_card()
         self._loaded = True
         self._show_header()
         yours = sum(1 for m in self.messages if m.role == "user")
@@ -349,10 +352,23 @@ class ConversationScreen(View):
             self._block = None
         self._show_header()
 
+    async def _refresh_card(self) -> None:
+        """The card's version for the header (#216), read once per load: a card that cannot be
+        read is a header without it, as with the block and the ledger."""
+        try:
+            card = await self.lustjinn.api.entry("characters", self.story.character_id)
+        except ApiError, UnreachableError:
+            self._card_version = None
+        else:
+            self._card_version = card.version
+        self._show_header()
+
     def on_screen_resume(self) -> None:
-        """Back from the status block (or settings): the scene line may have changed."""
+        """Back from the status block, settings or the library: the scene line may have
+        changed, and so may the card."""
         if self._loaded:
             self.run_worker(self._refresh_block, exclusive=False)
+            self.run_worker(self._refresh_card, exclusive=False)
 
     async def _refresh_spend(self) -> None:
         """Never allowed to break the screen it decorates: a ledger that cannot be read is a
@@ -397,6 +413,8 @@ class ConversationScreen(View):
             lines.append(f"[$accent]message {self._position()}[/][$muted]{facts}[/]")
         if self._loaded:
             who = Content(self.story.character_name).markup
+            if self._card_version is not None:
+                who += f"  ·  card v{self._card_version}"
             as_whom = Content(self._persona_label).markup
             lines.append(f"[$muted]{who}  ·  as {as_whom}[/]")
         if self._block is not None:

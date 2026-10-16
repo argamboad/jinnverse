@@ -96,6 +96,8 @@ class FakeServer:
             "snippets": [],
         }
         self.default_persona: dict[str, Any] | None = None
+        self.history: dict[str, list[dict[str, Any]]] = {}
+        """Every saved version of an entry, by its id, oldest first, as `library_history`."""
         self.pieces: list[dict[str, Any]] = []
         self.pack: list[dict[str, Any]] = [
             {
@@ -292,7 +294,31 @@ class FakeServer:
     ) -> dict[str, Any]:
         added = entry(name, text, opening, description)
         self.library[shelf].append(added)
+        self._remember(added)
         return added
+
+    def revise(self, found: dict[str, Any], **changes: Any) -> dict[str, Any]:
+        """A save made elsewhere: the entry moves to its next version, and its history too."""
+        found.update(changes)
+        found["version"] += 1
+        found["preview"] = found["text"][:200]
+        found["hidden"] = found["name"].startswith("_")
+        self._remember(found)
+        return found
+
+    def _remember(self, found: dict[str, Any]) -> None:
+        self.history.setdefault(found["id"], []).append(
+            {
+                "version": found["version"],
+                "name": found["name"],
+                "text": found["text"],
+                "opening": found.get("opening"),
+                "description": found.get("description"),
+                "saved_at": (
+                    datetime(2026, 10, 1, 9, tzinfo=UTC) + timedelta(hours=found["version"])
+                ).isoformat(),
+            }
+        )
 
     def piece(
         self,
@@ -547,9 +573,15 @@ class FakeServer:
             return httpx2.Response(404, json={"detail": "There is no such shelf."})
         kind = parts[1][:-1]
         if len(parts) == 2 and request.method == "GET":
+            # A name starting with `_` is kept but listed only when asked for, as the API does.
+            hidden = request.url.params.get("hidden") == "true"
             summaries = [
-                {k: v for k, v in e.items() if k not in {"text", "opening", "used_by"}}
+                {
+                    **{k: v for k, v in e.items() if k not in {"text", "opening", "used_by"}},
+                    "used": len(self._users(parts[1], e)),
+                }
                 for e in shelf
+                if hidden or not e["name"].startswith("_")
             ]
             return httpx2.Response(200, json=summaries)
         if len(parts) == 2 and request.method == "POST":
@@ -570,13 +602,8 @@ class FakeServer:
         if found is None:
             return httpx2.Response(404, json={"detail": "There is no such entry."})
         if len(parts) == 3 and request.method == "GET":
-            users = [
-                s["name"]
-                for s in self.stories
-                if (parts[1] == "characters" and s["character_id"] == found["id"])
-                or (parts[1] == "personas" and s["persona_id"] == found["id"])
-            ]
-            return httpx2.Response(200, json={**found, "used_by": users})
+            users = self._users(parts[1], found)
+            return httpx2.Response(200, json={**found, "used_by": users, "used": len(users)})
         if len(parts) == 3 and request.method == "PATCH":
             body = json.loads(request.content)
             if body["version"] != found["version"]:
@@ -599,14 +626,13 @@ class FakeServer:
             if changed:
                 found["version"] += 1
                 found["preview"] = found["text"][:200]
+                found["hidden"] = found["name"].startswith("_")
+                self._remember(found)
             return httpx2.Response(200, json=found)
+        if parts[3:] == ["history"] and request.method == "GET":
+            return httpx2.Response(200, json=list(reversed(self.history.get(found["id"], []))))
         if len(parts) == 3 and request.method == "DELETE":
-            users = [
-                s["name"]
-                for s in self.stories
-                if (parts[1] == "characters" and s["character_id"] == found["id"])
-                or (parts[1] == "personas" and s["persona_id"] == found["id"])
-            ]
+            users = self._users(parts[1], found)
             if users:
                 return httpx2.Response(
                     409,
@@ -618,6 +644,15 @@ class FakeServer:
             shelf.remove(found)
             return httpx2.Response(204)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _users(self, shelf: str, found: dict[str, Any]) -> list[str]:
+        """The live stories that use an entry, by name; none for a snippet, which is copied."""
+        return [
+            s["name"]
+            for s in self.stories
+            if (shelf == "characters" and s["character_id"] == found["id"])
+            or (shelf == "personas" and s["persona_id"] == found["id"])
+        ]
 
     def _counts(self) -> httpx2.Response:
         """The shelves as lists show them: names starting with an underscore are counted apart."""
@@ -673,7 +708,12 @@ class FakeServer:
                     },
                 )
             made = self.piece(
-                body["slot"], body["name"], body["text"], body["voice"], body.get("short")
+                body["slot"],
+                body["name"],
+                body["text"],
+                body["voice"],
+                body.get("short"),
+                body.get("description"),
             )
             return httpx2.Response(201, json=made)
         if parts[1:] in (["preview"], ["build"]) and request.method == "POST":

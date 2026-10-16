@@ -1,5 +1,6 @@
 """The library screen's counts on the shelf tabs and the short description of an entry: in the
-tabs, beside the names, over the text, edited on one line, and on the new-story form (#162)."""
+tabs, beside the names, over the text, edited on one line, and on the new-story form (#162);
+the line under each name with its version and how many stories use it (#215)."""
 
 from textual.pilot import Pilot
 
@@ -80,18 +81,53 @@ async def test_the_description_of_the_selected_entry_sits_over_its_text(
         assert not library(app).query_one("#description").display  # none: nothing shown
 
 
-async def test_the_row_shows_the_description_after_the_name_when_there_is_room(
+def row_lines(app: LustjinnApp) -> list[str]:
+    return [line.rstrip() for line in library(app).rows.render().plain.splitlines()]
+
+
+async def test_under_each_name_the_version_the_use_and_the_description(
     app: LustjinnApp, server: fake.FakeServer
 ) -> None:
+    """As the web's list has it (#215): two rows an entry, the second muted."""
     server.shelve("personas", "Elena", "You are Elena.", description="The innkeeper")
     server.shelve("personas", "Marta", "You are Marta.")
-    async with app.run_test(size=(120, 30)) as pilot:
+    async with app.run_test(size=(140, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("right")
         await pilot.pause(0.3)
-        rows = screen.rows.render().plain
-        assert "Elena  The innkeeper" in rows
-        assert "Marta" in rows
+        assert screen.rows.rows_per_item == 2
+        assert row_lines(app) == [
+            "  Elena",
+            "  v1 · unused · The innkeeper",
+            "  Marta",
+            "  v1 · unused · You are Marta.",  # no description: the start of the text
+        ]
+
+
+async def test_the_line_counts_the_stories_that_use_the_entry(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    elena = server.shelve("characters", "Elena", "You are Elena.")
+    marta = server.shelve("characters", "Marta", "You are Marta.")
+    server.add("Tale", character="Elena", character_id=elena["id"])
+    server.add("Another", character="Marta", character_id=marta["id"])
+    server.add("A third", character="Marta", character_id=marta["id"])
+    async with app.run_test(size=(140, 30)) as pilot:
+        await open_library(app, pilot)
+        lines = row_lines(app)
+        assert lines[1] == "  v1 · in 1 story · You are Elena."
+        assert lines[3] == "  v1 · in 2 stories · You are Marta."
+
+
+async def test_a_snippet_says_its_version_and_no_stories(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    server.shelve("snippets", "storm", "Rain on the glass.\nThunder later.")
+    async with app.run_test(size=(140, 30)) as pilot:
+        await open_library(app, pilot)
+        await pilot.press("right", "right")
+        await pilot.pause(0.3)
+        assert row_lines(app) == ["  storm", "  v1 · Rain on the glass."]  # its first line only
 
 
 async def test_a_long_description_is_cut_to_the_width_of_the_row(
@@ -100,9 +136,10 @@ async def test_a_long_description_is_cut_to_the_width_of_the_row(
     server.shelve("characters", "Elena", "You are Elena.", description="x" * 120)
     async with app.run_test(size=(80, 30)) as pilot:
         screen = await open_library(app, pilot)
-        first = screen.rows.render().plain.splitlines()[0]
-        assert "…" in first
-        assert len(first) <= screen.rows.size.width
+        second = screen.rows.render().plain.splitlines()[1]
+        assert second.startswith("  v1 · unused · xxx")
+        assert "…" in second
+        assert len(second) <= screen.rows.size.width
 
 
 async def test_e_edits_the_description_on_one_line_and_saves_it_as_a_version(
@@ -178,3 +215,66 @@ async def test_the_new_story_form_shows_the_description_of_the_character_and_the
         persona = app.screen.query_one("#persona-text", Panel).query_one(".caption")
         assert "The innkeeper." in str(world.render())
         assert "The pianist." in str(persona.render())
+
+
+def hidden_hint(app: LustjinnApp) -> str:
+    return next(h.label for h in library(app).hints() if h.key == "_")
+
+
+async def test_underscore_shows_the_hidden_entries_marked_and_puts_them_away(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """A name starting with `_` is kept but not listed; `_` lists it too (#214)."""
+    server.shelve("characters", "Elena", "You are Elena.")
+    server.shelve("characters", "_template", "A template.")
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        assert [e.name for e in screen.rows.items] == ["Elena"]
+        assert hidden_hint(app) == "Hidden (1)"
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Elena", "_template"]
+        assert "  hidden · v1 · unused · A template." in row_lines(app)
+        assert screen.status_line.text == "Showing 1 hidden character too."
+        assert hidden_hint(app) == "Put hidden away"
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Elena"]
+        assert screen.status_line.text == "Hidden entries put away."
+
+
+async def test_an_entry_renamed_to_underscore_can_be_reached_again(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    server.shelve("personas", "Draft", "Notes towards someone.")
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        await pilot.press("right")
+        await pilot.pause(0.3)
+        await pilot.press("f2", "home", "underscore", "enter")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == []
+        assert screen.status_line.text == (
+            'Renamed to "_Draft": a name starting with _ is hidden. _ shows it.'
+        )
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["_Draft"]
+        await pilot.press("f2", "home", "delete", "enter")
+        await pilot.pause(0.3)
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Draft"]
+
+
+async def test_the_pieces_shelf_has_nothing_hidden(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        await pilot.press("left")  # round to the last shelf: the pieces
+        await pilot.pause(0.3)
+        assert screen.shelf == "pieces"
+        await pilot.press("underscore")
+        await pilot.pause()
+        assert screen.status_line.text == "A piece is never hidden: this shelf shows every one."

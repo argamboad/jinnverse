@@ -1,10 +1,16 @@
 """The library: characters, personas and snippets, read and kept from the terminal
 (``Views/LibraryView.cs``).
 
-Three shelves across the top, the names down the left, the text on the right. ``N`` names a
-new entry and opens it in the editor with a skeleton to fill in; ``Enter`` edits the text,
+Three shelves across the top, the names down the left, the text on the right. Under each name,
+a line as the web's list has it: the version, how many stories use the entry, and its note or
+the start of its text. ``N`` names a
+new entry, asks for its note (Enter skips it) and opens it in the editor with a skeleton to fill
+in, a new character's opening straight after its card; a new piece asks the same, and a name
+piece its short form; ``Enter`` edits the text,
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
-while a live story uses it, and says which); ``D`` makes a persona the default.
+while a live story uses it, and says which); ``D`` makes a persona the default. A name
+starting with ``_`` is kept but not listed; ``_`` shows those too, and puts them away again.
+``H`` opens the entry's history (``history.py``), where an old version can be put back.
 
 A save carries the version the editor started from. When the entry moved on in between —
 edited on the phone while the laptop had it open — the API refuses with the entry as it is now,
@@ -16,6 +22,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar, Literal, cast
 
@@ -37,12 +44,14 @@ from lustjinn_tui.api import (
     PieceEntry,
     Shelf,
     UnreachableError,
+    Version,
     Voice,
 )
 from lustjinn_tui.builder import PersonaBuilderScreen
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.editor import editor_name
 from lustjinn_tui.hairline import Hairline
+from lustjinn_tui.history import HistoryScreen
 from lustjinn_tui.legend import Hint
 from lustjinn_tui.listing import Rows
 from lustjinn_tui.palette import PaletteCommand
@@ -59,7 +68,37 @@ KINDS: dict[Shelf, str] = {
     "pieces": "piece",
 }
 VOICES: tuple[Voice, ...] = ("he", "she", "they", "any")
-Mode = Literal["list", "naming", "renaming", "describing", "shorting"]
+Mode = Literal[
+    "list", "naming", "renaming", "describing", "shorting", "short-new", "describing-new"
+]
+
+
+@dataclass(slots=True)
+class Pending:
+    """What ``N`` has gathered so far, one question at a time, before anything is saved."""
+
+    name: str
+    slot: str | None = None
+    """A piece's slot; None for a character, persona or snippet."""
+    label: str = ""
+    """The slot's label, for the skeleton a piece's editor opens on."""
+    voice: Voice = "he"
+    short: str | None = None
+
+
+def about(entry: Entry, shelf: Shelf) -> str:
+    """The line under a name, as the web's list has it: the version, how many stories use the
+    entry (a snippet is copied when used, so it says only its version), then the owner's note,
+    or the first line of the text when there is none."""
+    parts = ["hidden", f"v{entry.version}"] if entry.hidden else [f"v{entry.version}"]
+    if shelf != "snippets":
+        parts.append(f"in {count(entry.used, 'story', 'stories')}" if entry.used else "unused")
+    note = (entry.description or "").strip() or next(
+        (line.strip() for line in entry.preview.splitlines() if line.strip()), ""
+    )
+    if note:
+        parts.append(note)
+    return " · ".join(parts)
 
 
 class ConflictScreen(View):
@@ -138,6 +177,8 @@ class LibraryScreen(View):
         Hint("D", "Default persona"),
         Hint("B", "Build persona"),
         Hint("Del", "Remove"),
+        Hint("H", "History"),
+        Hint("_", "Hidden"),
         Hint("PgUp/PgDn", "Read"),
         Hint("Esc", "Back"),
     )
@@ -154,6 +195,7 @@ class LibraryScreen(View):
         Hint("Enter", "Save the short name"),
         Hint("Esc", "Cancel"),
     )
+    ASKING_HINTS: ClassVar[tuple[Hint, ...]] = (Hint("Enter", "Go on"), Hint("Esc", "Cancel"))
     PIECE_HINTS: ClassVar[tuple[Hint, ...]] = (
         Hint("←→", "Shelf"),
         Hint("Enter", "Edit the text"),
@@ -186,6 +228,8 @@ class LibraryScreen(View):
         Binding("v,V", "voice", "Voice of the piece", show=False),
         Binding("s,S", "short", "Short name", show=False),
         Binding("delete", "remove", "Remove", show=False),
+        Binding("underscore", "hidden", "Hidden entries", show=False),
+        Binding("h,H", "history", "History", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
     ]
 
@@ -209,6 +253,9 @@ class LibraryScreen(View):
         self._default_persona: uuid.UUID | None = None
         self._shown: EntryFull | None = None
         self._counts = Counts()
+        self._show_hidden = False
+        """Whether the shelves list their ``_name`` entries too; kept across shelves."""
+        self._pending: Pending | None = None
 
     # -- the frame ------------------------------------------------------------------------------
 
@@ -221,7 +268,23 @@ class LibraryScreen(View):
             return self.DESCRIBING_HINTS
         if self._mode == "shorting":
             return self.SHORTING_HINTS
-        return self.PIECE_HINTS if self.shelf == "pieces" else self.HINTS
+        if self._mode in ("short-new", "describing-new"):
+            return self.ASKING_HINTS
+        if self.shelf == "pieces":
+            return self.PIECE_HINTS
+        return tuple(self._hidden_hint() if hint.key == "_" else hint for hint in self.HINTS)
+
+    def _hidden_hint(self) -> Hint:
+        """The key that shows the ``_name`` entries, with how many there are, as the web puts
+        the count beside its toggle."""
+        if self._show_hidden:
+            return Hint("_", "Put hidden away")
+        hidden = self._hidden_count()
+        return Hint("_", f"Hidden ({hidden})" if hidden else "Hidden")
+
+    def _hidden_count(self) -> int:
+        hidden: int = getattr(self._counts.hidden, self.shelf, 0)
+        return hidden
 
     def summary(self) -> str | None:
         return count(len(self.rows.items), KINDS[self.shelf])
@@ -250,6 +313,12 @@ class LibraryScreen(View):
             PaletteCommand("Change the voice", "of the selected piece", self.action_voice),
             PaletteCommand("Short name", "of the selected name piece", self.action_short),
             PaletteCommand("Remove the entry", "asks first", self.action_remove),
+            PaletteCommand(
+                "Hidden entries", "show or put away names starting with _", self.action_hidden
+            ),
+            PaletteCommand(
+                "History", "every saved version; put an old one back", self.action_history
+            ),
         ]
 
     def body(self) -> ComposeResult:
@@ -286,7 +355,9 @@ class LibraryScreen(View):
 
     async def _load(self, announce: bool, *, select: uuid.UUID | None = None) -> None:
         api = self.lustjinn.api
-        listed = await self.lustjinn.call(f"Reading the {self.shelf}", api.entries(self.shelf))
+        listed = await self.lustjinn.call(
+            f"Reading the {self.shelf}", api.entries(self.shelf, hidden=self._show_hidden)
+        )
         if listed is None:
             return
         if self.shelf == "personas":
@@ -295,6 +366,7 @@ class LibraryScreen(View):
         counted = await self.lustjinn.call("Counting the shelves", api.counts())
         if counted is not None:
             self._counts = counted
+        self.rows.rows_per_item = 1 if self.shelf == "pieces" else 2
         self.rows.set_items(listed, empty=f"No {self.kind}s yet — N starts one.")
         if select is not None:
             index = next((i for i, e in enumerate(listed) if e.id == select), -1)
@@ -315,8 +387,20 @@ class LibraryScreen(View):
         self.query_one("#tabs", Static).update(Content.from_markup("  ".join(parts)))
 
     def _row(self, entry: Entry, selected: bool, width: int) -> Content:
+        """Two rows: the name, then ``about`` under it, muted. A piece takes one: its name
+        already says its slot and its voice, and its note follows it."""
+        if isinstance(entry, PieceEntry):
+            return self._piece_row(entry, selected, width)
         marker = "★ " if self.shelf == "personas" and entry.id == self._default_persona else "  "
-        head = f"{marker}{entry.name}"
+        name = Content(pad(f"{marker}{entry.name}", width)).markup
+        line = Content(pad(f"  {about(entry, self.shelf)}", width)).markup
+        if selected:
+            return Content.from_markup(f"{SELECTION}{name}[/]\n{SELECTION}{line}[/]")
+        return Content.from_markup(f"{name}\n[$muted]{line}[/]")
+
+    @staticmethod
+    def _piece_row(entry: PieceEntry, selected: bool, width: int) -> Content:
+        head = f"  {entry.name}"
         if not entry.description:
             line = Content(pad(head, width)).markup
             return Content.from_markup(f"{SELECTION}{line}[/]" if selected else line)
@@ -408,8 +492,32 @@ class LibraryScreen(View):
     def action_refresh(self) -> None:
         self.run_worker(partial(self._load, True), exclusive=True)
 
+    def action_hidden(self) -> None:
+        """Shows the entries whose name starts with ``_`` — kept, but not listed — or puts them
+        away again. Without it, an entry renamed to ``_x`` here could not be reached here."""
+        if self._mode != "list":
+            return
+        if self.shelf == "pieces":
+            self.status("A piece is never hidden: this shelf shows every one.", Kind.WARNING)
+            return
+        self.run_worker(self._toggle_hidden, exclusive=True)
+
+    async def _toggle_hidden(self) -> None:
+        keep = self.selected.id if self.selected is not None else None
+        self._show_hidden = not self._show_hidden
+        await self._load(False, select=keep)
+        if not self._show_hidden:
+            self.status("Hidden entries put away.")
+            return
+        hidden = self._hidden_count()
+        if hidden:
+            self.status(f"Showing {count(hidden, f'hidden {self.kind}')} too.", Kind.SUCCESS)
+        else:
+            self.status(f"No hidden {self.kind}s: a name starting with _ hides one.")
+
     def action_back(self) -> None:
         if self._mode != "list":
+            self._pending = None
             self._leave_field()
             self.status("Cancelled.")
             return
@@ -509,11 +617,10 @@ class LibraryScreen(View):
         await self._load(False, select=saved.id)
         self.status(f"Short name: {short}.", Kind.SUCCESS)
 
-    async def _create_piece(self, answer: str) -> None:
-        """``slot [voice] name``: a new piece in the pool, then the editor for its text. A name
-        piece is its name: its text is the full name, and S gives it a short form."""
-        api = self.lustjinn.api
-        slots = await self.lustjinn.call("Reading the slots", api.piece_slots())
+    async def _start_piece(self, answer: str) -> None:
+        """``slot [voice] name``, then the questions the web's form asks too: a name piece's
+        short form (its first word offered), and a description, which may be left empty."""
+        slots = await self.lustjinn.call("Reading the slots", self.lustjinn.api.piece_slots())
         if slots is None:
             return
         words = answer.split()
@@ -531,18 +638,37 @@ class LibraryScreen(View):
         if not name:
             self.status("A piece needs a name.", Kind.WARNING)
             return
+        self._pending = Pending(name, slot=slot, label=keys[slot], voice=voice)
         if slot == "name":
-            text, short = name, name.split()[0]
+            self._open_field(
+                "short-new", name.split()[0], "the short name, used after the first mention"
+            )
         else:
-            before = skeletons.piece(keys[slot].lower(), voice)
+            self._ask_description()
+
+    def _ask_description(self) -> None:
+        self._open_field("describing-new", "", "a short note for lists — optional, Enter skips")
+
+    async def _finish_piece(self, pending: Pending, description: str | None) -> None:
+        """A name piece is its name: its text is the full name. Any other piece's text is
+        written in the editor, from the slot's skeleton."""
+        if pending.slot is None:
+            return
+        if pending.slot == "name":
+            text = pending.name
+        else:
+            before = skeletons.piece(pending.label.lower(), pending.voice)
             self.status(f"Waiting for {editor_name()} — save and close to come back.")
             after = self.lustjinn.editor(self.lustjinn, before, "-piece.txt")
             if after is None or not after.strip() or after.strip() == before.strip():
                 self.status("Nothing was written.")
                 return
-            text, short = after.strip(), None
+            text = after.strip()
         created = await self.lustjinn.call(
-            "Saving the piece", api.create_piece(slot, voice, name, text, short)
+            "Saving the piece",
+            self.lustjinn.api.create_piece(
+                pending.slot, pending.voice, pending.name, text, pending.short, description
+            ),
         )
         if created is None:
             return
@@ -571,28 +697,54 @@ class LibraryScreen(View):
             if isinstance(shown, PieceEntry):
                 self.run_worker(partial(self._set_short, shown, name), exclusive=True)
             return
+        pending = self._pending
+        if mode == "short-new" and pending is not None:
+            if not name:
+                self._pending = None
+                self.status("A name piece needs a short form.", Kind.WARNING)
+                return
+            pending.short = name
+            self._ask_description()
+            return
+        if mode == "describing-new" and pending is not None:
+            self._pending = None
+            finish = self._finish_piece if pending.slot is not None else self._create
+            self.run_worker(partial(finish, pending, name or None), exclusive=True)
+            return
         if not name:
             self.status(f"A {self.kind} needs a name.", Kind.WARNING)
             return
         if mode == "naming" and self.shelf == "pieces":
-            self.run_worker(partial(self._create_piece, name), exclusive=True)
+            self.run_worker(partial(self._start_piece, name), exclusive=True)
         elif mode == "naming":
-            self.run_worker(partial(self._create, name), exclusive=True)
+            self._pending = Pending(name)
+            self._ask_description()
         elif entry is not None:
             if name == (entry.piece_name if isinstance(entry, PieceEntry) else entry.name):
                 self.status("That is already its name.")
                 return
             self.run_worker(partial(self._rename, entry, name), exclusive=True)
 
-    async def _create(self, name: str) -> None:
+    async def _create(self, pending: Pending, description: str | None) -> None:
+        """The entry with its name and description, then its text in the editor from the
+        shelf's skeleton; a character's opening follows in the same pass, as the web's form
+        has both. Leaving the opening's skeleton as it is skips it."""
         created = await self.lustjinn.call(
             "Creating",
-            self.lustjinn.api.create_entry(self.shelf, name, skeletons.BY_SHELF[self.shelf]),
+            self.lustjinn.api.create_entry(
+                self.shelf, pending.name, skeletons.BY_SHELF[self.shelf], description=description
+            ),
         )
         if created is None:
             return
         await self._load(False, select=created.id)
-        await self._edit(created, "text")
+        saved = await self._edit(created, "text")
+        if (
+            self.shelf == "characters"
+            and saved is not None
+            and await self._edit(saved, "opening") is None
+        ):
+            self.status(f"'{saved.name}' is saved, with no opening yet: O writes one.")
 
     async def _describe(self, entry: EntryFull, description: str) -> None:
         """Saves the description over the version on screen; blank clears it."""
@@ -619,6 +771,12 @@ class LibraryScreen(View):
             if isinstance(renamed, PieceEntry):
                 self.status(f'Renamed to "{renamed.piece_name}".', Kind.SUCCESS)
                 return
+            if renamed.hidden and not self._show_hidden:
+                self.status(
+                    f'Renamed to "{renamed.name}": a name starting with _ is hidden. _ shows it.',
+                    Kind.SUCCESS,
+                )
+                return
             self.status(
                 f'Renamed to "{renamed.name}". Every story using it sees the name at once.',
                 Kind.SUCCESS,
@@ -641,15 +799,15 @@ class LibraryScreen(View):
             return
         self.run_worker(partial(self._edit, entry, "opening"), exclusive=True)
 
-    async def _edit(self, entry: EntryFull, field: Literal["text", "opening"]) -> None:
+    async def _edit(self, entry: EntryFull, field: Literal["text", "opening"]) -> EntryFull | None:
         """Hands the text to the reader's editor and saves what comes back over the version
-        the editor started from."""
+        the editor started from; the entry as saved, or None when nothing was."""
         before = entry.text if field == "text" else (entry.opening or skeletons.OPENING)
         self.status(f"Waiting for {editor_name()} — save and close to come back.")
         after = self.lustjinn.editor(self.lustjinn, before, f"-{self.kind}.txt")
         if after is None or after.strip() == before.strip():
             self.status("Nothing changed.")
-            return
+            return None
         if field == "text":
             saved = await self._save(entry.id, entry.version, text=after.rstrip() + "\n")
         else:
@@ -663,11 +821,12 @@ class LibraryScreen(View):
                     "Saved. Personas already built from it keep the text they were made with.",
                     Kind.SUCCESS,
                 )
-                return
+                return saved
             self.status(
                 f"Saved. Every story using '{saved.name}' sees the change from its next turn.",
                 Kind.SUCCESS,
             )
+        return saved
 
     async def _save(
         self,
@@ -768,6 +927,48 @@ class LibraryScreen(View):
             )
 
         self.lustjinn.push_screen(PersonaBuilderScreen(built))
+
+    # -- history ---------------------------------------------------------------------------------
+
+    def action_history(self) -> None:
+        """Every saved version of the entry, on its own screen, where one can be put back."""
+        entry = self._shown
+        if self._mode != "list" or entry is None:
+            return
+        if isinstance(entry, PieceEntry):
+            self.status("A piece has no history to show.", Kind.WARNING)
+            return
+        self.lustjinn.push_screen(HistoryScreen(self.shelf, entry, partial(self._put_back, entry)))
+
+    async def _put_back(self, entry: EntryFull, old: Version) -> None:
+        """Saves an old version as a new one over the version the history was opened on: an
+        ordinary save, so a change made elsewhere meanwhile meets the conflict screen."""
+        if isinstance(self.lustjinn.screen, HistoryScreen):
+            self.lustjinn.pop_screen()
+        character = self.shelf == "characters"
+        saved = await self._save(
+            entry.id,
+            entry.version,
+            name=old.name,
+            text=old.text,
+            opening=old.opening if character else None,
+            clear_opening=character,
+            description=old.description,
+            clear_description=True,
+        )
+        if saved is None:
+            return
+        await self._load(False, select=saved.id)
+        if saved.version == entry.version:
+            self.status(f"Version {old.version} says what the current one says: nothing changed.")
+            return
+        reach = (
+            "" if self.shelf == "snippets" else " Every story using it reads it from its next turn."
+        )
+        self.status(
+            f"Version {old.version} is back, saved as version {saved.version}.{reach}",
+            Kind.SUCCESS,
+        )
 
     def action_remove(self) -> None:
         entry = self._shown

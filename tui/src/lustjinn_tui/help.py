@@ -75,7 +75,9 @@ SECTIONS: Final[tuple[Section, ...]] = (
         (
             Row("Tab  /  Enter", "Next field; Enter on the last one creates"),
             Row("← →", "Pick the character, the persona, the model"),
+            Row("Space", "Tick a status line for the story"),
             Row("PgUp PgDn", "Read the card or the persona under the form"),
+            Row("Ctrl+B", "Build a persona from pieces; the story then plays as it"),
             Row("Ctrl+S", "Create the story"),
             Row("Esc", "Cancel; asks first if something was typed"),
         ),
@@ -165,8 +167,33 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row("N  /  F2", "New entry / rename"),
             Row("D  /  B", "Make the persona the default (again to clear) / build one from pieces"),
             Row("V  /  S", "A piece's voice / a name piece's short form"),
+            Row("H", "History: every saved version, and putting one back"),
+            Row("_", "Show the hidden entries, named with a leading _ / put them away"),
             Row("Del", "Remove, after confirming"),
             Row("PgUp PgDn", "Read the text"),
+        ),
+    ),
+    Section(
+        "An entry's history",
+        (
+            Row("↑ ↓", "Choose a version, newest first"),
+            Row("Enter", "Put it back: saved as a new version, after asking"),
+            Row("PgUp PgDn", "Read it"),
+        ),
+    ),
+    Section(
+        "Persona builder",
+        (
+            Row("← →  /  Tab", "Slots / pieces"),
+            Row("Space  /  Enter", "Pick the piece, or take it back"),
+            Row("R", "A piece at random for the row: each slot of a shared row"),
+            Row("F", "Fill every slot still empty at random"),
+            Row("V", "The voice: he, she or they"),
+            Row("N", "Write a new piece; a shared row asks which slot first"),
+            Row("E", "Edit the piece in the library; Esc comes back"),
+            Row("PgUp PgDn", "Read the persona as it will read"),
+            Row("Ctrl+S", "Name the persona and make it"),
+            Row("Esc", "Back; asks first when something is picked"),
         ),
     ),
 )

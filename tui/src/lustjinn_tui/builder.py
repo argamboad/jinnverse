@@ -1,10 +1,15 @@
 """Building a persona from pieces (#157): a voice, one pick per slot, a preview, a name.
 
 Slots down the left, the pool of the selected slot on the right, the persona as it will read
-underneath. ``Space`` picks a piece (or takes it back), ``N`` writes a new one into the slot
-and keeps it in the pool, ``V`` changes the voice, ``R`` picks one at random, ``Ctrl+S`` names
-the persona and makes it. The server joins the pick into the persona's format
-(``src/lustjinn/persona_pieces.py``); this screen only chooses and shows what it answers.
+underneath. Slots that write one paragraph together (home, vehicle, pets) share a row, as on the
+web; each piece's row says what it says, and the highlighted one is read whole under the list.
+``Space`` picks a piece (or takes it back), ``N`` writes a new one into the slot (a shared row
+asks which slot first) and keeps it in the pool, ``V`` changes the voice, ``R`` picks at random
+for the row, ``F`` fills every slot still empty at random, ``Ctrl+S`` names the persona and
+makes it. The caption counts the
+slots picked and the needed ones still empty, as the web's builder does. The server joins the
+pick into the persona's format (``src/lustjinn/persona_pieces.py``); this screen only chooses
+and shows what it answers.
 
 The persona that comes out is an ordinary library persona: the text is copied into it, so
 editing a piece later changes nothing already made. The screen that opened this one is told
@@ -21,6 +26,7 @@ from __future__ import annotations
 import random
 import uuid
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar, Literal, cast
 
@@ -46,7 +52,7 @@ from lustjinn_tui.view import View
 
 VOICES: tuple[Voice, ...] = ("he", "she", "they")
 Pane = Literal["slots", "pieces"]
-Mode = Literal["browse", "label", "full", "short", "name"]
+Mode = Literal["browse", "label", "slot-label", "full", "short", "name"]
 OnBuilt = Callable[[Built], Awaitable[None]]
 
 choose = random.choice
@@ -58,6 +64,47 @@ piece): every persona opens with its name and its look, and a piece that writes 
 name piece. Every other slot is optional."""
 
 
+@dataclass(frozen=True, slots=True)
+class SlotGroup:
+    """A row of the slot list: one slot, or the slots that write one paragraph together (home,
+    vehicle and pets), as the web's checklist groups them."""
+
+    key: str
+    label: str
+    slots: tuple[Slot, ...]
+
+    @property
+    def shared(self) -> bool:
+        return len(self.slots) > 1
+
+
+def group_slots(slots: list[Slot]) -> list[SlotGroup]:
+    """The slots in order, those sharing a paragraph in one row (the web's ``groupSlots``)."""
+    groups: list[SlotGroup] = []
+    for slot in slots:
+        last = groups[-1] if groups else None
+        if slot.paragraph is not None and last and last.slots[0].paragraph == slot.paragraph:
+            groups[-1] = SlotGroup(
+                f"{last.key}+{slot.key}", f"{last.label} · {slot.label}", (*last.slots, slot)
+            )
+        else:
+            groups.append(SlotGroup(slot.key, slot.label, (slot,)))
+    return groups
+
+
+def blurb(piece: Piece) -> str:
+    """What a piece's row says under its name: its description, or the start of its text."""
+    note = (piece.description or "").strip()
+    return note or next((line.strip() for line in piece.text.splitlines() if line.strip()), "")
+
+
+def builder_line(slots: list[Slot], picks: dict[str, list[uuid.UUID]]) -> str:
+    """How far the pick has got, in the web builder's words: ``3 of 12 slots picked · 1 needed``."""
+    picked = sum(1 for slot in slots if picks.get(slot.key))
+    needed = sum(1 for slot in NEEDED if not picks.get(slot))
+    return f"{picked} of {len(slots)} slots picked" + (f" · {needed} needed" if needed else "")
+
+
 class PersonaBuilderScreen(View):
     TITLE = "Build a persona"
     HINTS: ClassVar[tuple[Hint, ...]] = (
@@ -67,6 +114,7 @@ class PersonaBuilderScreen(View):
         Hint("E", "Edit piece"),
         Hint("V", "Voice"),
         Hint("R", "Random"),
+        Hint("F", "Fill the rest"),
         Hint("Ctrl+S", "Make it"),
         Hint("Esc", "Back"),
     )
@@ -84,6 +132,7 @@ class PersonaBuilderScreen(View):
         Binding("e,E", "edit_piece", "Edit the piece", show=False),
         Binding("v,V", "voice", "Voice", show=False),
         Binding("r,R", "random", "Random", show=False),
+        Binding("f,F", "fill", "Fill the rest", show=False),
         Binding("pageup", "page(-1)", "Read up", show=False),
         Binding("pagedown", "page(1)", "Read down", show=False),
         Binding("ctrl+s,ctrl+enter", "make", "Make it", show=False, priority=True),
@@ -94,6 +143,7 @@ class PersonaBuilderScreen(View):
     PersonaBuilderScreen #split { height: 3fr; }
     PersonaBuilderScreen #slots { width: 40%; min-width: 24; padding: 0 1; }
     PersonaBuilderScreen #pieces { width: 1fr; padding: 0 1; }
+    PersonaBuilderScreen #piece-text { color: $muted; height: auto; max-height: 6; }
     PersonaBuilderScreen .pane-title { color: $muted; height: 1; }
     PersonaBuilderScreen .pane-title.active { color: $primary; text-style: bold; }
     PersonaBuilderScreen #field { margin: 0 1; }
@@ -113,6 +163,8 @@ class PersonaBuilderScreen(View):
         self._mode: Mode = "browse"
         self._label = ""
         self._full = ""
+        self._writing: Slot | None = None
+        """The slot a new piece is being written for."""
         self._suggested: str | None = None
         self._preview_text = ""
 
@@ -122,7 +174,7 @@ class PersonaBuilderScreen(View):
         return self.HINTS if self._mode == "browse" else self.TYPING_HINTS
 
     def summary(self) -> str | None:
-        return count(sum(len(ids) for ids in self.picks.values()), "piece") + " picked"
+        return builder_line(self.slots, self.picks) if self.slots else None
 
     def commands(self) -> list[PaletteCommand]:
         return [
@@ -130,6 +182,9 @@ class PersonaBuilderScreen(View):
             PaletteCommand("New piece", "written into the selected slot", self.action_new_piece),
             PaletteCommand("Change the voice", "he, she or they", self.action_voice),
             PaletteCommand("Pick at random", "one piece for the selected slot", self.action_random),
+            PaletteCommand(
+                "Fill the rest at random", "a piece for every slot still empty", self.action_fill
+            ),
         ]
 
     def body(self) -> ComposeResult:
@@ -138,10 +193,11 @@ class PersonaBuilderScreen(View):
         with Horizontal(id="split"):
             with Vertical(id="slots"):
                 yield Static("Slots", classes="pane-title", id="slots-title")
-                yield Rows[Slot](self._slot_row, empty="(reading the slots…)", id="slot-list")
+                yield Rows[SlotGroup](self._slot_row, empty="(reading the slots…)", id="slot-list")
             with Vertical(id="pieces"):
                 yield Static("Pieces", classes="pane-title", id="pieces-title")
                 yield Rows[Piece](self._piece_row, empty="", id="piece-list")
+                yield Static("", id="piece-text")
         yield Input(placeholder="", id="field", compact=True)
         yield Hairline()
         with Vertical(id="preview"), VerticalScroll():
@@ -154,27 +210,29 @@ class PersonaBuilderScreen(View):
 
     def on_mount(self) -> None:
         self.query_one("#field", Input).display = False
+        self.piece_rows.rows_per_item = 2  # the name, then what the piece says
         self._show_caption()
         self._show_panes()
         self.run_worker(self._load, exclusive=True)
 
     @property
-    def slot_rows(self) -> Rows[Slot]:
-        return cast("Rows[Slot]", self.query_one("#slot-list", Rows))
+    def slot_rows(self) -> Rows[SlotGroup]:
+        return cast("Rows[SlotGroup]", self.query_one("#slot-list", Rows))
 
     @property
     def piece_rows(self) -> Rows[Piece]:
         return cast("Rows[Piece]", self.query_one("#piece-list", Rows))
 
     @property
-    def slot(self) -> Slot | None:
+    def group(self) -> SlotGroup | None:
+        """The selected row of the slot list: one slot, or the slots sharing a paragraph."""
         return self.slot_rows.selected
 
     @property
     def piece(self) -> Piece | None:
         return self.piece_rows.selected
 
-    def _active(self) -> Rows[Slot] | Rows[Piece]:
+    def _active(self) -> Rows[SlotGroup] | Rows[Piece]:
         return self.slot_rows if self.pane == "slots" else self.piece_rows
 
     # -- loading and drawing --------------------------------------------------------------------
@@ -186,7 +244,7 @@ class PersonaBuilderScreen(View):
             if slots is None:
                 return
             self.slots = slots
-            self.slot_rows.set_items(slots)
+            self.slot_rows.set_items(group_slots(slots))
         pieces = await self.lustjinn.call("Reading the pieces", api.pieces(voice=self.voice))
         if pieces is None:
             return
@@ -205,9 +263,13 @@ class PersonaBuilderScreen(View):
         await self._preview()
 
     def _show_caption(self) -> None:
+        """How far the pick has got, then the voice: on a wide screen the masthead has no room
+        for the summary, so the caption carries it."""
+        line = builder_line(self.slots, self.picks) if self.slots else ""
         self.query_one("#caption", Static).update(
             Content.from_markup(
-                f"[$muted]Voice[/]  {Content(self.voice).markup}   "
+                (f"[$accent]{Content(line).markup}[/]   " if line else "")
+                + f"[$muted]Voice[/]  {Content(self.voice).markup}   "
                 "[$muted]— pieces written in it, or in none, are offered[/]"
             )
         )
@@ -219,29 +281,51 @@ class PersonaBuilderScreen(View):
         self.piece_rows.refresh()
 
     def _show_pool(self) -> None:
-        slot = self.slot
-        pieces = self.pool.get(slot.key, []) if slot is not None else []
-        empty = "Nothing here yet — N writes the first one." if slot is not None else ""
+        """The pieces of the selected row, slot by slot in a shared row."""
+        group = self.group
+        pieces = [p for slot in group.slots for p in self.pool.get(slot.key, [])] if group else []
+        empty = "Nothing here yet — N writes the first one." if group is not None else ""
         self.piece_rows.set_items(pieces, empty=empty)
         self.query_one("#pieces-title", Static).update(
-            f"Pieces — {slot.label}" if slot is not None else "Pieces"
+            f"Pieces — {group.label}" if group is not None else "Pieces"
         )
         self.slot_rows.refresh()
+        self._show_piece_text()
 
-    def _slot_row(self, slot: Slot, selected: bool, width: int) -> Content:
-        picked = self.picks.get(slot.key, [])
+    def _show_piece_text(self) -> None:
+        """The highlighted piece's whole text under the list, as written ({name}, {short})."""
+        piece = self.piece
+        self.query_one("#piece-text", Static).update(
+            Content(piece.text.strip()) if piece is not None else ""
+        )
+
+    def _slot_row(self, group: SlotGroup, selected: bool, width: int) -> Content:
+        picked = [(slot.key, i) for slot in group.slots for i in self.picks.get(slot.key, [])]
         mark = "✓ " if picked else "  "
-        names = ", ".join(self.name_of(slot.key, i) for i in picked)
-        if not picked and slot.key in NEEDED:
+        names = ", ".join(self.name_of(slot, i) for slot, i in picked)
+        if not picked and any(slot.key in NEEDED for slot in group.slots):
             names = "needed"
-        line = Content(pad(f"{mark}{slot.label}", min(width, 32)) + names).markup
+        elif not picked and group.shared:
+            names = f"one paragraph, up to {len(group.slots)} pieces"
+        line = Content(pad(f"{mark}{group.label}", min(width, 32)) + names).markup
         return self._styled(line, selected and self.pane == "slots", selected)
 
     def _piece_row(self, piece: Piece, selected: bool, width: int) -> Content:
+        """Two rows: the name (and, in a shared row, which slot it writes), then what it says."""
         picked = piece.id in self.picks.get(piece.slot, [])
         voice = "" if piece.voice == "he" or piece.voice == self.voice else f"  ({piece.voice})"
-        line = Content(pad(f"{'✓ ' if picked else '  '}{piece.name}{voice}", width)).markup
-        return self._styled(line, selected and self.pane == "pieces", selected)
+        group = self.group
+        where = ""
+        if group is not None and group.shared:
+            where = next(f"  · {s.label}" for s in group.slots if s.key == piece.slot)
+        head = f"{'✓ ' if picked else '  '}{piece.name}{voice}{where}"
+        name = Content(pad(head, width)).markup
+        under = Content(pad(f"    {blurb(piece)}", width)).markup
+        active = selected and self.pane == "pieces"
+        if active:
+            return Content.from_markup(f"{SELECTION}{name}[/]\n{SELECTION}{under}[/]")
+        first = f"[bold]{name}[/]" if selected else name
+        return Content.from_markup(f"{first}\n[$muted]{under}[/]")
 
     @staticmethod
     def _styled(line: str, active: bool, selected: bool) -> Content:
@@ -306,6 +390,10 @@ class PersonaBuilderScreen(View):
     def _slot_moved(self) -> None:
         self._show_pool()
 
+    @on(Rows.Selected, "#piece-list")
+    def _piece_moved(self) -> None:
+        self._show_piece_text()
+
     # -- picking --------------------------------------------------------------------------------
 
     def action_pick(self) -> None:
@@ -327,19 +415,45 @@ class PersonaBuilderScreen(View):
         self._after_picking()
 
     def action_random(self) -> None:
-        slot = self.slot
-        if self._mode != "browse" or slot is None:
+        """A piece at random for the selected row: for each of its slots in a shared row, as
+        the web's Random does."""
+        group = self.group
+        if self._mode != "browse" or group is None:
             return
-        pieces = self.pool.get(slot.key, [])
-        if not pieces:
-            self.status(f"There is no {slot.label.lower()} piece to pick yet.", Kind.WARNING)
+        chosen = False
+        for slot in group.slots:
+            pieces = self.pool.get(slot.key, [])
+            if pieces:
+                self.picks[slot.key] = [choose(pieces).id]
+                chosen = True
+        if not chosen:
+            self.status(f"There is no {group.label.lower()} piece to pick yet.", Kind.WARNING)
             return
-        self.picks[slot.key] = [choose(pieces).id]
         self._after_picking()
+
+    def action_fill(self) -> None:
+        """A piece at random for every slot still empty, as the web's "Fill the rest at random";
+        what is picked stays picked, and a slot with no piece in this voice stays empty."""
+        if self._mode != "browse" or not self.slots:
+            return
+        filled = 0
+        for slot in self.slots:
+            pieces = self.pool.get(slot.key, [])
+            if self.picks.get(slot.key) or not pieces:
+                continue
+            self.picks[slot.key] = [choose(pieces).id]
+            filled += 1
+        if not filled:
+            self.status("Every slot that has a piece in this voice is picked already.")
+            return
+        self._after_picking()
+        self.status(f"Filled {count(filled, 'empty slot')} at random.", Kind.SUCCESS)
 
     def _after_picking(self) -> None:
         self.slot_rows.refresh()
         self.piece_rows.refresh()
+        self._show_piece_text()
+        self._show_caption()
         self.refresh_summary()
         self.run_worker(self._preview, exclusive=True)
 
@@ -358,6 +472,9 @@ class PersonaBuilderScreen(View):
         self._mode = mode
         field = self.query_one("#field", Input)
         field.value = value
+        # A suggested persona name is replaced by typing; an offered slot is typed after.
+        field.select_on_focus = mode == "name"
+        field.cursor_position = len(value)
         field.placeholder = placeholder
         field.display = True
         field.focus()
@@ -372,12 +489,25 @@ class PersonaBuilderScreen(View):
         self.refresh_hints()
 
     def action_new_piece(self) -> None:
-        slot = self.slot
-        if self._mode != "browse" or slot is None:
+        """A new piece for the selected row. A shared row asks which of its slots first, as
+        the library's Pieces shelf does (``vehicle Royal Enfield``), starting from the slot of
+        the piece under the cursor."""
+        group = self.group
+        if self._mode != "browse" or group is None:
             return
-        if slot.key == "name":
+        slot = group.slots[0]
+        if group.shared:
+            piece = self.piece if self.pane == "pieces" else None
+            keys = ", ".join(s.key for s in group.slots)
+            self._ask(
+                "slot-label",
+                f"its slot ({keys}), then a name for the picker",
+                f"{piece.slot} " if piece is not None else "",
+            )
+        elif slot.key == "name":
             self._ask("full", "the full name, as it opens the persona")
         else:
+            self._writing = slot
             self._ask("label", f"a name for this {slot.label.lower()} piece, for the picker")
 
     def action_edit_piece(self) -> None:
@@ -403,9 +533,12 @@ class PersonaBuilderScreen(View):
             self._stop_asking()
             self.status("Nothing was written.", Kind.WARNING)
             return
-        if mode == "label":
+        if mode == "label" and self._writing is not None:
             self._stop_asking()
-            self.run_worker(partial(self._write_piece, answer), exclusive=True)
+            self.run_worker(partial(self._write_piece, self._writing, answer), exclusive=True)
+        elif mode == "slot-label":
+            self._stop_asking()
+            self._slot_and_label(answer)
         elif mode == "full":
             self._full = answer
             self._ask("short", "the short name the text uses after the first mention")
@@ -413,10 +546,23 @@ class PersonaBuilderScreen(View):
             self._stop_asking()
             self.run_worker(partial(self._add_name, self._full, answer), exclusive=True)
 
-    async def _write_piece(self, label: str) -> None:
-        slot = self.slot
-        if slot is None:
+    def _slot_and_label(self, answer: str) -> None:
+        """``slot name`` for a shared row: the slot must be one of the row's."""
+        group = self.group
+        if group is None:
             return
+        word, _, label = answer.partition(" ")
+        slot = next((s for s in group.slots if s.key == word.lower()), None)
+        if slot is None:
+            keys = ", ".join(s.key for s in group.slots)
+            self.status(f"Start with one of this row's slots: {keys}.", Kind.WARNING)
+            return
+        if not label.strip():
+            self.status("A piece needs a name.", Kind.WARNING)
+            return
+        self.run_worker(partial(self._write_piece, slot, label.strip()), exclusive=True)
+
+    async def _write_piece(self, slot: Slot, label: str) -> None:
         before = skeletons.piece(slot.label.lower(), self.voice)
         self.status(f"Waiting for {editor_name()} — save and close to come back.")
         after = self.lustjinn.editor(self.lustjinn, before, "-piece.txt")

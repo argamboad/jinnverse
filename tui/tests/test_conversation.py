@@ -64,6 +64,22 @@ async def test_the_story_opens_on_its_newest_turn_with_the_header_and_the_cost(
         assert "The door opens. You came, she says." in drawn  # markers gone, prose styled
 
 
+async def test_the_header_names_the_version_of_the_card_the_story_reads(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """As the web's story head has it (#216): always the newest, which is the one read."""
+    elena = server.shelve("characters", "Elena", "You are Elena.")
+    server.revise(elena, text="You are Elena, older.")
+    server.add("Tale", OPENING, character="Elena", character_id=elena["id"])
+    async with app.run_test(size=(100, 30)) as pilot:
+        await open_story(app, pilot)
+        assert header(app).splitlines()[1] == "Elena  ·  card v2  ·  as Me"
+        server.revise(elena, text="Edited on the phone.")
+        await pilot.press("r")
+        await pilot.pause(0.3)
+        assert header(app).splitlines()[1] == "Elena  ·  card v3  ·  as Me"
+
+
 async def test_the_arrows_and_pages_move_and_the_header_follows(
     app: LustjinnApp, server: fake.FakeServer
 ) -> None:

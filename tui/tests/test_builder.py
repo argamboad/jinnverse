@@ -71,7 +71,7 @@ async def test_b_opens_the_builder_on_the_slots_the_server_lists(
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
         assert slot_keys(app)[:3] == ["name", "look", "style"]
-        assert len(slot_keys(app)) == 12
+        assert len(slot_keys(app)) == 10  # twelve slots; home, vehicle and pets share a row
         assert piece_names(app) == ["Allan"]  # the name slot is selected first
         assert built.legend.text.startswith(" ←→ Slots/pieces")
         assert "pick a piece to see the persona" in preview(app)
@@ -90,9 +90,85 @@ async def test_moving_down_the_slots_shows_the_pieces_written_for_each(
         assert piece_names(app) == ["Athletic"]  # hers is written in another voice: not offered
         await pilot.press("down", "down", "down", "down", "down")
         await pilot.pause(0.1)
-        assert screen(app).slot is not None
-        assert screen(app).slot.key == "home"  # type: ignore[union-attr]
-        assert piece_names(app) == ["Penthouse"]
+        group = screen(app).group
+        assert group is not None
+        assert group.key == "home+vehicle+pets"
+        assert piece_names(app) == ["Penthouse", "Royal Enfield", "Lupo"]  # slot by slot
+
+
+async def test_the_slots_sharing_a_paragraph_are_one_row_as_on_the_web(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """Home, vehicle and pets write one paragraph: one row, picked within (#218)."""
+    pool(server)
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        rows = built.slot_rows.render().plain
+        assert "Home · Vehicle · Pets" in rows
+        assert "one paragraph, up to 3 pieces" in rows
+        await pilot.press(*(["down"] * 6), "right", "down", "space")  # Royal Enfield
+        await pilot.pause(0.2)
+        assert [built.name_of("vehicle", i) for i in built.picks["vehicle"]] == ["Royal Enfield"]
+        assert "✓ Home · Vehicle · Pets" in built.slot_rows.render().plain
+        assert "Royal Enfield  · Vehicle" in built.piece_rows.render().plain
+
+
+async def test_a_piece_row_says_what_the_piece_says_and_the_highlighted_one_reads_whole(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    pool(server)
+    server.piece("look", "Lean", "{name} is lean.\nHe runs.", description="Runner build")
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        await pilot.press("down", "right")
+        await pilot.pause(0.2)
+        lines = [line.rstrip() for line in built.piece_rows.render().plain.splitlines()]
+        assert lines == [
+            "  Athletic",
+            "    {name} is an athletic young man.",  # no description: the start of its text
+            "  Lean",
+            "    Runner build",  # its description
+        ]
+        text = built.query_one("#piece-text")
+        assert str(text.render()) == "{name} is an athletic young man."
+        await pilot.press("down")
+        await pilot.pause(0.1)
+        assert str(text.render()) == "{name} is lean.\nHe runs."
+
+
+async def test_r_on_a_shared_row_picks_for_each_of_its_slots(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    pool(server)
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        await pilot.press(*(["down"] * 6), "r")
+        await pilot.pause(0.2)
+        assert sorted(built.picks) == ["home", "pets", "vehicle"]
+
+
+async def test_n_on_a_shared_row_asks_for_the_slot_first(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    pool(server)
+    app.editor = lambda app_, text, suffix: "He drives a pickup."  # type: ignore[method-assign]
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        await pilot.press(*(["down"] * 6), "right", "down", "n")  # on Royal Enfield
+        await pilot.pause()
+        field = built.query_one("#field")
+        assert field.value == "vehicle "  # type: ignore[attr-defined]
+        assert "home, vehicle, pets" in field.placeholder  # type: ignore[attr-defined]
+        await pilot.press(*"Pickup", "enter")
+        await pilot.pause(0.4)
+        assert [p["name"] for p in server.pieces if p["slot"] == "vehicle"] == [
+            "Royal Enfield",
+            "Pickup",
+        ]
+        assert built.status_line.text == "'Pickup' is in the pool, and picked."
+        await pilot.press("n", "ctrl+u", *"garage Big", "enter")
+        await pilot.pause(0.2)
+        assert built.status_line.text == "Start with one of this row's slots: home, vehicle, pets."
 
 
 async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
@@ -107,7 +183,7 @@ async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
         assert preview(app) == (
             "Allan Sanlúcar is an athletic young man.\nAllan lives in a penthouse."
         )
-        assert built.summary() == "3 pieces picked"
+        assert built.summary() == "3 of 12 slots picked"
         rows = built.slot_rows.render().plain
         assert "✓ Identity and look" in rows
         assert "✓ Home" in rows
@@ -169,6 +245,54 @@ async def test_r_picks_one_piece_for_the_slot_at_random(
         await pilot.pause(0.2)
         assert [built.name_of("home", i) for i in built.picks["home"]] == ["Penthouse"]
         assert ids  # the pool was not touched
+
+
+def caption(app: LustjinnApp) -> str:
+    return str(screen(app).query_one("#caption").render())
+
+
+async def test_the_caption_counts_the_slots_picked_and_the_needed_ones_left(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """In the web builder's words (#217)."""
+    pool(server)
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        assert caption(app).startswith("0 of 12 slots picked · 2 needed   Voice  he")
+        await pick_in(pilot, 0)  # the name
+        assert caption(app).startswith("1 of 12 slots picked · 1 needed")
+        await pick_in(pilot, 1)  # the look
+        assert caption(app).startswith("2 of 12 slots picked   Voice")
+        assert built.summary() == "2 of 12 slots picked"
+
+
+async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
+    app: LustjinnApp, server: fake.FakeServer, monkeypatch: object
+) -> None:
+    pool(server)
+    server.piece("home", "Loft", "{short} lives in a loft.")
+    server.piece("look", "Lean", "{name} is lean.")
+    monkeypatch.setattr(builder, "choose", lambda pieces: pieces[-1])  # type: ignore[attr-defined]
+    async with app.run_test(size=(110, 40)) as pilot:
+        built = await open_builder(app, pilot)
+        await pick_in(pilot, 1)  # the look: Athletic, the first; F must leave it
+        await pilot.press("f")
+        await pilot.pause(0.3)
+        chosen = {slot: [built.name_of(slot, i) for i in ids] for slot, ids in built.picks.items()}
+        assert chosen == {
+            "name": ["Allan"],
+            "look": ["Athletic"],  # picked by hand, kept
+            "home": ["Penthouse"],  # the last of Loft and Penthouse, as the fixed choice says
+            "vehicle": ["Royal Enfield"],
+            "pets": ["Lupo"],
+        }  # the slots with no piece in this voice stay empty
+        assert built.status_line.text == "Filled 4 empty slots at random."
+        assert caption(app).startswith("5 of 12 slots picked   Voice")
+        await pilot.press("f")
+        await pilot.pause(0.2)
+        assert built.status_line.text == (
+            "Every slot that has a piece in this voice is picked already."
+        )
 
 
 async def test_n_writes_a_new_piece_in_the_editor_and_picks_it(

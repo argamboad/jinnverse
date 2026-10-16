@@ -85,10 +85,10 @@ async def test_the_shelves_list_their_entries_with_the_text_beside(
         assert screen.shelf == "characters"
 
 
-async def test_n_names_a_new_entry_and_opens_the_editor_on_its_skeleton(
+async def test_n_names_a_new_entry_asks_its_note_and_opens_the_editor_on_its_skeleton(
     app: LustjinnApp, server: fake.FakeServer
 ) -> None:
-    editor = scripted_editor(["You are Sofia. The rest.\n"])
+    editor = scripted_editor(["You are Sofia. The rest.\n"])  # the opening is then left alone
     app.editor = editor
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
@@ -96,13 +96,54 @@ async def test_n_names_a_new_entry_and_opens_the_editor_on_its_skeleton(
         await pilot.pause()
         assert screen.legend.text.startswith(" Enter Create and edit")
         await pilot.press(*"Sofia", "enter")
-        await pilot.pause(0.3)
+        await pilot.pause()
+        assert "optional" in screen.query_one("#name").placeholder  # type: ignore[attr-defined]
+        await pilot.press(*"The dancer", "enter")  # the description, as the web's form asks
+        await pilot.pause(0.4)
         assert names(app) == ["Sofia"]
         assert editor.handed[0].startswith("You are the narrator")  # type: ignore[attr-defined]
-        assert server.library["characters"][0]["text"] == "You are Sofia. The rest.\n"
-        assert server.library["characters"][0]["version"] == 2
-        assert screen.status_line.text.startswith("Saved. Every story using 'Sofia'")
+        assert editor.handed[1].startswith("[ The first message")  # type: ignore[attr-defined]
+        sofia = server.library["characters"][0]
+        assert (sofia["text"], sofia["description"], sofia["opening"]) == (
+            "You are Sofia. The rest.\n",
+            "The dancer",
+            None,
+        )
+        assert sofia["version"] == 2
+        assert screen.status_line.text == "'Sofia' is saved, with no opening yet: O writes one."
         assert "You are Sofia." in prose(app)
+
+
+async def test_a_new_character_writes_its_opening_in_the_same_pass(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    app.editor = scripted_editor(["You are Sofia.\n", "*Sofia waves from the stage.*\n"])
+    async with app.run_test(size=(100, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        await pilot.press("n", *"Sofia", "enter", "enter")  # no description
+        await pilot.pause(0.4)
+        sofia = server.library["characters"][0]
+        assert (sofia["description"], sofia["opening"]) == (
+            None,
+            "*Sofia waves from the stage.*",
+        )
+        assert sofia["version"] == 3
+        assert screen.status_line.text.startswith("Saved. Every story using 'Sofia'")
+
+
+async def test_a_new_persona_has_no_opening_to_write(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    editor = scripted_editor(["A tall man.\n"])
+    app.editor = editor
+    async with app.run_test(size=(100, 30)) as pilot:
+        await open_library(app, pilot)
+        await pilot.press("right")
+        await pilot.pause(0.3)
+        await pilot.press("n", *"Me", "enter", "enter")
+        await pilot.pause(0.4)
+        assert len(editor.handed) == 1  # type: ignore[attr-defined]
+        assert server.library["personas"][0]["text"] == "A tall man.\n"
 
 
 async def test_enter_edits_and_an_unchanged_text_saves_nothing(
