@@ -798,10 +798,14 @@ class Api:
 
     # -- the library ---------------------------------------------------------------------------
 
-    async def entries(self, shelf: Shelf) -> list[Entry]:
+    async def entries(self, shelf: Shelf, *, hidden: bool = False) -> list[Entry]:
+        """The shelf as its list shows it; with ``hidden``, the ``_name`` entries too."""
         if shelf == "pieces":
             return list(await self._piece_entries())
-        return _entries.validate_python(await self._request("GET", f"/library/{shelf}"))
+        params = {"hidden": "true"} if hidden else None
+        return _entries.validate_python(
+            await self._request("GET", f"/library/{shelf}", params=params)
+        )
 
     async def entry(self, shelf: Shelf, entry_id: uuid.UUID) -> EntryFull:
         if shelf == "pieces":

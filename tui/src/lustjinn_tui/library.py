@@ -6,7 +6,8 @@ a line as the web's list has it: the version, how many stories use the entry, an
 the start of its text. ``N`` names a
 new entry and opens it in the editor with a skeleton to fill in; ``Enter`` edits the text,
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
-while a live story uses it, and says which); ``D`` makes a persona the default.
+while a live story uses it, and says which); ``D`` makes a persona the default. A name
+starting with ``_`` is kept but not listed; ``_`` shows those too, and puts them away again.
 
 A save carries the version the editor started from. When the entry moved on in between —
 edited on the phone while the laptop had it open — the API refuses with the entry as it is now,
@@ -68,7 +69,7 @@ def about(entry: Entry, shelf: Shelf) -> str:
     """The line under a name, as the web's list has it: the version, how many stories use the
     entry (a snippet is copied when used, so it says only its version), then the owner's note,
     or the first line of the text when there is none."""
-    parts = [f"v{entry.version}"]
+    parts = ["hidden", f"v{entry.version}"] if entry.hidden else [f"v{entry.version}"]
     if shelf != "snippets":
         parts.append(f"in {count(entry.used, 'story', 'stories')}" if entry.used else "unused")
     note = (entry.description or "").strip() or next(
@@ -155,6 +156,7 @@ class LibraryScreen(View):
         Hint("D", "Default persona"),
         Hint("B", "Build persona"),
         Hint("Del", "Remove"),
+        Hint("_", "Hidden"),
         Hint("PgUp/PgDn", "Read"),
         Hint("Esc", "Back"),
     )
@@ -203,6 +205,7 @@ class LibraryScreen(View):
         Binding("v,V", "voice", "Voice of the piece", show=False),
         Binding("s,S", "short", "Short name", show=False),
         Binding("delete", "remove", "Remove", show=False),
+        Binding("underscore", "hidden", "Hidden entries", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
     ]
 
@@ -226,6 +229,8 @@ class LibraryScreen(View):
         self._default_persona: uuid.UUID | None = None
         self._shown: EntryFull | None = None
         self._counts = Counts()
+        self._show_hidden = False
+        """Whether the shelves list their ``_name`` entries too; kept across shelves."""
 
     # -- the frame ------------------------------------------------------------------------------
 
@@ -238,7 +243,21 @@ class LibraryScreen(View):
             return self.DESCRIBING_HINTS
         if self._mode == "shorting":
             return self.SHORTING_HINTS
-        return self.PIECE_HINTS if self.shelf == "pieces" else self.HINTS
+        if self.shelf == "pieces":
+            return self.PIECE_HINTS
+        return tuple(self._hidden_hint() if hint.key == "_" else hint for hint in self.HINTS)
+
+    def _hidden_hint(self) -> Hint:
+        """The key that shows the ``_name`` entries, with how many there are, as the web puts
+        the count beside its toggle."""
+        if self._show_hidden:
+            return Hint("_", "Put hidden away")
+        hidden = self._hidden_count()
+        return Hint("_", f"Hidden ({hidden})" if hidden else "Hidden")
+
+    def _hidden_count(self) -> int:
+        hidden: int = getattr(self._counts.hidden, self.shelf, 0)
+        return hidden
 
     def summary(self) -> str | None:
         return count(len(self.rows.items), KINDS[self.shelf])
@@ -267,6 +286,9 @@ class LibraryScreen(View):
             PaletteCommand("Change the voice", "of the selected piece", self.action_voice),
             PaletteCommand("Short name", "of the selected name piece", self.action_short),
             PaletteCommand("Remove the entry", "asks first", self.action_remove),
+            PaletteCommand(
+                "Hidden entries", "show or put away names starting with _", self.action_hidden
+            ),
         ]
 
     def body(self) -> ComposeResult:
@@ -303,7 +325,9 @@ class LibraryScreen(View):
 
     async def _load(self, announce: bool, *, select: uuid.UUID | None = None) -> None:
         api = self.lustjinn.api
-        listed = await self.lustjinn.call(f"Reading the {self.shelf}", api.entries(self.shelf))
+        listed = await self.lustjinn.call(
+            f"Reading the {self.shelf}", api.entries(self.shelf, hidden=self._show_hidden)
+        )
         if listed is None:
             return
         if self.shelf == "personas":
@@ -437,6 +461,29 @@ class LibraryScreen(View):
 
     def action_refresh(self) -> None:
         self.run_worker(partial(self._load, True), exclusive=True)
+
+    def action_hidden(self) -> None:
+        """Shows the entries whose name starts with ``_`` — kept, but not listed — or puts them
+        away again. Without it, an entry renamed to ``_x`` here could not be reached here."""
+        if self._mode != "list":
+            return
+        if self.shelf == "pieces":
+            self.status("A piece is never hidden: this shelf shows every one.", Kind.WARNING)
+            return
+        self.run_worker(self._toggle_hidden, exclusive=True)
+
+    async def _toggle_hidden(self) -> None:
+        keep = self.selected.id if self.selected is not None else None
+        self._show_hidden = not self._show_hidden
+        await self._load(False, select=keep)
+        if not self._show_hidden:
+            self.status("Hidden entries put away.")
+            return
+        hidden = self._hidden_count()
+        if hidden:
+            self.status(f"Showing {count(hidden, f'hidden {self.kind}')} too.", Kind.SUCCESS)
+        else:
+            self.status(f"No hidden {self.kind}s: a name starting with _ hides one.")
 
     def action_back(self) -> None:
         if self._mode != "list":
@@ -648,6 +695,12 @@ class LibraryScreen(View):
             await self._load(False, select=renamed.id)
             if isinstance(renamed, PieceEntry):
                 self.status(f'Renamed to "{renamed.piece_name}".', Kind.SUCCESS)
+                return
+            if renamed.hidden and not self._show_hidden:
+                self.status(
+                    f'Renamed to "{renamed.name}": a name starting with _ is hidden. _ shows it.',
+                    Kind.SUCCESS,
+                )
                 return
             self.status(
                 f'Renamed to "{renamed.name}". Every story using it sees the name at once.',

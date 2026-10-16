@@ -215,3 +215,66 @@ async def test_the_new_story_form_shows_the_description_of_the_character_and_the
         persona = app.screen.query_one("#persona-text", Panel).query_one(".caption")
         assert "The innkeeper." in str(world.render())
         assert "The pianist." in str(persona.render())
+
+
+def hidden_hint(app: LustjinnApp) -> str:
+    return next(h.label for h in library(app).hints() if h.key == "_")
+
+
+async def test_underscore_shows_the_hidden_entries_marked_and_puts_them_away(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    """A name starting with `_` is kept but not listed; `_` lists it too (#214)."""
+    server.shelve("characters", "Elena", "You are Elena.")
+    server.shelve("characters", "_template", "A template.")
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        assert [e.name for e in screen.rows.items] == ["Elena"]
+        assert hidden_hint(app) == "Hidden (1)"
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Elena", "_template"]
+        assert "  hidden · v1 · unused · A template." in row_lines(app)
+        assert screen.status_line.text == "Showing 1 hidden character too."
+        assert hidden_hint(app) == "Put hidden away"
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Elena"]
+        assert screen.status_line.text == "Hidden entries put away."
+
+
+async def test_an_entry_renamed_to_underscore_can_be_reached_again(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    server.shelve("personas", "Draft", "Notes towards someone.")
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        await pilot.press("right")
+        await pilot.pause(0.3)
+        await pilot.press("f2", "home", "underscore", "enter")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == []
+        assert screen.status_line.text == (
+            'Renamed to "_Draft": a name starting with _ is hidden. _ shows it.'
+        )
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["_Draft"]
+        await pilot.press("f2", "home", "delete", "enter")
+        await pilot.pause(0.3)
+        await pilot.press("underscore")
+        await pilot.pause(0.3)
+        assert [e.name for e in screen.rows.items] == ["Draft"]
+
+
+async def test_the_pieces_shelf_has_nothing_hidden(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    async with app.run_test(size=(140, 30)) as pilot:
+        screen = await open_library(app, pilot)
+        await pilot.press("left")  # round to the last shelf: the pieces
+        await pilot.pause(0.3)
+        assert screen.shelf == "pieces"
+        await pilot.press("underscore")
+        await pilot.pause()
+        assert screen.status_line.text == "A piece is never hidden: this shelf shows every one."

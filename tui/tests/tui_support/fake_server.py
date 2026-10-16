@@ -547,12 +547,15 @@ class FakeServer:
             return httpx2.Response(404, json={"detail": "There is no such shelf."})
         kind = parts[1][:-1]
         if len(parts) == 2 and request.method == "GET":
+            # A name starting with `_` is kept but listed only when asked for, as the API does.
+            hidden = request.url.params.get("hidden") == "true"
             summaries = [
                 {
                     **{k: v for k, v in e.items() if k not in {"text", "opening", "used_by"}},
                     "used": len(self._users(parts[1], e)),
                 }
                 for e in shelf
+                if hidden or not e["name"].startswith("_")
             ]
             return httpx2.Response(200, json=summaries)
         if len(parts) == 2 and request.method == "POST":
@@ -597,6 +600,7 @@ class FakeServer:
             if changed:
                 found["version"] += 1
                 found["preview"] = found["text"][:200]
+                found["hidden"] = found["name"].startswith("_")
             return httpx2.Response(200, json=found)
         if len(parts) == 3 and request.method == "DELETE":
             users = self._users(parts[1], found)
