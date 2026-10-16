@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
+	import LibraryRail from '#lib/LibraryRail.svelte';
 	import Sheet from '#lib/Sheet.svelte';
 	import {
 		api,
@@ -13,6 +14,7 @@
 		type Voice
 	} from '#lib/api.ts';
 	import { pieceBlurb } from '#lib/library.ts';
+	import { Media } from '#lib/media.svelte.ts';
 	import {
 		VOICES,
 		builderLine,
@@ -31,6 +33,7 @@
 	 * and the persona as the server joins it, one tap away. */
 	/** Where to go once the persona is made: back to the new-story form when it came from there. */
 	const then = $derived(page.url.searchParams.get('then'));
+	const wide = new Media('(min-width: 900px)');
 
 	let voice = $state<Voice>('he');
 	let slots = $state<Slot[]>([]);
@@ -292,117 +295,121 @@
 	}
 </script>
 
-<div class="screen">
-	<AppBar
-		title="Build a persona"
-		sub={loaded ? builderLine(slots, picks) : undefined}
-		back={then === 'new' ? '/new' : '/library'}
-	>
-		{#snippet actions()}
-			<button type="button" class="pill" onclick={randomAll}>Fill the rest at random</button>
-		{/snippet}
-	</AppBar>
-	<div class="controls">
-		<div class="seg" role="radiogroup" aria-label="Voice">
-			{#each VOICES as v (v.id)}
-				<button
-					type="button"
-					role="radio"
-					aria-checked={voice === v.id}
-					onclick={() => changeVoice(v.id)}>{v.label}</button
-				>
-			{/each}
-		</div>
-		<div class="seg" role="tablist" aria-label="View">
-			<button
-				type="button"
-				role="tab"
-				aria-selected={view === 'slots'}
-				onclick={() => (view = 'slots')}>Slots</button
-			>
-			<button
-				type="button"
-				role="tab"
-				aria-selected={view === 'read'}
-				onclick={() => (view = 'read')}>Read it</button
-			>
-		</div>
-	</div>
-	<main>
-		{#if !loaded}
-			<p class="muted">Reading the pieces…</p>
-		{:else if view === 'read'}
-			{#if previewError}
-				<p class="muted">{previewError}</p>
-			{:else if preview}
-				<p class="prose persona">{preview.text}</p>
-			{:else}
-				<p class="muted">Pick a piece to see the persona.</p>
-			{/if}
-		{:else}
-			{#each groups as g (g.key)}
-				{@const chosen = pickedIn(g)}
-				<div class="row">
+<div class="outer" class:wide={wide.current}>
+	{#if wide.current}<LibraryRail shelf="personas" />{/if}
+	<div class="screen">
+		<AppBar
+			sections={!wide.current}
+			title="Build a persona"
+			sub={loaded ? builderLine(slots, picks) : undefined}
+			back={then === 'new' ? '/new' : '/library'}
+		>
+			{#snippet actions()}
+				<button type="button" class="pill" onclick={randomAll}>Fill the rest at random</button>
+			{/snippet}
+		</AppBar>
+		<div class="controls">
+			<div class="seg" role="radiogroup" aria-label="Voice">
+				{#each VOICES as v (v.id)}
 					<button
 						type="button"
-						class="open"
-						aria-haspopup="dialog"
-						aria-label="{g.label}: {chosen.length
-							? chosen.map((p) => p.name).join(', ')
-							: 'nothing picked'}"
-						onclick={() => openRow(g)}
+						role="radio"
+						aria-checked={voice === v.id}
+						onclick={() => changeVoice(v.id)}>{v.label}</button
 					>
-						<span class="what">
-							<span
-								class="label"
-								class:picked={chosen.length > 0}
-								class:needed={!chosen.length && neededIn(g)}>{g.label}</span
-							>
-							{#if chosen.length}
-								<span class="value">{chosen.map((p) => p.name).join(', ')}</span>
-							{:else}
-								<span class="value muted"
-									>{g.slots.length > 1
-										? `One paragraph, up to ${g.slots.length} pieces`
-										: 'Pick one, or leave it'}</span
-								>
-							{/if}
-						</span>
-						<span class="chev" aria-hidden="true">›</span>
-					</button>
-					<button type="button" class="random" onclick={() => randomRow(g)}>Random</button>
-				</div>
-			{/each}
-		{/if}
-	</main>
-	<footer class="foot">
-		{#if renaming}
-			<input
-				class="input"
-				type="text"
-				aria-label="Library name"
-				bind:value={libraryName}
-				maxlength="200"
-				placeholder={preview?.name ?? 'from the name piece'}
-				onblur={() => (renaming = false)}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === 'Escape') renaming = false;
-				}}
-			/>
-		{:else}
-			<span class="shelved">
-				<span class="muted small">Will be shelved as</span>
-				<span class="name"
-					><span class="mono">{shelvedAs ?? 'the name piece'}</span>
-					<button type="button" class="change" onclick={() => (renaming = true)}>change</button
-					></span
+				{/each}
+			</div>
+			<div class="seg" role="tablist" aria-label="View">
+				<button
+					type="button"
+					role="tab"
+					aria-selected={view === 'slots'}
+					onclick={() => (view = 'slots')}>Slots</button
 				>
-			</span>
-		{/if}
-		<button class="btn primary" type="button" onclick={make} disabled={busy}>
-			{busy ? 'Making…' : 'Make persona'}
-		</button>
-	</footer>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={view === 'read'}
+					onclick={() => (view = 'read')}>Read it</button
+				>
+			</div>
+		</div>
+		<main>
+			{#if !loaded}
+				<p class="muted">Reading the pieces…</p>
+			{:else if view === 'read'}
+				{#if previewError}
+					<p class="muted">{previewError}</p>
+				{:else if preview}
+					<p class="prose persona">{preview.text}</p>
+				{:else}
+					<p class="muted">Pick a piece to see the persona.</p>
+				{/if}
+			{:else}
+				{#each groups as g (g.key)}
+					{@const chosen = pickedIn(g)}
+					<div class="row">
+						<button
+							type="button"
+							class="open"
+							aria-haspopup="dialog"
+							aria-label="{g.label}: {chosen.length
+								? chosen.map((p) => p.name).join(', ')
+								: 'nothing picked'}"
+							onclick={() => openRow(g)}
+						>
+							<span class="what">
+								<span
+									class="label"
+									class:picked={chosen.length > 0}
+									class:needed={!chosen.length && neededIn(g)}>{g.label}</span
+								>
+								{#if chosen.length}
+									<span class="value">{chosen.map((p) => p.name).join(', ')}</span>
+								{:else}
+									<span class="value muted"
+										>{g.slots.length > 1
+											? `One paragraph, up to ${g.slots.length} pieces`
+											: 'Pick one, or leave it'}</span
+									>
+								{/if}
+							</span>
+							<span class="chev" aria-hidden="true">›</span>
+						</button>
+						<button type="button" class="random" onclick={() => randomRow(g)}>Random</button>
+					</div>
+				{/each}
+			{/if}
+		</main>
+		<footer class="foot">
+			{#if renaming}
+				<input
+					class="input"
+					type="text"
+					aria-label="Library name"
+					bind:value={libraryName}
+					maxlength="200"
+					placeholder={preview?.name ?? 'from the name piece'}
+					onblur={() => (renaming = false)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === 'Escape') renaming = false;
+					}}
+				/>
+			{:else}
+				<span class="shelved">
+					<span class="muted small">Will be shelved as</span>
+					<span class="name"
+						><span class="mono">{shelvedAs ?? 'the name piece'}</span>
+						<button type="button" class="change" onclick={() => (renaming = true)}>change</button
+						></span
+					>
+				</span>
+			{/if}
+			<button class="btn primary" type="button" onclick={make} disabled={busy}>
+				{busy ? 'Making…' : 'Make persona'}
+			</button>
+		</footer>
+	</div>
 </div>
 
 <Sheet
@@ -517,7 +524,29 @@
 </Sheet>
 
 <style>
+	/* From 900 px the library's rail sits beside this screen, as it does beside the editor. */
+	.outer {
+		height: 100%;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.outer.wide {
+		grid-template-columns: 340px minmax(0, 1fr);
+	}
+	/* Beside the rail the screen is the pane, not the centred 860 px frame of a lone wide screen. */
+	.outer.wide .screen {
+		max-width: none;
+		margin-inline: 0;
+	}
+	.outer.wide .controls,
+	.outer.wide main,
+	.outer.wide .foot {
+		margin: 0;
+		max-width: 760px;
+		padding-inline: 24px;
+	}
 	.screen {
+		min-height: 0;
 		height: 100%;
 		display: flex;
 		flex-direction: column;

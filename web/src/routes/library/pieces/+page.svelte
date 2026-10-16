@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
+	import LibraryRail from '#lib/LibraryRail.svelte';
 	import { api, type Piece, type Slot } from '#lib/api.ts';
 	import { pieceBlurb, piecesSummary } from '#lib/library.ts';
+	import { Media } from '#lib/media.svelte.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	/** The pool of persona pieces, by slot: what a persona is built from. Reached from the
 	 * Personas shelf; a piece opens in its own editor. */
+	const wide = new Media('(min-width: 900px)');
+
 	let pieces = $state<Piece[] | null>(null);
 	let slots = $state<Slot[]>([]);
 
@@ -29,45 +33,72 @@
 	});
 </script>
 
-<div class="screen">
-	<AppBar title="Pieces" sub={pieces?.length ? piecesSummary(pieces) : undefined} back="/library">
-		{#snippet actions()}
-			<a class="btn primary small" href="/library/pieces/new">+ New piece</a>
-		{/snippet}
-	</AppBar>
-	<main class="list">
-		{#if pieces === null}
-			<p class="muted center">Reading the pieces…</p>
-		{:else if pieces.length === 0}
-			<div class="empty">
-				<p class="muted">
-					No pieces yet. A piece is one paragraph of a persona — a look, a home, a pet — and a
-					persona is built by picking one for each.
-				</p>
-				<a class="btn primary" href="/library/pieces/new">Write the first piece</a>
-			</div>
-		{:else}
-			{#each groups as group (group.slot.key)}
-				<div class="slot">
-					<h2>{group.slot.label} <span>{group.items.length}</span></h2>
-					{#each group.items as piece (piece.id)}
-						{@const shown = pieceBlurb(piece)}
-						<a class="row" href="/library/pieces/{piece.id}">
-							<span class="text">
-								<span class="name">{piece.name}</span>
-								<span class="preview" class:prose={!shown.note}>{shown.text}</span>
-							</span>
-							<span class="voice">{piece.voice}</span>
-						</a>
-					{/each}
+<div class="outer" class:wide={wide.current}>
+	{#if wide.current}<LibraryRail shelf="personas" />{/if}
+	<div class="screen">
+		<AppBar
+			sections={!wide.current}
+			title="Pieces"
+			sub={pieces?.length ? piecesSummary(pieces) : undefined}
+			back="/library"
+		>
+			{#snippet actions()}
+				<a class="btn primary small" href="/library/pieces/new">+ New piece</a>
+			{/snippet}
+		</AppBar>
+		<main class="list">
+			{#if pieces === null}
+				<p class="muted center">Reading the pieces…</p>
+			{:else if pieces.length === 0}
+				<div class="empty">
+					<p class="muted">
+						No pieces yet. A piece is one paragraph of a persona — a look, a home, a pet — and a
+						persona is built by picking one for each.
+					</p>
+					<a class="btn primary" href="/library/pieces/new">Write the first piece</a>
 				</div>
-			{/each}
-		{/if}
-	</main>
+			{:else}
+				{#each groups as group (group.slot.key)}
+					<div class="slot">
+						<h2>{group.slot.label} <span>{group.items.length}</span></h2>
+						{#each group.items as piece (piece.id)}
+							{@const shown = pieceBlurb(piece)}
+							<a class="row" href="/library/pieces/{piece.id}">
+								<span class="text">
+									<span class="name">{piece.name}</span>
+									<span class="preview" class:prose={!shown.note}>{shown.text}</span>
+								</span>
+								<span class="voice">{piece.voice}</span>
+							</a>
+						{/each}
+					</div>
+				{/each}
+			{/if}
+		</main>
+	</div>
 </div>
 
 <style>
+	/* From 900 px the library's rail sits beside this screen, as it does beside the editor. */
+	.outer {
+		height: 100%;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.outer.wide {
+		grid-template-columns: 340px minmax(0, 1fr);
+	}
+	/* Beside the rail the screen is the pane, not the centred 860 px frame of a lone wide screen. */
+	.outer.wide .screen {
+		max-width: none;
+		margin-inline: 0;
+	}
+	.outer.wide .list {
+		max-width: 760px;
+		padding-inline: 24px;
+	}
 	.screen {
+		min-height: 0;
 		height: 100%;
 		display: flex;
 		flex-direction: column;
