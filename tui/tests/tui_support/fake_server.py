@@ -96,6 +96,8 @@ class FakeServer:
             "snippets": [],
         }
         self.default_persona: dict[str, Any] | None = None
+        self.history: dict[str, list[dict[str, Any]]] = {}
+        """Every saved version of an entry, by its id, oldest first, as `library_history`."""
         self.pieces: list[dict[str, Any]] = []
         self.pack: list[dict[str, Any]] = [
             {
@@ -292,7 +294,31 @@ class FakeServer:
     ) -> dict[str, Any]:
         added = entry(name, text, opening, description)
         self.library[shelf].append(added)
+        self._remember(added)
         return added
+
+    def revise(self, found: dict[str, Any], **changes: Any) -> dict[str, Any]:
+        """A save made elsewhere: the entry moves to its next version, and its history too."""
+        found.update(changes)
+        found["version"] += 1
+        found["preview"] = found["text"][:200]
+        found["hidden"] = found["name"].startswith("_")
+        self._remember(found)
+        return found
+
+    def _remember(self, found: dict[str, Any]) -> None:
+        self.history.setdefault(found["id"], []).append(
+            {
+                "version": found["version"],
+                "name": found["name"],
+                "text": found["text"],
+                "opening": found.get("opening"),
+                "description": found.get("description"),
+                "saved_at": (
+                    datetime(2026, 10, 1, 9, tzinfo=UTC) + timedelta(hours=found["version"])
+                ).isoformat(),
+            }
+        )
 
     def piece(
         self,
@@ -601,7 +627,10 @@ class FakeServer:
                 found["version"] += 1
                 found["preview"] = found["text"][:200]
                 found["hidden"] = found["name"].startswith("_")
+                self._remember(found)
             return httpx2.Response(200, json=found)
+        if parts[3:] == ["history"] and request.method == "GET":
+            return httpx2.Response(200, json=list(reversed(self.history.get(found["id"], []))))
         if len(parts) == 3 and request.method == "DELETE":
             users = self._users(parts[1], found)
             if users:

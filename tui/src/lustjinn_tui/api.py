@@ -155,6 +155,17 @@ class EntryFull(Entry):
     used_by: list[str] = Field(default_factory=list[str])
 
 
+class Version(BaseModel):
+    """One saved version of an entry, as its history keeps it."""
+
+    version: int
+    name: str
+    text: str
+    opening: str | None = None
+    description: str | None = None
+    saved_at: datetime
+
+
 class Defaults(BaseModel):
     default_persona_id: uuid.UUID | None = None
     default_persona_name: str | None = None
@@ -516,6 +527,7 @@ Event = Delta | TurnDone | AsideDone | Said | Failed
 
 _stories = TypeAdapter(list[Story])
 _entries = TypeAdapter(list[Entry])
+_versions = TypeAdapter(list[Version])
 _slots = TypeAdapter(list[Slot])
 _pieces = TypeAdapter(list[Piece])
 _facts = TypeAdapter(list[Fact])
@@ -814,6 +826,12 @@ class Api:
                 raise ApiError(404, "There is no piece with that id.")
             return found
         return EntryFull.model_validate(await self._request("GET", f"/library/{shelf}/{entry_id}"))
+
+    async def history(self, shelf: Shelf, entry_id: uuid.UUID) -> list[Version]:
+        """Every version of an entry ever saved, newest first."""
+        return _versions.validate_python(
+            await self._request("GET", f"/library/{shelf}/{entry_id}/history")
+        )
 
     async def _piece_entries(self) -> list[PieceEntry]:
         """The pool as library entries, in the persona's slot order and then by name."""

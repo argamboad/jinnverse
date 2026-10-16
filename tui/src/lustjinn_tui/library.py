@@ -8,6 +8,7 @@ new entry and opens it in the editor with a skeleton to fill in; ``Enter`` edits
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
 while a live story uses it, and says which); ``D`` makes a persona the default. A name
 starting with ``_`` is kept but not listed; ``_`` shows those too, and puts them away again.
+``H`` opens the entry's history (``history.py``), where an old version can be put back.
 
 A save carries the version the editor started from. When the entry moved on in between —
 edited on the phone while the laptop had it open — the API refuses with the entry as it is now,
@@ -40,12 +41,14 @@ from lustjinn_tui.api import (
     PieceEntry,
     Shelf,
     UnreachableError,
+    Version,
     Voice,
 )
 from lustjinn_tui.builder import PersonaBuilderScreen
 from lustjinn_tui.confirm import ConfirmScreen
 from lustjinn_tui.editor import editor_name
 from lustjinn_tui.hairline import Hairline
+from lustjinn_tui.history import HistoryScreen
 from lustjinn_tui.legend import Hint
 from lustjinn_tui.listing import Rows
 from lustjinn_tui.palette import PaletteCommand
@@ -156,6 +159,7 @@ class LibraryScreen(View):
         Hint("D", "Default persona"),
         Hint("B", "Build persona"),
         Hint("Del", "Remove"),
+        Hint("H", "History"),
         Hint("_", "Hidden"),
         Hint("PgUp/PgDn", "Read"),
         Hint("Esc", "Back"),
@@ -206,6 +210,7 @@ class LibraryScreen(View):
         Binding("s,S", "short", "Short name", show=False),
         Binding("delete", "remove", "Remove", show=False),
         Binding("underscore", "hidden", "Hidden entries", show=False),
+        Binding("h,H", "history", "History", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
     ]
 
@@ -288,6 +293,9 @@ class LibraryScreen(View):
             PaletteCommand("Remove the entry", "asks first", self.action_remove),
             PaletteCommand(
                 "Hidden entries", "show or put away names starting with _", self.action_hidden
+            ),
+            PaletteCommand(
+                "History", "every saved version; put an old one back", self.action_history
             ),
         ]
 
@@ -851,6 +859,48 @@ class LibraryScreen(View):
             )
 
         self.lustjinn.push_screen(PersonaBuilderScreen(built))
+
+    # -- history ---------------------------------------------------------------------------------
+
+    def action_history(self) -> None:
+        """Every saved version of the entry, on its own screen, where one can be put back."""
+        entry = self._shown
+        if self._mode != "list" or entry is None:
+            return
+        if isinstance(entry, PieceEntry):
+            self.status("A piece has no history to show.", Kind.WARNING)
+            return
+        self.lustjinn.push_screen(HistoryScreen(self.shelf, entry, partial(self._put_back, entry)))
+
+    async def _put_back(self, entry: EntryFull, old: Version) -> None:
+        """Saves an old version as a new one over the version the history was opened on: an
+        ordinary save, so a change made elsewhere meanwhile meets the conflict screen."""
+        if isinstance(self.lustjinn.screen, HistoryScreen):
+            self.lustjinn.pop_screen()
+        character = self.shelf == "characters"
+        saved = await self._save(
+            entry.id,
+            entry.version,
+            name=old.name,
+            text=old.text,
+            opening=old.opening if character else None,
+            clear_opening=character,
+            description=old.description,
+            clear_description=True,
+        )
+        if saved is None:
+            return
+        await self._load(False, select=saved.id)
+        if saved.version == entry.version:
+            self.status(f"Version {old.version} says what the current one says: nothing changed.")
+            return
+        reach = (
+            "" if self.shelf == "snippets" else " Every story using it reads it from its next turn."
+        )
+        self.status(
+            f"Version {old.version} is back, saved as version {saved.version}.{reach}",
+            Kind.SUCCESS,
+        )
 
     def action_remove(self) -> None:
         entry = self._shown
