@@ -446,3 +446,63 @@ frame fold.
 
 **The roadmap ends here.** Two clients, one API, a memory that does not forget. What comes next
 is the owner's to choose: the cloud, when it is wanted, is described in `docs/DEPLOYMENT.md`.
+
+## Postscript: a loop that outlives its widgets
+
+Step 18 was one flaky test. In a full run, `test_the_lamp_says_intercepted_instead_of_asleep`
+failed once with `NoMatches: No nodes match '#elapsed'`, and passed every time on its own. The
+waking screen's worker was the cause, and the way it went wrong is worth knowing about any loop
+that runs in the background of a screen.
+
+The worker knocks on `/health`, waits, then draws how long it has waited. Each `await` is a
+point where the rest of the app moves on without it. When the app closes, Textual takes the
+screen apart in an order: **first the widgets inside it, then the screen itself**, and only that
+last step cancels the screen's workers. A knock that wakes in between still runs, finds no
+`#elapsed` to draw on, and the worker fails. In a test that means a red run: the test was
+already over, and a worker failed while the app closed.
+
+The fix is two guards, one for each half of the problem:
+
+```python
+await asyncio.wait_for(self._now.wait(), wait)
+if not self.is_attached:      # the app is closing: nothing left to knock for
+    return
+self._show_elapsed()          # draws through _draw, below
+
+def _draw(self, selector: str, text: str) -> None:
+    for line in self.query(selector).results(Static):   # zero or one; never raises
+        line.update(text)
+```
+
+`is_attached` turns false the moment the app starts closing, so the loop ends at its next
+`await`. `query(...)` returns what it finds, possibly nothing, where `query_one` insists, so a
+line removed early is skipped rather than fatal. Either guard alone leaves a gap: the first
+doesn't cover a screen being removed while the app stays open, and the second would let a dead
+screen go on knocking until it is cancelled.
+
+The test makes the moment happen on purpose instead of waiting for the timing to line up. It
+removes the lamp's lines by hand while the loop runs, then checks the worker is still running:
+
+```python
+for selector in ("#lamp", "#why", "#elapsed"):
+    await screen.query_one(selector).remove()
+await pilot.pause(0.2)  # several knocks, each of which used to draw
+assert [w.state for w in knocking] == [WorkerState.RUNNING]
+```
+
+Before the fix it failed every time with the same `NoMatches`. A flaky test is usually a
+deterministic bug with a timing-dependent trigger: find the state the timing produces, and
+produce that state directly.
+
+The same worker had a second, quieter version of the problem, the one the warning under
+*Workers: a stream without a thread* describes: it was started with `self._knock()`, a coroutine, rather than `self._knock`. A
+coroutine cancelled before it starts warns that it was never awaited, and this repo's pytest
+treats that warning as an error. It is started from the method now.
+
+::: dotnet
+The .NET shape of this bug is a `BackgroundService` whose `ExecuteAsync` touches a disposed
+service after `StopAsync` began, or a WPF `Dispatcher.InvokeAsync` that lands on a window
+already closed. The cures are the same: honour the stop signal at every `await` (in .NET,
+`stoppingToken.IsCancellationRequested`; here `is_attached`), and don't assume a control still
+exists because it existed before the `await`.
+:::
