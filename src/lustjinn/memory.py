@@ -59,6 +59,13 @@ ROOM_FOR_THE_REPLY = 200
 SUMMARY_TEMPERATURE = 0.3
 """A creative summariser invents history the character then believes."""
 SUMMARY_MAX_TOKENS = 1200
+"""All of it for the summary: the summariser is asked not to think (#226). Left to think, the
+default model spent up to 1,120 of these tokens on it, and 47 of 81 summaries on staging stopped
+here, cut off mid-sentence."""
+SUMMARY_WORDS = 500
+"""The length asked for after the transcript. "Be brief" alone was not heeded: ten turns of a real
+story came back as 1,200 tokens of headed report and still ran out. Asked for 500 words, the same
+stretches came back in 400 to 800 tokens."""
 
 SUMMARY_INSTRUCTION = (
     "You are compressing part of a roleplay transcript so it can be carried forward once the "
@@ -79,6 +86,16 @@ def transcript(turns: Sequence[Message], story: Story, persona: Persona | None) 
     the reader named by their persona."""
     who = {"assistant": story.character.name, "user": reader_name(persona), "system": "Note"}
     return "\n\n".join(f"{who[turn.role.value]}: {turn.text}" for turn in turns)
+
+
+def stretch_to_summarise(turns: Sequence[Message], story: Story, persona: Persona | None) -> str:
+    """The stretch as the summariser is sent it: the transcript, then the task said again with its
+    length. The last thing a model reads is what it acts on."""
+    return (
+        f"{transcript(turns, story, persona)}\n\n"
+        "Write the factual account of this transcript now, as instructed. "
+        f"Use at most {SUMMARY_WORDS} words."
+    )
 
 
 async def summaries_of(session: AsyncSession, story_id: uuid.UUID) -> list[Summary]:
@@ -147,28 +164,36 @@ async def summarise(
     persona: Persona | None,
     batch: Sequence[Message],
 ) -> Summary | None:
-    """Compresses `batch` into one summary row. None when the model's answer was refused.
+    """Compresses `batch` into one summary row. None when the model's answer was refused: cut off
+    at the ceiling, or too short to account for the stretch.
 
     The ledger row is written before the answer is judged: a refused summary was still billed.
     """
     messages = [
         ChatMessage("system", SUMMARY_INSTRUCTION),
-        ChatMessage("user", transcript(batch, story, persona)),
+        ChatMessage("user", stretch_to_summarise(batch, story, persona)),
     ]
 
     async def call() -> Reply:
-        # Never a reasoning flag here: the field is for replies, and a model that cannot switch
-        # it off refuses the whole call.
+        # Thinking off, as on replies: thinking counts against the ceiling, and a summary that
+        # thought first was stored cut off (#226). A background model that cannot switch it off
+        # refuses the call; the default can.
         return await openrouter.complete(
             messages,
             model=settings.background_model or settings.model,
             temperature=SUMMARY_TEMPERATURE,
             max_tokens=SUMMARY_MAX_TOKENS,
+            reasoning=False,
         )
 
     reply = await background.once_more_if_worth_it(call)
     session.add(ledger.row(story.id, SpendKind.SUMMARY, reply))
     text = reply.text.strip()
+    if reply.truncated:
+        # A summary that stopped at the ceiling lost its end, and nothing in what is left says so.
+        log.warning("summary refused: cut off at the %d-token ceiling", SUMMARY_MAX_TOKENS)
+        await session.commit()
+        return None
     if not credible(text, batch):
         log.warning("summary refused: %d tokens for %d turns", tokens.count(text), len(batch))
         await session.commit()
