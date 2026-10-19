@@ -271,6 +271,10 @@ class FakeServer:
         ]
         self.reroll_bodies: list[dict[str, Any]] = []
         self.spend: dict[str, tuple[str, str]] = {}  # story id -> (cost, discarded)
+        self.proposals: dict[str, list[dict[str, Any]]] = {}  # story id -> a review's answer
+        self.review_estimate: str | None = "0.0031"
+        self.applied: list[list[dict[str, Any]]] = []  # every confirmed set sent back
+        self.summaries: dict[str, list[tuple[int, int, int]]] = {}  # id -> (from, to, tokens)
 
     # -- scripting ------------------------------------------------------------------------------
 
@@ -411,6 +415,62 @@ class FakeServer:
     def _listed(found: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in found.items() if k != "messages"}
 
+    def _review(
+        self, found: dict[str, Any], parts: list[str], request: httpx2.Request
+    ) -> httpx2.Response:
+        """``POST …/facts/review`` (``dry_run`` for the estimate) and ``…/review/apply``."""
+        if request.method != "POST":
+            return httpx2.Response(405, json={"detail": "POST only."})
+        if len(parts) == 5 and parts[4] == "apply":
+            confirmed: list[dict[str, Any]] = json.loads(request.content)
+            self.applied.append(confirmed)
+            retired = sum(len(p["fact_ids"]) for p in confirmed)
+            added = sum(1 for p in confirmed if p.get("text"))
+            return httpx2.Response(200, json={"retired": retired, "added": added})
+        estimate = {
+            "estimated_cost": self.review_estimate,
+            "based_on": 3 if self.review_estimate is not None else 0,
+        }
+        if request.url.params.get("dry_run") == "true":
+            return httpx2.Response(
+                200, json={"dry_run": True, "proposals": [], "skipped": 0, **estimate}
+            )
+        return httpx2.Response(
+            200,
+            json={
+                "dry_run": False,
+                "proposals": self.proposals.get(found["id"], []),
+                "skipped": 0,
+                "cost": "0.0029",
+                **estimate,
+            },
+        )
+
+    def _condense(self, found: dict[str, Any], request: httpx2.Request) -> httpx2.Response:
+        """``POST …/memory/condense``: the oldest ``count`` summaries, or all but the newest."""
+        rows = self.summaries.get(found["id"], [])
+        count = request.url.params.get("count")
+        wanted = len(rows) - 1 if count is None else int(count)
+        chosen = rows[:wanted]
+        if len(chosen) < 2:
+            return httpx2.Response(
+                409, json={"detail": "This story has fewer than two summaries to merge."}
+            )
+        plan = {
+            "summaries": len(chosen),
+            "from_sequence": chosen[0][0],
+            "to_sequence": chosen[-1][1],
+            "tokens_before": sum(tokens for _, _, tokens in chosen),
+            "estimated_cost": "0.0003",
+            "based_on": 7,
+        }
+        if request.url.params.get("dry_run") == "true":
+            return httpx2.Response(200, json={"dry_run": True, "tokens_after": None, **plan})
+        self.summaries[found["id"]] = [(chosen[0][0], chosen[-1][1], 1058), *rows[len(chosen) :]]
+        return httpx2.Response(
+            200, json={"dry_run": False, "tokens_after": 1058, "cost": "0.0004", **plan}
+        )
+
     def _stories(self, parts: list[str], request: httpx2.Request) -> httpx2.Response:
         if len(parts) == 1 and request.method == "GET":
             ordered = sorted(
@@ -454,6 +514,10 @@ class FakeServer:
             }
             self.facts.setdefault(found["id"], []).append(fact)
             return httpx2.Response(201, json=fact)
+        if len(parts) >= 4 and parts[2] == "facts" and parts[3] == "review":
+            return self._review(found, parts, request)
+        if len(parts) == 4 and parts[2] == "memory" and parts[3] == "condense":
+            return self._condense(found, request)
         if len(parts) == 3 and parts[2] == "trackers" and request.method == "GET":
             return httpx2.Response(200, json=self.trackers.get(found["id"], []))
         if len(parts) == 3 and parts[2] == "audit":

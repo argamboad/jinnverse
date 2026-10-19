@@ -81,6 +81,20 @@ LOCAL: Final[tuple[Spec, ...]] = (
         cost="free",
     ),
     Spec(
+        name="review",
+        usage="/review",
+        summary="Have the model propose facts to retire, rewrite or merge; you confirm each",
+        cost="billed",
+        needs_argument=False,
+    ),
+    Spec(
+        name="condense",
+        usage="/condense [count]",
+        summary="Merge the oldest summaries into one shorter account; asks first",
+        cost="billed",
+        needs_argument=False,
+    ),
+    Spec(
         name="help",
         usage="/help",
         summary="Every command, with what each one costs",
@@ -300,6 +314,8 @@ KIND_NAMES: Final[dict[str, str]] = {
     "aside": "questions",
     "summary": "compression",
     "facts": "extraction",
+    "review": "fact reviews",
+    "condense": "condensing",
 }
 
 

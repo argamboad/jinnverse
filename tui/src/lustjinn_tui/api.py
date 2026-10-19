@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 import ssl
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
@@ -297,6 +297,46 @@ class Fact(BaseModel):
     valid_to_sequence: int | None = None
     model: str | None = None
     pinned: bool = False
+
+
+class Proposal(BaseModel):
+    """One change a review proposes: the facts it would touch, what they become, and why."""
+
+    action: str
+    facts: list[Fact]
+    subject: str | None = None
+    text: str | None = None
+    reason: str = ""
+
+
+class Reviewed(BaseModel):
+    """What a review answered — or, as a dry run, what one would cost."""
+
+    dry_run: bool
+    estimated_cost: Decimal | None = None
+    based_on: int = 0
+    proposals: list[Proposal] = Field(default_factory=list[Proposal])
+    skipped: int = 0
+    cost: Decimal | None = None
+
+
+class Applied(BaseModel):
+    retired: int
+    added: int
+
+
+class Condensed(BaseModel):
+    """What a condense did — or, as a dry run, what one would merge and cost."""
+
+    dry_run: bool
+    summaries: int
+    from_sequence: int | None = None
+    to_sequence: int | None = None
+    tokens_before: int = 0
+    tokens_after: int | None = None
+    estimated_cost: Decimal | None = None
+    based_on: int = 0
+    cost: Decimal | None = None
 
 
 class Tracker(BaseModel):
@@ -702,6 +742,45 @@ class Api:
         return Fact.model_validate(
             await self._request(
                 "POST", f"/stories/{story_id}/facts", json={"subject": subject, "text": text}
+            )
+        )
+
+    async def review_facts(self, story_id: uuid.UUID, *, dry_run: bool = False) -> Reviewed:
+        """The model's proposals for the live facts — billed — or, with ``dry_run``, only what
+        the call would cost."""
+        params = {"dry_run": "true"} if dry_run else None
+        return Reviewed.model_validate(
+            await self._request("POST", f"/stories/{story_id}/facts/review", params=params)
+        )
+
+    async def apply_review(self, story_id: uuid.UUID, confirmed: Sequence[Proposal]) -> Applied:
+        """Applies the proposals the reader kept, all or none. No model call."""
+        body = [
+            {
+                "action": p.action,
+                "fact_ids": [str(f.id) for f in p.facts],
+                "subject": p.subject,
+                "text": p.text,
+            }
+            for p in confirmed
+        ]
+        return Applied.model_validate(
+            await self._request("POST", f"/stories/{story_id}/facts/review/apply", json=body)
+        )
+
+    async def condense(
+        self, story_id: uuid.UUID, count: int | None = None, *, dry_run: bool = False
+    ) -> Condensed:
+        """Merges the oldest ``count`` summaries (all but the newest when not given) into one —
+        billed — or, with ``dry_run``, says what it would merge and cost."""
+        params: dict[str, str] = {}
+        if count is not None:
+            params["count"] = str(count)
+        if dry_run:
+            params["dry_run"] = "true"
+        return Condensed.model_validate(
+            await self._request(
+                "POST", f"/stories/{story_id}/memory/condense", params=params or None
             )
         )
 
