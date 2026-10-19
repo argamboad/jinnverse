@@ -189,10 +189,17 @@ Each was measured on real stories and cost real time. Do not re-learn them.
 - **Compress in batches: at least 10 messages, at most 40, never the 6 newest.** Compressing only
   the overflow ran every turn on two messages; a single call over 99 messages came back as `##`.
 - **Refuse a summary too short to account for what it replaces** (a compression ratio above ~60×;
-  working ones run 3–19×). If compression fails, **go over budget rather than discard**.
+  working ones run 3–19×), **or cut off at its ceiling** (`finish_reason: length`): its end is
+  missing and nothing in it says so — 47 of 81 summaries on staging were (#226). If compression
+  fails, **go over budget rather than discard**.
 - **Summaries at temperature 0.3, facts at 0.2.** A creative summariser invents history the
-  character then believes. Output ceilings: 1,200 tokens for a summary, 4,000 for fact extraction
-  (a reasoning model thinks first).
+  character then believes. Output ceilings: 1,200 tokens for a summary, with thinking off and
+  "at most 500 words" asked after the transcript ("be brief" alone was not heeded; #226); 8,000
+  for fact extraction, which keeps thinking (it decides what to retire): at 4,000, one call in
+  73 thought through the ceiling, and a cut-off answer is refused (#227).
+- **Close off the stretch the summariser reads**: `<transcript>` tags, then the task said again
+  after them. Sent bare, a stretch that ends on a turn of the story was continued instead of
+  summarised — three of one story's twenty-six summaries were its next turn (#229).
 - **Hand-written facts are pinned**: the extractor cannot retire them.
 - **Name the reader by their persona, never "User"**, in anything a model reads.
 - **Background calls retry once**, only for failures a retry could fix (timeouts, 408, 429, 5xx,
@@ -217,8 +224,9 @@ Each was measured on real stories and cost real time. Do not re-learn them.
 - **Criterion #1: uncensored.** Prose second, cost a distant third. A refusing summariser is a
   character that forgets.
 - **Default: DeepSeek V4 Flash** on OpenRouter.
-- **Send `reasoning: {enabled: false}` on replies and `/ask`.** Without it, the default came back
-  empty 3 times in 5 at a 400-token ceiling, every token spent thinking.
+- **Send `reasoning: {enabled: false}` on replies, `/ask` and summaries.** Without it, the default
+  came back empty 3 times in 5 at a 400-token ceiling, every token spent thinking; and summaries
+  spent up to 1,120 of their 1,200 tokens thinking and were stored cut off (#226).
 - **Temperature depends on the model.** Roleplay finetunes wrote cleanly up to 0.9 and turned to
   token soup at 1.3; DeepSeek holds at 1.3.
 - **One model for every story.** airp's choice of six models per story gave nothing back: the

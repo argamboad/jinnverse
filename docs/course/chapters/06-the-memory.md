@@ -373,3 +373,61 @@ run.
 clients will use: directions with `/do`, dials, meters, regenerating with a reason, branching a
 story, search, export, cost reports, editing facts by hand, and rebuilding a story's memory from
 its transcript.
+
+## Postscript: a summary that thinks through its ceiling
+
+Step 19 started with a long story that felt off. Reading its memory turned up summaries that
+stopped mid-sentence, `…including Priya (a second-year` or simply `2. ~`. Fifteen of one
+story's twenty-six were like that, and 47 of the 81 summary calls in the whole ledger.
+
+The ledger is what gave it away. Every one of those calls had **exactly 1,200 completion
+tokens**: the ceiling. A number that sits exactly on a limit is a limit being hit. The ledger also
+keeps OpenRouter's generation id, and OpenRouter's own record of a call (`GET
+/api/v1/generation?id=…`) splits the tokens: for the worst one, 1,120 thinking and 80 of
+summary, `finish_reason: "length"`. DeepSeek V4 Flash thinks before it writes unless told not
+to, and **the thinking counts against `max_tokens`**. The summariser never sent the reasoning
+switch, so whatever room the thinking left was all the summary got.
+
+The guard this chapter built could not see it. `credible()` asks whether a summary is long
+enough to have kept its stretch, one sixtieth of it; 312 characters for 8,000 passes. It is a
+floor for `##`, not a test of completeness. The answer had said it was incomplete all along:
+`finish_reason` was `length`, and `Reply.truncated` existed with nothing reading it.
+
+Four changes, in issues #226, #229 and #227:
+
+```python
+reply = await openrouter.complete(..., max_tokens=SUMMARY_MAX_TOKENS, reasoning=False)
+...
+if reply.truncated:      # stopped at the ceiling: the end is missing, and nothing says so
+    log.warning("summary refused: cut off at the %d-token ceiling", SUMMARY_MAX_TOKENS)
+    return None          # the turns go whole: over budget rather than discard
+```
+
+- **Thinking off** for summaries, as for replies. The 1,200 tokens are now all summary.
+- **The length as a number, said last.** Replayed with thinking off, a real stretch still filled
+  1,200 tokens with headed report: "be brief" in the system message was not heeded. "Use at most
+  500 words", after the transcript, brought the same stretches to 400–800 tokens.
+- **The transcript closed off.** Three summaries were not summaries at all but the story's next
+  turn: a transcript that ends on a turn of the story reads as one to continue. Sent between
+  `<transcript>` tags, with "the transcript ends here; do not continue the story" after it, the
+  same stretch came back as an account three times out of three.
+- **A cut-off answer refused**, for the fact extractor too. The extractor keeps its thinking (it
+  decides what to retire) and gets 8,000 tokens instead of 4,000; one call in 73 had reached
+  the old ceiling, and its broken JSON was logged as "unreadable", which hid why.
+
+Each figure came from replaying real stretches of the story through the summariser before any
+code changed: a throwaway script, reading from the staging database and storing nothing, a
+dozen calls for well under a cent. That is the habit the brief asks for in its lessons: every
+figure measured on real stories. A guess at the word limit, or at whether thinking off was
+enough, would have shipped the same bug with a different number.
+
+And because the memory is derived, nothing is lost for good. The transcript was never touched;
+the memory rebuild (chapter 7) makes every summary and extracted fact again from it.
+
+::: dotnet
+The OpenAI .NET SDK has the same signal: `ChatCompletion.FinishReason == ChatFinishReason.Length`,
+and on reasoning models `MaxOutputTokenCount` covers the reasoning tokens too. The habit
+generalises to any producer that can stop early: trust its own completion signal, not the size
+of what arrived. A `Stream.ReadAsync` that returns fewer bytes than asked, or a body shorter than
+its `Content-Length`, looks just as plausible as a whole one.
+:::

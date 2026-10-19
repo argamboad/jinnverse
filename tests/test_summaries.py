@@ -232,22 +232,26 @@ async def test_a_reply_too_short_to_be_a_summary_is_refused_rather_than_believed
     assert kinds == [SpendKind.REPLY, SpendKind.SUMMARY]  # refused, and still paid for
 
 
-async def test_a_summary_that_ran_to_the_ceiling_is_kept(
+async def test_a_summary_cut_off_at_the_ceiling_is_refused_rather_than_stored(
     client: httpx2.AsyncClient,
     session: AsyncSession,
     model: ScriptedModel,
     tune: Callable[..., Settings],
     dummy: Dummy,
 ) -> None:
+    """Kept, a cut-off summary stood for its whole stretch with the end missing, and nothing in
+    it said so: 47 of 81 on staging stopped mid-sentence (#226)."""
     tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
     story = await a_long_story(session, 30)
     model.truncated("A long account of the evening that the ceiling cut off mid" + " word" * 40)
-    model.extracts().says("Hm.")
+    model.says("Hm.")
 
     await send(client, story.id, "I come in.")
 
-    [summary] = await summaries(session, story)
-    assert summary.text.startswith("A long account")
+    assert await summaries(session, story) == []
+    assert any("Turn 2." in text for text in prompt_texts(model))  # the turns went whole
+    kinds = sorted(row.kind for row in await ledger(session, story))
+    assert kinds == [SpendKind.REPLY, SpendKind.SUMMARY]  # refused, and still paid for
 
 
 async def test_the_summary_is_billed_as_its_own_kind_of_spending(
@@ -269,13 +273,15 @@ async def test_the_summary_is_billed_as_its_own_kind_of_spending(
     assert rows[SpendKind.SUMMARY].message_id is None
 
 
-async def test_the_summariser_is_asked_cold_and_without_a_reasoning_flag(
+async def test_the_summariser_is_asked_cold_and_without_thinking(
     client: httpx2.AsyncClient,
     session: AsyncSession,
     model: ScriptedModel,
     tune: Callable[..., Settings],
     dummy: Dummy,
 ) -> None:
+    """Thinking counts against the ceiling: the default model spent up to 1,120 of the 1,200
+    tokens on it and left the summary cut off (#226)."""
     tune(context_budget=a_budget_that_holds(dummy, 12, tune()), background_model="cheap/model")
     story = await a_long_story(session, 30)
     model.summarises("Stretch.").extracts().says("Hm.")
@@ -286,9 +292,53 @@ async def test_the_summariser_is_asked_cold_and_without_a_reasoning_flag(
     assert summary_call["model"] == "cheap/model"
     assert summary_call["temperature"] == memory.SUMMARY_TEMPERATURE
     assert summary_call["max_tokens"] == memory.SUMMARY_MAX_TOKENS
-    assert "reasoning" not in summary_call
-    assert model.calls[1]["model"] == "cheap/model"  # the extractor, on the same model
+    assert summary_call["reasoning"] == {"enabled": False}
+    assert model.calls[1]["model"] == "cheap/model"  # the extractor, on the same model…
+    assert "reasoning" not in model.calls[1]  # …which still thinks
     assert model.calls[2]["model"] == tune().model  # the reply still goes to the story's model
+
+
+async def test_the_length_is_asked_for_after_the_transcript(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+) -> None:
+    """The instruction's "be brief" was not heeded: real stretches came back longer than the
+    ceiling. A number, last, was (#226)."""
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    story = await a_long_story(session, 30)
+    model.summarises("Stretch.").extracts().says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    stretch = model.calls[0]["messages"][1]["content"]
+    assert stretch.index("Turn 2.") < stretch.index(f"at most {memory.SUMMARY_WORDS} words")
+    assert stretch.endswith(f"Use at most {memory.SUMMARY_WORDS} words.")
+
+
+async def test_the_transcript_is_closed_off_so_it_is_not_continued(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+) -> None:
+    """Sent bare, a stretch that ends on a turn of the story reads as one to continue: three of
+    a real story's summaries were its next turn, status block and all (#229)."""
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    story = await a_long_story(session, 30)
+    model.summarises("Stretch.").extracts().says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    stretch = model.calls[0]["messages"][1]["content"]
+    assert stretch.startswith("<transcript>\nThe Gilded Heron: ")
+    turns, request = stretch.split("\n</transcript>\n\n")
+    assert "Rowan Hale: Turn 2." in turns
+    assert request.startswith("The transcript ends here.")
+    assert "Do not continue the story" in request
 
 
 async def test_the_reader_is_named_by_their_persona_rather_than_called_user(

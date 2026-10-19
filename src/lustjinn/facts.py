@@ -36,8 +36,10 @@ log = logging.getLogger(__name__)
 
 FACTS_TEMPERATURE = 0.2
 """Colder than the summariser: an invented fact is injected into every prompt from then on."""
-FACTS_MAX_TOKENS = 4000
-"""Generous: a reasoning model thinks first, and the JSON comes after."""
+FACTS_MAX_TOKENS = 8000
+"""Generous: a reasoning model thinks first, and the JSON comes after. At 4,000 it was tight: one
+extraction on staging thought for 2,687 of its 2,902 tokens, and one in 73 reached the ceiling
+(#227)."""
 ID_PREFIX = 8
 """How much of a fact's id the extractor is shown, and may name to retire it."""
 
@@ -176,6 +178,13 @@ async def extract(
 
     reply = await background.once_more_if_worth_it(call)
     session.add(ledger.row(story.id, SpendKind.FACTS, reply))
+    if reply.truncated:
+        # Its end is missing — the retirements come last — so none of it is believed.
+        log.warning(
+            "fact extraction cut off at the %d-token ceiling, nothing recorded", FACTS_MAX_TOKENS
+        )
+        await session.commit()
+        return 0, 0
     try:
         found, retired_ids = parse(reply.text)
     except (ValueError, json.JSONDecodeError) as error:
