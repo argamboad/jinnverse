@@ -96,6 +96,8 @@ class SpendKind(StrEnum):
     FACTS = "facts"
     REVIEW = "review"
     """A review of the facts the reader asked for (#232)."""
+    CONDENSE = "condense"
+    """The oldest summaries merged into one, on request (#233)."""
 
 
 def _values(members: type[StrEnum]) -> list[str]:
@@ -468,7 +470,9 @@ class Spend(Base):
 
     __tablename__ = "spend"
     __table_args__ = (
-        CheckConstraint("kind IN ('reply', 'aside', 'summary', 'facts', 'review')", name="kind"),
+        CheckConstraint(
+            "kind IN ('reply', 'aside', 'summary', 'facts', 'review', 'condense')", name="kind"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)

@@ -215,6 +215,11 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   evening the summaries did not yet cover was still ahead. Thinking off (thirteen facts ate 8,000
   tokens of it and answered nothing), a cap on proposals (uncapped, it rewrote 47 of 52), and
   never a trait, possession or identity retired "because the story shows it".
+- **The summary layer is condensed on request, never on its own** (Condense summaries, #233):
+  the oldest N merged into one account by the summariser's rules, the newest kept. Seven
+  summaries of a real story (5,090 tokens) came back as one of 1,058, every name and open thread
+  still there, for $0.0004. The old rows go first, explicitly: the unit of work inserts before it
+  deletes, and the new row takes the first one's starting turn.
 - **Background calls retry once**, only for failures a retry could fix (timeouts, 408, 429, 5xx,
   a 200 with no content).
 - **Every test of the memory must use a real character of realistic size.** airp's tests set a

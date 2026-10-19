@@ -16,6 +16,7 @@ from lustjinn import (
     audit,
     auth,
     commands,
+    condense,
     dials,
     editing,
     emoji,
@@ -157,6 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(facts.router, dependencies=[Depends(auth.require_user)])
     app.include_router(review.router, dependencies=[Depends(auth.require_user)])
     app.include_router(rebuild.router, dependencies=[Depends(auth.require_user)])
+    app.include_router(condense.router, dependencies=[Depends(auth.require_user)])
     app.include_router(purge.router, dependencies=[Depends(auth.require_user)])
     return app
 
