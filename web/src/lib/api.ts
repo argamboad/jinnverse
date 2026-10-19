@@ -195,6 +195,46 @@ export interface Rebuilt {
 	messages_covered: number;
 }
 
+/** One change a fact review proposes: the facts it touches, what they become, and why. */
+export interface Proposal {
+	action: 'retire' | 'rewrite' | 'merge';
+	facts: Fact[];
+	/** For a rewrite or a merge: whose the new sentence is; null means the first fact's. */
+	subject: string | null;
+	/** For a rewrite or a merge: the new sentence. */
+	text: string | null;
+	reason: string;
+}
+
+/** What a fact review answered — or, as a dry run, what one would cost. */
+export interface Reviewed {
+	dry_run: boolean;
+	/** The story's average priced reply, or null with nothing to go on. */
+	estimated_cost: string | null;
+	based_on: number;
+	proposals: Proposal[];
+	skipped: number;
+	cost: string | null;
+}
+
+export interface Applied {
+	retired: number;
+	added: number;
+}
+
+/** What a condense did — or, as a dry run, what one would merge and cost. */
+export interface Condensed {
+	dry_run: boolean;
+	summaries: number;
+	from_sequence: number | null;
+	to_sequence: number | null;
+	tokens_before: number;
+	tokens_after: number | null;
+	estimated_cost: string | null;
+	based_on: number;
+	cost: string | null;
+}
+
 export interface SpendReport {
 	calls: number;
 	cost: string;
@@ -592,6 +632,23 @@ export const api = {
 	facts: (storyId: string) => json<Fact[]>('GET', `/stories/${storyId}/facts`),
 	/** Throws the summaries and extracted facts away and writes them again: slow, and billed. */
 	rebuildMemory: (storyId: string) => json<Rebuilt>('POST', `/stories/${storyId}/memory/rebuild`),
+	/** The model's proposals for the live facts (billed), or with `dryRun` only the cost. */
+	reviewFacts: (storyId: string, dryRun = false) =>
+		json<Reviewed>('POST', `/stories/${storyId}/facts/review${dryRun ? '?dry_run=true' : ''}`),
+	/** The proposals the reader kept, applied all or none. No model call. */
+	applyReview: (
+		storyId: string,
+		confirmed: { action: Proposal['action']; fact_ids: string[]; subject?: string; text?: string }[]
+	) => json<Applied>('POST', `/stories/${storyId}/facts/review/apply`, confirmed),
+	/** The oldest `count` summaries (all but the newest when omitted) merged into one (billed), or
+	 * with `dryRun` only what would merge and the cost. */
+	condense: (storyId: string, count?: number, dryRun = false) => {
+		const params = new URLSearchParams();
+		if (count !== undefined) params.set('count', String(count));
+		if (dryRun) params.set('dry_run', 'true');
+		const query = params.size ? `?${params}` : '';
+		return json<Condensed>('POST', `/stories/${storyId}/memory/condense${query}`);
+	},
 
 	/**
 	 * Sends what the reader typed and streams the reply: `onDelta` gets each piece of text as it

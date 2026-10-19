@@ -11,6 +11,7 @@ from lustjinn_tui.history import HistoryScreen
 from lustjinn_tui.legend import Hint
 from lustjinn_tui.library import LibraryScreen
 from lustjinn_tui.newstory import NewStoryScreen
+from lustjinn_tui.panes import ReviewScreen
 
 
 def keys(text: str) -> set[str]:
@@ -32,6 +33,7 @@ def in_help(section: str) -> set[str]:
         (HistoryScreen.HINTS, "An entry's history"),
         (PersonaBuilderScreen.HINTS, "Persona builder"),
         (NewStoryScreen.HINTS, "New story"),
+        (ReviewScreen.HINTS, "Review facts (/review)"),
     ],
 )
 def test_every_key_in_the_legend_is_in_help(hints: tuple[Hint, ...], section: str) -> None:

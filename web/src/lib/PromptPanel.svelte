@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { fade, layerLabel, shares } from '#lib/audit.ts';
 	import type { Extras } from '#lib/extras.svelte.ts';
-	import { money } from '#lib/money.ts';
+	import { fine, money } from '#lib/money.ts';
 	import Sheet from '#lib/Sheet.svelte';
-	import { api } from '#lib/api.ts';
+	import { api, type Condensed, type Reviewed } from '#lib/api.ts';
+	import { condensePlan, confirmed, subjectOf, tally } from '#lib/review.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	/** The Prompt tab: what the last reply was built from, layer by layer as one stacked bar over
-	 * the budget, what it cost, and two things to do about the story's memory. */
+	 * the budget, what it cost, and the memory tools — each billed, each asking first with the
+	 * cost, and Review facts applying nothing the reader did not keep. */
 	let { extras }: { extras: Extras } = $props();
 
 	const ctx = $derived(extras.context);
@@ -29,12 +31,41 @@
 	}
 
 	// --- memory ---------------------------------------------------------------------------------
-	let confirming = $state(false);
-	let rebuilding = $state(false);
+	// One confirm at a time. Review and Condense open theirs with a dry run, so the confirm can
+	// say the number before anything is billed; Rebuild has no estimate (many calls).
+	type Tool = 'rebuild' | 'review' | 'condense';
+	let asking = $state<Tool | null>(null);
+	let busy = $state(false);
 	let factsOpen = $state(false);
+	let reviewEstimate = $state<string | null>(null);
+	let condenseEstimate = $state<Condensed | null>(null);
+	let reviewed = $state<Reviewed | null>(null);
+	let reviewOpen = $state(false);
+	let kept = $state<boolean[]>([]);
+	let applying = $state(false);
+
+	function failed(title: string, error: unknown) {
+		toasts.show('danger', title, error instanceof Error ? error.message : undefined);
+	}
+
+	async function ask(tool: Tool) {
+		busy = true;
+		try {
+			if (tool === 'review') {
+				reviewEstimate = (await api.reviewFacts(extras.storyId, true)).estimated_cost;
+			} else if (tool === 'condense') {
+				condenseEstimate = await api.condense(extras.storyId, undefined, true);
+			}
+			asking = tool;
+		} catch (error) {
+			failed(tool === 'review' ? 'Could not estimate the review' : 'Nothing to condense', error);
+		} finally {
+			busy = false;
+		}
+	}
 
 	async function rebuild() {
-		rebuilding = true;
+		busy = true;
 		try {
 			const done = await api.rebuildMemory(extras.storyId);
 			toasts.show(
@@ -44,16 +75,73 @@
 			);
 			await extras.refresh();
 		} catch (error) {
-			toasts.show(
-				'danger',
-				'Could not rebuild the memory',
-				error instanceof Error ? error.message : undefined
-			);
+			failed('Could not rebuild the memory', error);
 		} finally {
-			rebuilding = false;
-			confirming = false;
+			busy = false;
+			asking = null;
 		}
 	}
+
+	async function review() {
+		busy = true;
+		try {
+			const answer = await api.reviewFacts(extras.storyId);
+			await extras.refresh();
+			if (answer.proposals.length === 0) {
+				toasts.show('ok', 'Nothing to change', 'The model proposes no change to the facts.');
+				return;
+			}
+			reviewed = answer;
+			kept = answer.proposals.map(() => true);
+			reviewOpen = true;
+		} catch (error) {
+			failed('The review was not made', error);
+		} finally {
+			busy = false;
+			asking = null;
+		}
+	}
+
+	async function apply() {
+		if (!reviewed) return;
+		const set = confirmed(reviewed.proposals, kept);
+		applying = true;
+		try {
+			const done = await api.applyReview(extras.storyId, set);
+			toasts.show(
+				'ok',
+				`Applied ${set.length} ${set.length === 1 ? 'proposal' : 'proposals'}`,
+				`${done.retired} ${done.retired === 1 ? 'fact' : 'facts'} retired, ${done.added} added.`
+			);
+			reviewOpen = false;
+			reviewed = null;
+			await extras.refresh();
+		} catch (error) {
+			failed('Nothing was applied', error);
+		} finally {
+			applying = false;
+		}
+	}
+
+	async function condense() {
+		busy = true;
+		try {
+			const done = await api.condense(extras.storyId);
+			toasts.show(
+				'ok',
+				'Summaries condensed',
+				`${done.summaries} became 1: ${done.tokens_before.toLocaleString()} tokens are now ${done.tokens_after?.toLocaleString() ?? 'fewer'}.`
+			);
+			await extras.refresh();
+		} catch (error) {
+			failed('Nothing was condensed', error);
+		} finally {
+			busy = false;
+			asking = null;
+		}
+	}
+
+	const keptCount = $derived(kept.filter(Boolean).length);
 
 	/** The live facts, grouped by who or what they are about. */
 	const bySubject = $derived.by(() => {
@@ -120,27 +208,73 @@
 					<span>Cached share</span><b>{Math.round(extras.spend.cached_share * 100)}%</b>
 				{/if}
 			</div>
-			{#if confirming}
+			{#if asking === 'review'}
+				<div class="ask" role="alertdialog" aria-label="Review the facts?">
+					<p>
+						Asks the model what to retire, rewrite or merge among the {extras.facts.length} facts, reading
+						the story as it does for a reply. One call,
+						<b
+							>{reviewEstimate !== null
+								? `about ${fine(reviewEstimate)}`
+								: 'about what a reply costs'}</b
+						>. Nothing changes until you confirm each proposal.
+					</p>
+					<div class="two">
+						<button type="button" class="chip" disabled={busy} onclick={() => (asking = null)}
+							>Keep them</button
+						>
+						<button type="button" class="chip go" disabled={busy} onclick={review}
+							>{busy
+								? 'Reviewing…'
+								: `Review${reviewEstimate !== null ? ` · ${fine(reviewEstimate)}` : ''}`}</button
+						>
+					</div>
+				</div>
+			{:else if asking === 'condense' && condenseEstimate}
+				<div class="ask" role="alertdialog" aria-label="Condense the summaries?">
+					<p>
+						{condensePlan(condenseEstimate)} The newest summary stays. One call,
+						<b
+							>{condenseEstimate.estimated_cost !== null
+								? `about ${fine(condenseEstimate.estimated_cost)}`
+								: 'about what a summary costs'}</b
+						>.
+					</p>
+					<div class="two">
+						<button type="button" class="chip" disabled={busy} onclick={() => (asking = null)}
+							>Keep them</button
+						>
+						<button type="button" class="chip go" disabled={busy} onclick={condense}
+							>{busy
+								? 'Condensing…'
+								: `Condense${condenseEstimate.estimated_cost !== null ? ` · ${fine(condenseEstimate.estimated_cost)}` : ''}`}</button
+						>
+					</div>
+				</div>
+			{:else if asking === 'rebuild'}
 				<div class="ask" role="alertdialog" aria-label="Rebuild the memory?">
 					<p>
 						Throws away this story's summaries and extracted facts and writes them again from the
 						transcript. Facts you pinned stay. It calls the model many times, and is billed.
 					</p>
 					<div class="two">
-						<button
-							type="button"
-							class="chip"
-							disabled={rebuilding}
-							onclick={() => (confirming = false)}>Keep it</button
+						<button type="button" class="chip" disabled={busy} onclick={() => (asking = null)}
+							>Keep it</button
 						>
-						<button type="button" class="chip go" disabled={rebuilding} onclick={rebuild}
-							>{rebuilding ? 'Rebuilding…' : 'Rebuild'}</button
+						<button type="button" class="chip go" disabled={busy} onclick={rebuild}
+							>{busy ? 'Rebuilding…' : 'Rebuild'}</button
 						>
 					</div>
 				</div>
 			{:else}
 				<div class="chips">
-					<button type="button" class="chip" onclick={() => (confirming = true)}
+					<button type="button" class="chip" disabled={busy} onclick={() => ask('review')}
+						>Review facts</button
+					>
+					<button type="button" class="chip" disabled={busy} onclick={() => ask('condense')}
+						>Condense summaries</button
+					>
+					<button type="button" class="chip" disabled={busy} onclick={() => (asking = 'rebuild')}
 						>Rebuild memory</button
 					>
 					<button type="button" class="chip" onclick={() => (factsOpen = true)}
@@ -151,6 +285,56 @@
 		</div>
 	{/if}
 </div>
+
+<Sheet
+	bind:open={reviewOpen}
+	title="What the model proposes"
+	hint={reviewed
+		? `${reviewed.proposals.length} ${reviewed.proposals.length === 1 ? 'proposal' : 'proposals'}${reviewed.cost !== null ? ` · ${fine(reviewed.cost)}` : ''}`
+		: undefined}
+>
+	{#if reviewed}
+		<p class="lead">
+			Each one is a guess with a reason. Switch off what you don’t agree with; the rest is applied
+			at once. Pinned facts are never touched.
+		</p>
+		<div class="proposals">
+			{#each reviewed.proposals as proposal, i (i)}
+				<div class="proposal" class:off={!kept[i]}>
+					<span class="kind" class:retire={proposal.action === 'retire'}>{proposal.action}</span>
+					<label class="switch" class:on={kept[i]}>
+						<input type="checkbox" bind:checked={kept[i]} aria-label="Keep this proposal" />
+					</label>
+					<span class="was">
+						{#each proposal.facts as fact, j (fact.id)}
+							{#if j > 0}<span class="plus"> + </span>{/if}
+							<span class="subject">{fact.subject}</span> · <s>{fact.text}</s>
+						{/each}
+					</span>
+					{#if proposal.text}
+						<span class="now"
+							><span class="subject">{subjectOf(proposal)}</span> · {proposal.text}</span
+						>
+					{/if}
+					{#if proposal.reason}<span class="why">{proposal.reason}</span>{/if}
+				</div>
+			{/each}
+		</div>
+		<div class="foot">
+			<span class="muted sum"
+				>{tally(kept)}{reviewed.skipped ? ` · ${reviewed.skipped} not shown` : ''}</span
+			>
+			<div class="two">
+				<button type="button" class="chip" disabled={applying} onclick={() => (reviewOpen = false)}
+					>Discard</button
+				>
+				<button type="button" class="chip go" disabled={applying || keptCount === 0} onclick={apply}
+					>{applying ? 'Applying…' : `Apply ${keptCount}`}</button
+				>
+			</div>
+		</div>
+	{/if}
+</Sheet>
 
 <Sheet
 	bind:open={factsOpen}
@@ -325,5 +509,115 @@
 	.from {
 		font-size: 0.72rem;
 		white-space: nowrap;
+	}
+	.ask b {
+		color: var(--fg);
+		font-weight: 600;
+	}
+	/* the proposals: what was there, what it becomes, and why — kept until switched off */
+	.lead {
+		font-size: 0.8rem;
+		color: var(--fg-2);
+		line-height: 1.4;
+	}
+	.proposals {
+		display: grid;
+		gap: 10px;
+	}
+	.proposal {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 6px 12px;
+		padding: 10px 12px;
+		border-radius: 12px;
+		background: var(--surface-2);
+		border: 1px solid var(--line);
+	}
+	.proposal.off {
+		opacity: 0.55;
+	}
+	.kind {
+		font-size: 0.7rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		font-weight: 600;
+		color: var(--gold-text);
+	}
+	.kind.retire {
+		color: var(--warn);
+	}
+	.was {
+		font-size: 0.84rem;
+		color: var(--muted);
+		line-height: 1.35;
+	}
+	.was s {
+		text-decoration-color: var(--line-strong);
+	}
+	.now {
+		font-size: 0.92rem;
+		color: var(--fg);
+		line-height: 1.35;
+	}
+	.why {
+		font-size: 0.78rem;
+		color: var(--fg-2);
+		font-family: var(--font-prose);
+		font-style: italic;
+		line-height: 1.35;
+	}
+	.subject {
+		font-weight: 600;
+		color: var(--fg-2);
+	}
+	.switch {
+		grid-row: 1 / span 4;
+		align-self: start;
+		position: relative;
+		width: 40px;
+		height: 24px;
+		border-radius: var(--r-pill);
+		background: var(--line-strong);
+		cursor: pointer;
+	}
+	.switch.on {
+		background: var(--gold);
+	}
+	.switch input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		margin: 0;
+		cursor: pointer;
+	}
+	.switch::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: var(--raised);
+		transition: left 0.12s ease;
+	}
+	.switch.on::after {
+		left: 19px;
+		background: var(--gold-ink);
+	}
+	.switch:focus-within {
+		outline: 2px solid var(--gold);
+		outline-offset: 2px;
+	}
+	.foot {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 10px;
+		padding-top: 4px;
+		border-top: 1px solid var(--line);
+	}
+	.sum {
+		font-size: 0.78rem;
 	}
 </style>

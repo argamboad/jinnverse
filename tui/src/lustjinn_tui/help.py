@@ -111,6 +111,7 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row(":name", "A snippet or an emoji, offered as you type; :name: is the emoji"),
             Row("abc…", "After three letters, words from the dictionary; Tab takes one"),
             Row("/help", "Every command, with what each one costs"),
+            Row("/review  /condense", "Memory tools: billed, each asks and shows the cost first"),
             Row("//", "Send a line that genuinely starts with a slash"),
             Row("Ctrl+J", "New line; also Alt+Enter or Shift+Enter, where they arrive"),
             Row("Ctrl+Z / Ctrl+Y", "Undo / redo"),
@@ -123,6 +124,16 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row("↑ ↓", "Choose a reason"),
             Row("I", "Add instructions"),
             Row("Enter", "Regenerate"),
+        ),
+    ),
+    Section(
+        "Review facts (/review)",
+        (
+            Row("↑ ↓", "Choose a proposal"),
+            Row("Space", "Keep it or drop it; dropped ones are not applied"),
+            Row("A", "Apply the kept proposals, all at once"),
+            Row("PgUp PgDn", "Scroll"),
+            Row("Esc", "Discard every proposal; nothing changes"),
         ),
     ),
     Section(

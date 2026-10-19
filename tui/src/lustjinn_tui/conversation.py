@@ -18,6 +18,7 @@ import contextlib
 import time
 import uuid
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from functools import partial
 from typing import ClassVar, Literal
 
@@ -56,7 +57,7 @@ from lustjinn_tui.export import ExportScreen
 from lustjinn_tui.hairline import Hairline
 from lustjinn_tui.legend import Hint
 from lustjinn_tui.palette import PaletteCommand
-from lustjinn_tui.panes import AskScreen, TextPaneScreen
+from lustjinn_tui.panes import AskScreen, ReviewScreen, TextPaneScreen
 from lustjinn_tui.regenerate import RegenerateScreen
 from lustjinn_tui.settings import ChatSettingsScreen
 from lustjinn_tui.status import Kind
@@ -66,6 +67,12 @@ from lustjinn_tui.transcript import Transcript
 from lustjinn_tui.view import View
 
 Mode = Literal["read", "write", "search", "branch"]
+
+
+def _about(cost: Decimal | None, what: str) -> str:
+    """A price for a confirm: the estimate, or what the call is like when nothing is priced yet."""
+    return f"about ${cost:.4f}" if cost is not None else f"about what {what} costs"
+
 
 FLOOR = 40  # the column is never narrower than this, unless the window is
 
@@ -702,6 +709,12 @@ class ConversationScreen(View):
         elif name == "search":
             self._find(argument)
             return
+        elif name == "review":
+            await self._review()
+            return
+        elif name == "condense":
+            await self._condense(argument)
+            return
         elif name == "help":
             report = commands.Report(
                 "Commands", "typed in the composer", tuple(self.slash.help_lines())
@@ -712,6 +725,84 @@ class ConversationScreen(View):
             self.status(report.subtitle)
         else:
             self.lustjinn.push_screen(TextPaneScreen(report))
+
+    # -- the memory tools: billed, so each asks first with the cost (#235) --------------------
+
+    async def _review(self) -> None:
+        """``/review``: a dry run for the price, the question, then the proposals in a pane."""
+        api = self.lustjinn.api
+        story = self.story
+        estimate = await self.lustjinn.call("Estimating", api.review_facts(story.id, dry_run=True))
+        if estimate is None:
+            return
+
+        async def review() -> None:
+            reviewed = await api.review_facts(story.id)
+            await self._refresh_spend()
+            if not reviewed.proposals:
+                self.status("The model proposes no change to the facts.", Kind.INFO)
+                return
+            self.lustjinn.push_screen(ReviewScreen(story.id, reviewed, self._refresh_spend))
+
+        self.lustjinn.push_screen(
+            ConfirmScreen(
+                "Review facts",
+                "Ask the model what to retire, rewrite or merge among the facts?",
+                (
+                    "It reads the story as it does for a reply and proposes changes to the live "
+                    "facts, each with a reason.",
+                    f"One billed call, {_about(estimate.estimated_cost, 'a reply')}.",
+                    "Nothing changes until you confirm each proposal.",
+                ),
+                "Review",
+                review,
+            )
+        )
+
+    async def _condense(self, argument: str) -> None:
+        """``/condense [count]``: a dry run for what would merge and the price, the question,
+        then the merge; the result is a status."""
+        api = self.lustjinn.api
+        story = self.story
+        count: int | None = None
+        if argument.strip():
+            if not argument.strip().isdigit() or int(argument) < 2:
+                self.status(
+                    "/condense takes how many of the oldest summaries to merge, at least 2 — "
+                    "or nothing, for all but the newest.",
+                    Kind.WARNING,
+                )
+                return
+            count = int(argument)
+        plan = await self.lustjinn.call("Measuring", api.condense(story.id, count, dry_run=True))
+        if plan is None:
+            return
+
+        async def condense() -> None:
+            done = await api.condense(story.id, count)
+            await self._refresh_spend()
+            after = f"{done.tokens_after:,}" if done.tokens_after is not None else "fewer"
+            self.status(
+                f"{done.summaries} summaries became one: {done.tokens_before:,} tokens are "
+                f"now {after}.",
+                Kind.SUCCESS,
+            )
+
+        newest = "" if count is not None else " The newest summary stays."
+        self.lustjinn.push_screen(
+            ConfirmScreen(
+                "Condense summaries",
+                f"Merge the oldest {plan.summaries} summaries into one?",
+                (
+                    f"Turns {plan.from_sequence} to {plan.to_sequence}, "
+                    f"{plan.tokens_before:,} tokens of every reply, become one account.{newest}",
+                    f"One billed call, {_about(plan.estimated_cost, 'a summary')}.",
+                    "The turns themselves are untouched; a rebuild can make the summaries again.",
+                ),
+                "Condense",
+                condense,
+            )
+        )
 
     def _find(self, query: str) -> None:
         """``/search`` runs the in-story search that ``/`` in reading mode opens."""

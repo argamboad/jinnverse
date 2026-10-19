@@ -19,7 +19,7 @@ answer is gone.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import ClassVar
 
 from textual.app import ComposeResult
@@ -28,7 +28,7 @@ from textual.containers import VerticalScroll
 from textual.content import Content
 from textual.widgets import Static
 
-from lustjinn_tui.api import Aside
+from lustjinn_tui.api import Aside, Proposal, Reviewed
 from lustjinn_tui.commands import Report
 from lustjinn_tui.hairline import Hairline
 from lustjinn_tui.legend import Hint
@@ -180,3 +180,141 @@ class AskScreen(Scrolled):
             f"Pinned under {self.subject}. The extractor cannot retire it; /facts shows it.",
             Kind.SUCCESS,
         )
+
+
+class ReviewScreen(Scrolled):
+    """What a fact review proposes (#235): each proposal with the facts it touches, what they
+    become and the model's reason, kept until the reader drops it. ``A`` applies the kept ones
+    as one; ``Esc`` applies none. The reasons are there to be judged: a review of a real story
+    once proposed retiring "owns a custom Telecaster" because the story showed it."""
+
+    TITLE = "Review facts"
+    HINTS: ClassVar[tuple[Hint, ...]] = (
+        Hint("↑↓", "Choose"),
+        Hint("Space", "Keep / drop"),
+        Hint("A", "Apply the kept"),
+        Hint("PgUp PgDn", "Scroll"),
+        Hint("Esc", "Discard"),
+    )
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("up", "move(-1)", "Up", show=False),
+        Binding("down", "move(1)", "Down", show=False),
+        Binding("pageup", "scroll_page(-1)", "Page up", show=False),
+        Binding("pagedown", "scroll_page(1)", "Page down", show=False),
+        Binding("home", "scroll_home", "Top", show=False),
+        Binding("end", "scroll_end", "Bottom", show=False),
+        Binding("space", "keep_or_drop", "Keep / drop", show=False),
+        Binding("a,A", "apply", "Apply", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    ReviewScreen #body { padding: 0 2; }
+    ReviewScreen .heading { margin-top: 1; }
+    ReviewScreen VerticalScroll { height: 1fr; }
+    ReviewScreen .proposal { padding: 0 2; margin-bottom: 1; }
+    ReviewScreen #foot { height: 1; }
+    """
+
+    def __init__(
+        self,
+        story_id: uuid.UUID,
+        reviewed: Reviewed,
+        applied: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        super().__init__()
+        self.story_id = story_id
+        self.reviewed = reviewed
+        self.proposals: list[Proposal] = list(reviewed.proposals)
+        self.kept = [True] * len(self.proposals)
+        self.cursor = 0
+        self._applied = applied
+        self._done = False
+
+    def body(self) -> ComposeResult:
+        count = len(self.proposals)
+        cost = f"${self.reviewed.cost:.4f}" if self.reviewed.cost is not None else "unpriced"
+        skipped = f" · {self.reviewed.skipped} not shown" if self.reviewed.skipped else ""
+        yield Static(
+            Content.from_markup(
+                f"{HEADING}What the model proposes[/]   "
+                f"[$muted]{count} proposal(s) · {cost}{skipped}[/]"
+            ),
+            classes="heading",
+        )
+        yield Hairline()
+        with VerticalScroll():
+            for i in range(count):
+                yield Static(self._line(i), id=f"proposal-{i}", classes="proposal")
+        yield Hairline()
+        yield Static(self._foot(), id="foot")
+
+    def _line(self, i: int) -> Content:
+        proposal = self.proposals[i]
+        mark = "[$accent]›[/]" if i == self.cursor else " "
+        state = "[$success]keep[/]" if self.kept[i] else "[$muted]drop[/]"
+        lines = [f"{mark} [$accent]{proposal.action.upper()}[/]  {state}"]
+        for fact in proposal.facts:
+            was = Content(f"{fact.subject}: {fact.text}").markup
+            lines.append(f"    [$muted]{was}[/]")
+        if proposal.text:
+            subject = proposal.subject or (proposal.facts[0].subject if proposal.facts else "")
+            now = Content(f"{subject}: {proposal.text}".lstrip(": ")).markup
+            lines.append(f"    → {now}")
+        if proposal.reason:
+            lines.append(f"    [$muted]{Content(proposal.reason).markup}[/]")
+        return Content.from_markup("\n".join(lines))
+
+    def _foot(self) -> Content:
+        kept = sum(self.kept)
+        return Content.from_markup(
+            f"  [$muted]{kept} of {len(self.kept)} kept   A applies them · Esc discards all · "
+            "pinned facts are never touched[/]"
+        )
+
+    def _redraw(self, *indexes: int) -> None:
+        for i in indexes:
+            if 0 <= i < len(self.proposals):
+                self.query_one(f"#proposal-{i}", Static).update(self._line(i))
+        self.query_one("#foot", Static).update(self._foot())
+
+    def action_move(self, direction: int) -> None:
+        if not self.proposals:
+            return
+        was = self.cursor
+        self.cursor = max(0, min(len(self.proposals) - 1, self.cursor + direction))
+        self._redraw(was, self.cursor)
+        self.scroller.scroll_to_widget(
+            self.query_one(f"#proposal-{self.cursor}", Static), animate=False
+        )
+
+    def action_keep_or_drop(self) -> None:
+        # Not `action_toggle`: Textual's DOMNode already has one, with another signature.
+        if not self.proposals:
+            return
+        self.kept[self.cursor] = not self.kept[self.cursor]
+        self._redraw(self.cursor)
+
+    async def action_apply(self) -> None:
+        if self._done:
+            return
+        confirmed = [p for p, keep in zip(self.proposals, self.kept, strict=True) if keep]
+        if not confirmed:
+            self.status("Nothing is kept; Esc discards them all.", Kind.WARNING)
+            return
+        applied = await self.lustjinn.call(
+            "Applying", self.lustjinn.api.apply_review(self.story_id, confirmed)
+        )
+        if applied is None:
+            return
+        self._done = True
+        app = self.lustjinn
+        below = app.screen_stack[-2]
+        app.pop_screen()
+        if isinstance(below, View):
+            below.status(
+                f"Applied {len(confirmed)} proposal(s): {applied.retired} fact(s) retired, "
+                f"{applied.added} added. /facts shows them.",
+                Kind.SUCCESS,
+            )
+        if self._applied is not None:
+            await self._applied()
