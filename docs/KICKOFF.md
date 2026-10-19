@@ -194,8 +194,9 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   fails, **go over budget rather than discard**.
 - **Summaries at temperature 0.3, facts at 0.2.** A creative summariser invents history the
   character then believes. Output ceilings: 1,200 tokens for a summary, with thinking off and
-  "at most 500 words" asked after the transcript ("be brief" alone was not heeded; #226); 4,000
-  for fact extraction (a reasoning model thinks first).
+  "at most 500 words" asked after the transcript ("be brief" alone was not heeded; #226); 8,000
+  for fact extraction, which keeps thinking (it decides what to retire): at 4,000, one call in
+  73 thought through the ceiling, and a cut-off answer is refused (#227).
 - **Close off the stretch the summariser reads**: `<transcript>` tags, then the task said again
   after them. Sent bare, a stretch that ends on a turn of the story was continued instead of
   summarised — three of one story's twenty-six summaries were its next turn (#229).

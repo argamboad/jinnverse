@@ -199,6 +199,29 @@ async def test_an_answer_that_is_not_json_records_nothing_and_is_still_billed(
     assert kinds == [SpendKind.FACTS, SpendKind.REPLY, SpendKind.SUMMARY]
 
 
+async def test_an_answer_cut_off_at_the_ceiling_records_nothing_and_says_why(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Even when what arrived reads as JSON: the retirements come last, and they are what a cut
+    takes first. The log said "unreadable", and a cut-off could not be told apart (#227)."""
+    tight(tune, dummy)
+    story = await a_long_story(session, 30)
+    whole_so_far = json.dumps({"facts": [{"subject": "Mags", "text": "owes nobody."}]})
+    model.summarises("Stretch.").truncated(whole_so_far).says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    assert await all_facts(session, story) == []
+    assert f"cut off at the {facts.FACTS_MAX_TOKENS}-token ceiling" in caplog.text
+    kinds = sorted(row.kind for row in await ledger(session, story))
+    assert kinds == [SpendKind.FACTS, SpendKind.REPLY, SpendKind.SUMMARY]  # still billed
+
+
 async def test_an_extractor_that_fails_does_not_cost_the_reader_the_reply_or_the_summary(
     client: httpx2.AsyncClient,
     session: AsyncSession,
