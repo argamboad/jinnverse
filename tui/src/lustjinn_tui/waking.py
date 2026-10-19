@@ -57,9 +57,13 @@ class WakingScreen(View):
 
     def on_mount(self) -> None:
         self.status_line.busy("Waking the server")
-        self.run_worker(self._knock(), exclusive=True)
+        self.run_worker(self._knock, exclusive=True)  # the method, not a coroutine (chapter 9)
 
     async def _knock(self) -> None:
+        """Knocks until the server answers. The loop outlives an ``await`` that the app may
+        close during, so after each one it stops if the app is closing, and it only draws on
+        lines that are still there (#222): Textual removes a screen's widgets before it cancels
+        the screen's worker, and a knock can wake between the two."""
         waits = self.lustjinn.wake_waits
         while True:
             self._attempts += 1
@@ -67,13 +71,16 @@ class WakingScreen(View):
                 await self.lustjinn.api.health()
             except InterceptedError as intercepted:
                 self._intercepted = True
-                self.query_one("#lamp", Static).update("The connection was intercepted.")
-                self.query_one("#why", Static).update(str(intercepted))
+                self._draw("#lamp", "The connection was intercepted.")
+                self._draw("#why", str(intercepted))
             except UnreachableError:
                 pass
             else:
-                self.status_line.idle()
-                self.lustjinn.woke()
+                if self.is_attached:
+                    self.status_line.idle()
+                    self.lustjinn.woke()
+                return
+            if not self.is_attached:
                 return
             wait = waits[min(self._attempts - 1, len(waits) - 1)]
             self._now.clear()
@@ -81,16 +88,25 @@ class WakingScreen(View):
                 await asyncio.wait_for(self._now.wait(), wait)
             except TimeoutError:
                 self._elapsed += wait
+            if not self.is_attached:
+                return
             self._show_elapsed()
+
+    def _draw(self, selector: str, text: str) -> None:
+        """Updates a line of the lamp if it is still on the screen; a removed one is skipped."""
+        for line in self.query(selector).results(Static):
+            line.update(text)
 
     def _show_elapsed(self) -> None:
         if self._elapsed >= self.PLAINER_AFTER and not self._intercepted:
-            self.query_one("#lamp", Static).update("The server has not answered.")
-            self.query_one("#why", Static).update(
-                "It may be down rather than asleep. Enter tries again now; Q leaves it for later."
+            self._draw("#lamp", "The server has not answered.")
+            self._draw(
+                "#why",
+                "It may be down rather than asleep. Enter tries again now; Q leaves it for later.",
             )
-        self.query_one("#elapsed", Static).update(
-            f"{self._elapsed:.0f}s · {self._attempts} attempt{'s' if self._attempts != 1 else ''}"
+        self._draw(
+            "#elapsed",
+            f"{self._elapsed:.0f}s · {self._attempts} attempt{'s' if self._attempts != 1 else ''}",
         )
 
     def action_try_now(self) -> None:

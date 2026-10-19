@@ -3,6 +3,8 @@
 
 from collections.abc import Callable
 
+from textual.worker import WorkerState
+
 from lustjinn_tui.app import LustjinnApp
 from lustjinn_tui.config import TokenStore
 from lustjinn_tui.signin import SignInScreen
@@ -26,6 +28,25 @@ async def test_the_lamp_shows_until_the_server_answers_then_the_stories(
         server.asleep_for = 0
         await pilot.pause(0.3)
         assert isinstance(app.screen, StoriesScreen)
+
+
+async def test_the_knock_loop_outlives_its_widgets_without_an_error(
+    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+) -> None:
+    """When the app closes mid-wait, Textual removes the screen's widgets before it cancels the
+    screen's worker, and a knock that wakes in between must not draw on what is gone (#222).
+    Removing the widgets by hand makes that moment happen on purpose, not by timing."""
+    server.asleep_for = 1000
+    app = make_app()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause(0.1)
+        screen = app.screen
+        assert isinstance(screen, WakingScreen)
+        for selector in ("#lamp", "#why", "#elapsed"):
+            await screen.query_one(selector).remove()
+        await pilot.pause(0.2)  # several knocks, each of which used to draw
+        knocking = [w for w in app.workers if w.node is screen]
+        assert [w.state for w in knocking] == [WorkerState.RUNNING]  # still knocking, no error
 
 
 async def test_without_a_token_the_reader_signs_in_and_letters_type_into_the_fields(
