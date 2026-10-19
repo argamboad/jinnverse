@@ -207,6 +207,14 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   turns (#231). **It names facts by number**, never by an id prefix: UUIDv7 ids made in the same
   second share seven of eight characters, and a model cannot tell them apart.
 - **Name the reader by their persona, never "User"**, in anything a model reads.
+- **A tool that calls the model on request is billed with the cost shown first, proposes, and
+  the reader confirms** (Review facts, #232): a dry run estimates from the ledger, the model's
+  reasons are there to be judged, and nothing is applied until the confirmed set comes back.
+  **The reviewer sees what the reply model sees** — the composed prompt, summaries, live history
+  and the facts numbered in the instruction. Sent the facts and summaries alone, it believed an
+  evening the summaries did not yet cover was still ahead. Thinking off (thirteen facts ate 8,000
+  tokens of it and answered nothing), a cap on proposals (uncapped, it rewrote 47 of 52), and
+  never a trait, possession or identity retired "because the story shows it".
 - **Background calls retry once**, only for failures a retry could fix (timeouts, 408, 429, 5xx,
   a 200 with no content).
 - **Every test of the memory must use a real character of realistic size.** airp's tests set a

@@ -25,6 +25,7 @@ from lustjinn import (
     persona_pieces,
     purge,
     rebuild,
+    review,
     search,
     spend,
     status_api,
@@ -154,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(export.router, dependencies=[Depends(auth.require_user)])
     app.include_router(spend.router, dependencies=[Depends(auth.require_user)])
     app.include_router(facts.router, dependencies=[Depends(auth.require_user)])
+    app.include_router(review.router, dependencies=[Depends(auth.require_user)])
     app.include_router(rebuild.router, dependencies=[Depends(auth.require_user)])
     app.include_router(purge.router, dependencies=[Depends(auth.require_user)])
     return app
