@@ -196,6 +196,9 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   character then believes. Output ceilings: 1,200 tokens for a summary, with thinking off and
   "at most 500 words" asked after the transcript ("be brief" alone was not heeded; #226); 4,000
   for fact extraction (a reasoning model thinks first).
+- **Close off the stretch the summariser reads**: `<transcript>` tags, then the task said again
+  after them. Sent bare, a stretch that ends on a turn of the story was continued instead of
+  summarised — three of one story's twenty-six summaries were its next turn (#229).
 - **Hand-written facts are pinned**: the extractor cannot retire them.
 - **Name the reader by their persona, never "User"**, in anything a model reads.
 - **Background calls retry once**, only for failures a retry could fix (timeouts, 408, 429, 5xx,

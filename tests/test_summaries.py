@@ -318,6 +318,29 @@ async def test_the_length_is_asked_for_after_the_transcript(
     assert stretch.endswith(f"Use at most {memory.SUMMARY_WORDS} words.")
 
 
+async def test_the_transcript_is_closed_off_so_it_is_not_continued(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+) -> None:
+    """Sent bare, a stretch that ends on a turn of the story reads as one to continue: three of
+    a real story's summaries were its next turn, status block and all (#229)."""
+    tune(context_budget=a_budget_that_holds(dummy, 12, tune()))
+    story = await a_long_story(session, 30)
+    model.summarises("Stretch.").extracts().says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    stretch = model.calls[0]["messages"][1]["content"]
+    assert stretch.startswith("<transcript>\nThe Gilded Heron: ")
+    turns, request = stretch.split("\n</transcript>\n\n")
+    assert "Rowan Hale: Turn 2." in turns
+    assert request.startswith("The transcript ends here.")
+    assert "Do not continue the story" in request
+
+
 async def test_the_reader_is_named_by_their_persona_rather_than_called_user(
     client: httpx2.AsyncClient,
     session: AsyncSession,

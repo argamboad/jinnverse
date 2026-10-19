@@ -89,11 +89,14 @@ def transcript(turns: Sequence[Message], story: Story, persona: Persona | None) 
 
 
 def stretch_to_summarise(turns: Sequence[Message], story: Story, persona: Persona | None) -> str:
-    """The stretch as the summariser is sent it: the transcript, then the task said again with its
-    length. The last thing a model reads is what it acts on."""
+    """The stretch as the summariser is sent it: the transcript closed off, then the task said
+    again with its length. The last thing a model reads is what it acts on, and a transcript that
+    ends on a turn of the story reads as one to continue: three of a real story's twenty-six
+    summaries were its next turn instead (#229)."""
     return (
-        f"{transcript(turns, story, persona)}\n\n"
-        "Write the factual account of this transcript now, as instructed. "
+        f"<transcript>\n{transcript(turns, story, persona)}\n</transcript>\n\n"
+        "The transcript ends here. Write the factual account of it now, as instructed. Do not "
+        "continue the story and do not write anyone's next turn. "
         f"Use at most {SUMMARY_WORDS} words."
     )
 
