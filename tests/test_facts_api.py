@@ -73,7 +73,7 @@ async def test_a_person_can_retire_what_the_extractor_cannot(
     session.add(pinned)
     await session.commit()
 
-    assert facts.retire([pinned], pinned.id.hex[:8], 1) is None  # the extractor's way: refused
+    assert facts.retire([pinned], 1, 1) is None  # the extractor's way: refused
     response = await client.delete(f"/stories/{story.id}/facts/{pinned.id}")
 
     assert response.status_code == 200

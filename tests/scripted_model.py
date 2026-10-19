@@ -137,12 +137,13 @@ class ScriptedModel:
     def extracts(
         self,
         facts: list[tuple[str, str]] = [],  # noqa: B006 — read only
-        retired: list[str] = [],  # noqa: B006
+        retired: list[int] = [],  # noqa: B006
         *,
         fenced: bool = False,
     ) -> Self:
-        """Answers the fact extractor's JSON: new facts as (subject, text), and ids to retire.
-        `fenced` wraps it in a Markdown code fence, as chatty models do."""
+        """Answers the fact extractor's JSON: new facts as (subject, text), and the numbers of
+        the existing facts to retire, as the extractor was shown them. `fenced` wraps it in a
+        Markdown code fence, as chatty models do."""
         document = json.dumps(
             {"facts": [{"subject": s, "text": t} for s, t in facts], "retired": retired}
         )

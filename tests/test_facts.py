@@ -89,7 +89,7 @@ async def test_the_extractor_sees_the_existing_facts_and_the_new_stretch(
     assert asked["messages"][0]["content"] == facts.INSTRUCTION
     body = asked["messages"][1]["content"]
     assert "Existing facts:\n" in body
-    assert "| Blake | sits where he can see the door." in body
+    assert "1. Blake | sits where he can see the door." in body  # numbered, not an id prefix
     assert "New transcript:\nThe Gilded Heron: " in body  # the stretch begins with the opening
     assert "Rowan Hale: Turn 2." in body
     assert asked["temperature"] == facts.FACTS_TEMPERATURE
@@ -109,7 +109,7 @@ async def test_a_retired_fact_leaves_the_next_prompt_and_keeps_its_range(
     old = facts.add(story, "Isaure", "distrusts Rowan.", 1, model="m")
     session.add(old)
     await session.commit()
-    model.summarises("Stretch.").extracts([("Isaure", "trusts Rowan.")], [old.id.hex[:8]])
+    model.summarises("Stretch.").extracts([("Isaure", "trusts Rowan.")], [1])
     model.says("Hm.")
 
     await send(client, story.id, "I come in.")
@@ -133,7 +133,7 @@ async def test_the_model_cannot_retire_a_fact_a_person_stated(
     pinned = facts.add(story, "Rowan Hale", "is allergic to shellfish.", 1)  # no model: a person
     session.add(pinned)
     await session.commit()
-    model.summarises("Stretch.").extracts([], [pinned.id.hex[:8]]).says("Hm.")
+    model.summarises("Stretch.").extracts([], [1]).says("Hm.")
 
     await send(client, story.id, "I come in.")
 
@@ -143,7 +143,7 @@ async def test_the_model_cannot_retire_a_fact_a_person_stated(
     assert world_sent(model) == WORLD_FRAME + "Rowan Hale: is allergic to shellfish."
 
 
-async def test_an_ambiguous_or_unknown_id_retires_nothing(
+async def test_a_number_off_the_list_retires_nothing(
     client: httpx2.AsyncClient,
     session: AsyncSession,
     model: ScriptedModel,
@@ -156,12 +156,38 @@ async def test_an_ambiguous_or_unknown_id_retires_nothing(
     two = facts.add(story, "B", "two.", 1, model="m")
     session.add_all([one, two])
     await session.commit()
-    shared = ""  # the empty prefix matches both
-    model.summarises("Stretch.").extracts([], [shared, "zzzzzzzz"]).says("Hm.")
+    model.summarises("Stretch.").extracts([], [0, 3, -1]).says("Hm.")
 
     await send(client, story.id, "I come in.")
 
     assert all(f.valid_to_sequence is None for f in await all_facts(session, story))
+
+
+async def test_a_plan_that_happened_is_retired_and_its_outcome_recorded(
+    client: httpx2.AsyncClient,
+    session: AsyncSession,
+    model: ScriptedModel,
+    tune: Callable[..., Settings],
+    dummy: Dummy,
+) -> None:
+    """The rule the extractor works by: a plan contradicts nothing when it happens, and under
+    "retire only on a contradiction" a real story kept "invited to the open house tonight" live
+    two hundred turns after the evening (#231)."""
+    tight(tune, dummy)
+    story = await a_long_story(session, 30)
+    plan = facts.add(story, "Rowan Hale", "is expected at the dock at dawn.", 1, model="m")
+    session.add(plan)
+    await session.commit()
+    model.summarises("Rowan went to the dock at dawn and took the silver.")
+    model.extracts([("Rowan Hale", "has the silver from the dock.")], [1]).says("Hm.")
+
+    await send(client, story.id, "I come in.")
+
+    gone, now = await all_facts(session, story)
+    assert gone.id == plan.id
+    assert gone.valid_to_sequence is not None
+    assert now.text == "has the silver from the dock."
+    assert "a plan, invitation or appointment that has now happened" in facts.INSTRUCTION
 
 
 async def test_json_wrapped_in_a_code_fence_is_still_read(
@@ -260,27 +286,27 @@ async def test_a_story_that_fits_extracts_nothing(
 
 
 def test_the_answer_is_read_from_the_first_brace_to_the_last() -> None:
-    document = '{"facts": [{"subject": "A", "text": "b."}], "retired": ["ab12"]}'
+    document = '{"facts": [{"subject": "A", "text": "b."}], "retired": [2]}'
     answer = f"Here you go:\n```json\n{document}\n```\nDone."
 
     found, retired = facts.parse(answer)
 
     assert found == [("A", "b.")]
-    assert retired == ["ab12"]
+    assert retired == [2]
 
 
 def test_entries_that_are_not_the_agreed_shape_are_skipped() -> None:
     answer = json.dumps(
         {
             "facts": [{"subject": "A", "text": "b."}, "junk", {"subject": "", "text": "x"}],
-            "retired": [7, " c3 "],
+            "retired": [7, " 3 ", "ab12", True, None],
         }
     )
 
     found, retired = facts.parse(answer)
 
     assert found == [("A", "b.")]
-    assert retired == ["c3"]
+    assert retired == [7, 3]  # a number as a string still counts; words and booleans do not
 
 
 def test_an_answer_with_no_object_in_it_is_refused() -> None:

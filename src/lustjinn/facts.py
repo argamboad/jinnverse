@@ -40,16 +40,13 @@ FACTS_MAX_TOKENS = 8000
 """Generous: a reasoning model thinks first, and the JSON comes after. At 4,000 it was tight: one
 extraction on staging thought for 2,687 of its 2,902 tokens, and one in 73 reached the ceiling
 (#227)."""
-ID_PREFIX = 8
-"""How much of a fact's id the extractor is shown, and may name to retire it."""
-
 INSTRUCTION = (
     "You are maintaining the world state of a roleplay conversation. You are given the facts "
-    "currently believed to be true, and a new stretch of transcript.\n\n"
+    "currently believed to be true, numbered, and a new stretch of transcript.\n\n"
     "Reply with JSON only, in this shape:\n"
     "{\n"
     '  "facts": [ { "subject": "...", "text": "..." } ],\n'
-    '  "retired": [ "<id of a fact that is no longer true>" ]\n'
+    '  "retired": [ <the number of a fact that is no longer true as written> ]\n'
     "}\n\n"
     "Rules:\n"
     '- "facts" holds only what the new transcript establishes and the existing list does not '
@@ -60,12 +57,17 @@ INSTRUCTION = (
     "is.\n"
     '- "text" is one plain sentence, in the language of the transcript, stating something '
     "durable: a trait, a possession, an injury, a commitment, a standing between people.\n"
-    "- Do not record what merely happened; that is the summary's job. Record what it left true.\n"
-    '- "retired" lists the ids of existing facts the new transcript has made false. A change '
-    "of heart, a wound that healed, a promise broken or kept. Be conservative: retire a fact "
-    "only when the transcript actually contradicts it.\n"
+    "- Do not record what merely happened — a post published, a message sent, a meal eaten; "
+    "that is the summary's job. Record only what it left true.\n"
+    '- "retired" lists the numbers of existing facts the new transcript has made false or left '
+    "behind: a change of heart, a wound that healed, a promise broken or kept — and a plan, "
+    "invitation or appointment that has now happened, or a state a newer one replaces. When a "
+    "plan happened, retire it and record what it left true as a new fact. Retire only on what "
+    "the transcript shows, never on a guess.\n"
     "- If there is nothing to add and nothing to retire, reply with empty arrays."
 )
+"""The extractor's rule on retiring was once "only when the transcript contradicts it", and in
+27 calls on a real story it retired nothing: a plan that happened contradicts nothing (#231)."""
 
 
 async def live_facts(session: AsyncSession, story_id: uuid.UUID) -> list[Fact]:
@@ -84,16 +86,20 @@ def world(facts: Sequence[Fact]) -> list[WorldFact]:
 
 
 def listed(facts: Sequence[Fact]) -> str:
-    """The existing facts as the extractor sees them: a short id to retire by, then the fact."""
+    """The existing facts as the extractor sees them, numbered from 1 in the order given — the
+    order `retire` counts in. They were once named by the first eight characters of their id,
+    and ids are UUIDv7, time-ordered: fifty-two facts of one story shared one seven-character
+    prefix, and a model cannot tell `01a155b4` from `01a155b8` (#231)."""
     if not facts:
         return "(none yet)"
-    return "\n".join(f"{fact.id.hex[:ID_PREFIX]} | {fact.subject} | {fact.text}" for fact in facts)
+    return "\n".join(f"{n}. {fact.subject} | {fact.text}" for n, fact in enumerate(facts, 1))
 
 
-def parse(answer: str) -> tuple[list[tuple[str, str]], list[str]]:
-    """The facts and the retired ids in the model's answer, read generously: the JSON is taken
-    from the first `{` to the last `}`, so a code fence or a sentence around it does no harm.
-    Anything that is not the agreed shape is skipped rather than guessed at."""
+def parse(answer: str) -> tuple[list[tuple[str, str]], list[int]]:
+    """The facts and the retired numbers in the model's answer, read generously: the JSON is
+    taken from the first `{` to the last `}`, so a code fence or a sentence around it does no
+    harm. Anything that is not the agreed shape is skipped rather than guessed at; a number
+    written as a string still counts."""
     start, end = answer.find("{"), answer.rfind("}")
     if start < 0 or end < start:
         raise ValueError("no JSON object in the answer")
@@ -108,26 +114,28 @@ def parse(answer: str) -> tuple[list[tuple[str, str]], list[str]]:
         text = entry.get("text")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         if isinstance(subject, str) and isinstance(text, str) and subject.strip() and text.strip():
             found.append((subject.strip()[:200], text.strip()))
-    retired = [
-        item.strip()
-        for item in document.get("retired") or []  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-        if isinstance(item, str) and item.strip()
-    ]
+    retired: list[int] = []
+    for item in document.get("retired") or []:  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            retired.append(item)
+        elif isinstance(item, str) and item.strip().isdigit():
+            retired.append(int(item.strip()))
     return found, retired
 
 
-def retire(facts: Sequence[Fact], prefix: str, at_sequence: int) -> Fact | None:
-    """Retires the one live, unpinned fact whose id starts with `prefix`. Nothing happens when
-    the prefix matches no fact, more than one, or only a pinned one."""
-    matches = [
-        fact
-        for fact in facts
-        if fact.valid_to_sequence is None and fact.id.hex.startswith(prefix.lower())
-    ]
-    if len(matches) != 1 or matches[0].pinned:
+def retire(facts: Sequence[Fact], number: int, at_sequence: int) -> Fact | None:
+    """Retires fact `number` — counted from 1 in `facts`, the order `listed` showed them — when
+    it is live and not pinned. A number off the list, a fact already retired, or a pinned one:
+    nothing happens."""
+    if not 1 <= number <= len(facts):
         return None
-    matches[0].valid_to_sequence = at_sequence
-    return matches[0]
+    fact = facts[number - 1]
+    if fact.valid_to_sequence is not None or fact.pinned:
+        return None
+    fact.valid_to_sequence = at_sequence
+    return fact
 
 
 def add(
@@ -195,7 +203,7 @@ async def extract(
     first, last = stretch[0].sequence, stretch[-1].sequence
     for subject, text in found:
         session.add(add(story, subject, text, first, model=reply.model))
-    retired = sum(1 for prefix in retired_ids if retire(existing, prefix, last) is not None)
+    retired = sum(1 for number in retired_ids if retire(existing, number, last) is not None)
     await session.commit()
     return len(found), retired
 

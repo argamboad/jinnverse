@@ -201,6 +201,11 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   after them. Sent bare, a stretch that ends on a turn of the story was continued instead of
   summarised — three of one story's twenty-six summaries were its next turn (#229).
 - **Hand-written facts are pinned**: the extractor cannot retire them.
+- **The extractor retires what the story has moved past** — a plan that happened, a state a
+  newer one replaced — not only what a stretch contradicts: told "only on a contradiction", it
+  retired nothing in 27 calls on a real story, and an invitation stayed "tonight" for two hundred
+  turns (#231). **It names facts by number**, never by an id prefix: UUIDv7 ids made in the same
+  second share seven of eight characters, and a model cannot tell them apart.
 - **Name the reader by their persona, never "User"**, in anything a model reads.
 - **Background calls retry once**, only for failures a retry could fix (timeouts, 408, 429, 5xx,
   a 200 with no content).
