@@ -28,3 +28,21 @@ export function apiHost(url: string): string {
 		return url;
 	}
 }
+
+const count = (n: number, one: string, many: string) =>
+	`${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+/** What the Deleted stories card says about the deleted stories still kept. */
+export function keptLine(kept: { stories: number; messages: number }): string {
+	if (kept.stories === 0) return 'Nothing to erase.';
+	const verb = kept.stories === 1 ? 'keeps' : 'keep';
+	return `${count(kept.stories, 'deleted story', 'deleted stories')} still ${verb} ${count(kept.messages, 'message', 'messages')} and their memory.`;
+}
+
+/** The question asked before erasing, and the toast after. */
+export function eraseQuestion(stories: number): string {
+	return `Erase ${count(stories, 'story', 'stories')} for good?`;
+}
+export function erasedLine(stories: number): string {
+	return `Erased ${count(stories, 'story', 'stories')}`;
+}

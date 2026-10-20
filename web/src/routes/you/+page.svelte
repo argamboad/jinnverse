@@ -3,11 +3,12 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import Tabs from '#lib/Tabs.svelte';
 	import ThemeSwitch from '#lib/ThemeSwitch.svelte';
-	import { api, API_URL, token, type SpendReport } from '#lib/api.ts';
+	import { api, ApiError, API_URL, token, type PurgedAll, type SpendReport } from '#lib/api.ts';
 	import { server } from '#lib/health.svelte.ts';
 	import { money } from '#lib/money.ts';
 	import { session } from '#lib/session.svelte.ts';
-	import { apiHost, monthStart, tokenName } from '#lib/you.ts';
+	import { toasts } from '#lib/toasts.svelte.ts';
+	import { apiHost, erasedLine, eraseQuestion, keptLine, monthStart, tokenName } from '#lib/you.ts';
 
 	const name = tokenName(token.get()) ?? 'reader';
 
@@ -15,11 +16,48 @@
 	let month = $state<SpendReport | null>(null);
 	let byStory = $state(false);
 
+	/** The deleted stories still kept, from a dry run; null until it is read, or if it cannot be. */
+	let kept = $state<PurgedAll | null>(null);
+	let unread = $state(false);
+	let which = $state(false);
+	let confirming = $state(false);
+	let erasing = $state(false);
+
+	function look() {
+		api
+			.purgeDeleted(true)
+			.then((found) => {
+				kept = found;
+				unread = false;
+			})
+			.catch(() => (unread = true));
+	}
+
+	async function erase() {
+		erasing = true;
+		try {
+			const done = await api.purgeDeleted();
+			toasts.show('ok', erasedLine(done.stories), 'Their spending stays in the reports.');
+		} catch (error) {
+			toasts.show(
+				'danger',
+				'Could not erase',
+				error instanceof ApiError ? error.message : undefined
+			);
+		} finally {
+			erasing = false;
+			confirming = false;
+			which = false;
+			look();
+		}
+	}
+
 	onMount(() => {
 		api
 			.spend(monthStart())
 			.then((report) => (month = report))
 			.catch(() => undefined); // the card says "—" and the rest of the screen still works
+		look();
 	});
 </script>
 
@@ -72,6 +110,57 @@
 		<section class="card">
 			<h2>Theme</h2>
 			<ThemeSwitch />
+		</section>
+		<!-- Delete only hides a story; this erases the hidden ones for good (#240). -->
+		<section class="card">
+			<h2>Deleted stories</h2>
+			{#if unread}
+				<p class="note muted">Could not read the deleted stories.</p>
+			{:else if kept === null}
+				<p class="note muted">—</p>
+			{:else if kept.stories === 0}
+				<p class="note muted">
+					{keptLine(kept)} A deleted story keeps its messages and memory until it is erased here.
+				</p>
+			{:else}
+				<p class="note">{keptLine(kept)}</p>
+				<button class="link" type="button" aria-expanded={which} onclick={() => (which = !which)}
+					>Which {which ? '⌄' : '›'}</button
+				>
+				{#if which}
+					<ul class="stories">
+						{#each kept.names as storyName, i (i)}
+							<li><span>{storyName}</span></li>
+						{/each}
+					</ul>
+				{/if}
+				{#if confirming}
+					<div class="confirm" role="alertdialog" aria-label="Erase the deleted stories?">
+						<p class="note">
+							<b>{eraseQuestion(kept.stories)}</b> Their messages and memory go; their spending stays
+							in the reports. This cannot be undone.
+						</p>
+						<div class="choice">
+							<button
+								class="btn ghost small"
+								type="button"
+								disabled={erasing}
+								onclick={() => (confirming = false)}>Keep</button
+							>
+							<button
+								class="btn ghost small danger"
+								type="button"
+								disabled={erasing}
+								onclick={erase}>{erasing ? 'Erasing…' : 'Erase'}</button
+							>
+						</div>
+					</div>
+				{:else}
+					<button class="btn ghost small danger" type="button" onclick={() => (confirming = true)}
+						>Erase them for good</button
+					>
+				{/if}
+			{/if}
 		</section>
 		<p class="foot muted">
 			API <code>{apiHost(API_URL)}</code>{#if server.commit}
@@ -200,5 +289,29 @@
 	.foot {
 		font-size: 0.78rem;
 		padding: 4px 6px;
+	}
+	.note {
+		font-size: 0.88rem;
+		color: var(--fg-2);
+	}
+	.note.muted {
+		color: var(--muted);
+	}
+	.note b {
+		color: var(--fg);
+	}
+	.btn.danger {
+		color: var(--danger);
+		border-color: var(--danger);
+	}
+	.confirm {
+		display: grid;
+		gap: 10px;
+		width: 100%;
+	}
+	.choice {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
 	}
 </style>
