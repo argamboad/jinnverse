@@ -107,50 +107,59 @@
 	{#each shown as story (story.id)}
 		{@const reachable = hover || open === story.id}
 		<div class="row" class:rail class:current={story.id === current}>
-			<div class="actions" aria-hidden={!reachable}>
-				<button
-					type="button"
-					class="act branch"
-					onclick={() => branch(story)}
-					tabindex={reachable ? 0 : -1}>Branch</button
-				>
-				<button
-					type="button"
-					class="act delete"
-					onclick={() => (confirming = story.id)}
-					tabindex={reachable ? 0 : -1}>Delete</button
-				>
-			</div>
-			<a
-				class="story"
-				href="/story/{story.id}"
-				aria-current={story.id === current ? 'page' : undefined}
-				style:transform="translateX({offset(story.id)})"
-				onpointerdown={(e) => pointerdown(e, story.id)}
-				onpointermove={pointermove}
-				onpointerup={(e) => pointerup(e, story.id)}
-				onpointercancel={() => (drag = null)}
-				onclick={(e) => {
-					if (open === story.id || (drag && Math.abs(drag.dx) > 8)) e.preventDefault();
-				}}
-				draggable="false"
-			>
-				<div class="who">{initial(story)}</div>
-				<div class="text">
-					<div class="name">
-						<span>{story.name}</span>
-					</div>
-					{#if !rail}<div class="line">{whoLine(story)}</div>{/if}
-					{#if story.turns > 0 && story.last_message_preview}
-						<div class="preview prose">{story.last_message_preview}</div>
-					{:else if rail}
-						<div class="preview muted">Nothing said yet</div>
-					{/if}
+			<!-- The card and the actions under it, apart from the confirmation below: the actions
+			     are as tall as the card, never laid over the confirmation's buttons. -->
+			<div class="swipe">
+				<div class="actions" aria-hidden={!reachable}>
+					<button
+						type="button"
+						class="act branch"
+						onclick={() => branch(story)}
+						tabindex={reachable ? 0 : -1}>Branch</button
+					>
+					<button
+						type="button"
+						class="act delete"
+						onclick={() => (confirming = story.id)}
+						tabindex={reachable ? 0 : -1}>Delete</button
+					>
 				</div>
-				<div class="when">{when(story)}</div>
-			</a>
+				<a
+					class="story"
+					href="/story/{story.id}"
+					aria-current={story.id === current ? 'page' : undefined}
+					style:transform="translateX({offset(story.id)})"
+					onpointerdown={(e) => pointerdown(e, story.id)}
+					onpointermove={pointermove}
+					onpointerup={(e) => pointerup(e, story.id)}
+					onpointercancel={() => (drag = null)}
+					onclick={(e) => {
+						if (open === story.id || (drag && Math.abs(drag.dx) > 8)) e.preventDefault();
+					}}
+					draggable="false"
+				>
+					<div class="who">{initial(story)}</div>
+					<div class="text">
+						<div class="name">
+							<span>{story.name}</span>
+						</div>
+						{#if !rail}<div class="line">{whoLine(story)}</div>{/if}
+						{#if story.turns > 0 && story.last_message_preview}
+							<div class="preview prose">{story.last_message_preview}</div>
+						{:else if rail}
+							<div class="preview muted">Nothing said yet</div>
+						{/if}
+					</div>
+					<div class="when">{when(story)}</div>
+				</a>
+			</div>
 			{#if confirming === story.id}
-				<div class="confirm" role="alertdialog" aria-label="Delete this story?">
+				<div
+					class="confirm"
+					role="alertdialog"
+					aria-label="Delete this story?"
+					{@attach (node) => node.scrollIntoView({ block: 'nearest' })}
+				>
 					<span>Delete “{story.name}”? It is hidden, not erased.</span>
 					<button type="button" class="btn ghost" onclick={() => (confirming = null)}>Keep</button>
 					<button type="button" class="btn danger" onclick={() => remove(story)}>Delete</button>
@@ -161,10 +170,17 @@
 {/if}
 
 <style>
+	/* The row itself never clips. Both lists are grids of a fixed height, and a grid shrinks a
+	   row that clips its overflow below what is in it once the rows outgrow the list: the cards
+	   lost their last line and the delete confirmation had no room to appear. Only the card and
+	   its actions are clipped, so the row is as tall as its content and the list scrolls (#238). */
 	.row {
-		position: relative;
 		border-radius: var(--r-m);
+	}
+	.swipe {
+		position: relative;
 		overflow: hidden;
+		border-radius: inherit;
 	}
 	.actions {
 		position: absolute;
@@ -263,6 +279,8 @@
 		padding: 10px 12px;
 		background: var(--surface-2);
 		border-top: 1px solid var(--line);
+		border-bottom-left-radius: inherit;
+		border-bottom-right-radius: inherit;
 		font-size: 0.88rem;
 		color: var(--fg-2);
 	}
