@@ -109,3 +109,48 @@ async def test_other_stories_are_untouched(
 
     assert (await rows_of(session, kept.id))["messages"] == 10
     assert await session.get(Story, kept.id) is not None
+
+
+async def test_every_deleted_story_is_erased_at_once_and_the_live_ones_are_spared(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    first, _turns = await a_story_with_a_memory(session)
+    second, _more = await a_story_with_a_memory(session)
+    kept, _still = await a_story_with_a_memory(session)
+    await client.patch(f"/stories/{second.id}", json={"name": "A second night"})
+    await client.delete(f"/stories/{first.id}")
+    await client.delete(f"/stories/{second.id}")
+
+    looked = (await client.post("/stories/purge", params={"dry_run": True})).json()
+
+    assert (looked["dry_run"], looked["stories"]) == (True, 2)
+    assert looked["names"] == ["A second night", "First night"]
+    assert (looked["messages"], looked["embeddings"], looked["ledger_rows_kept"]) == (20, 14, 2)
+    assert (await rows_of(session, first.id))["messages"] == 10  # a dry run erases nothing
+
+    response = await client.post("/stories/purge")
+
+    assert response.status_code == 200, response.text
+    erased = response.json()
+    assert (erased["dry_run"], erased["stories"]) == (False, 2)
+    assert {k: v for k, v in erased.items() if k != "dry_run"} == {
+        k: v for k, v in looked.items() if k != "dry_run"
+    }
+    for gone in (first, second):
+        assert set((await rows_of(session, gone.id)).values()) == {0}
+        assert await session.get(Story, gone.id) is None
+    assert (await rows_of(session, kept.id))["messages"] == 10
+    assert await session.get(Story, kept.id) is not None
+    assert len(list(await session.scalars(select(Spend)))) == 3  # the ledger keeps every bill
+
+
+async def test_with_nothing_deleted_erasing_everything_erases_nothing(
+    client: httpx2.AsyncClient, session: AsyncSession
+) -> None:
+    kept, _turns = await a_story_with_a_memory(session)
+
+    erased = (await client.post("/stories/purge")).json()
+
+    assert (erased["stories"], erased["names"], erased["messages"]) == (0, [], 0)
+    assert Decimal(erased["ledger_cost_kept"]) == Decimal(0)
+    assert (await rows_of(session, kept.id))["messages"] == 10

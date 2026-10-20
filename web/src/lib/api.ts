@@ -159,6 +159,26 @@ export interface Defaults {
 	default_persona_name: string | null;
 }
 
+/** What erasing every deleted story did, or with `dry_run` would do. The spend rows are kept. */
+export interface PurgedAll {
+	dry_run: boolean;
+	stories: number;
+	/** The stories erased, or that would be, alphabetically. */
+	names: string[];
+	messages: number;
+	embeddings: number;
+	summaries: number;
+	facts: number;
+	trackers: number;
+	asides: number;
+	dial_values: number;
+	status_fields: number;
+	status_values: number;
+	status_pins: number;
+	ledger_rows_kept: number;
+	ledger_cost_kept: string;
+}
+
 export interface StorySpend {
 	story_id: string;
 	name: string;
@@ -508,6 +528,9 @@ export const api = {
 		json<StoryWithMessages>('POST', '/stories', body),
 	renameStory: (id: string, name: string) => json<Story>('PATCH', `/stories/${id}`, { name }),
 	deleteStory: (id: string) => call('DELETE', `/stories/${id}`).then(() => undefined),
+	/** Erases every deleted story for good; with `dryRun` only says what would go. */
+	purgeDeleted: (dryRun = false) =>
+		json<PurgedAll>('POST', `/stories/purge${dryRun ? '?dry_run=true' : ''}`),
 
 	branch: (storyId: string, messageId: string, name?: string) =>
 		json<StoryWithMessages>('POST', `/stories/${storyId}/branch`, {
