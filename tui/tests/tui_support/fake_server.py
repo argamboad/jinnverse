@@ -754,17 +754,13 @@ class FakeServer:
     # The slots and the paragraphs they write, as the API's own list has them.
     _SLOTS: ClassVar[list[tuple[str, str, int | None]]] = [
         ("name", "Name", None),
-        ("look", "Identity and look", 0),
-        ("style", "Style and what they carry", 1),
-        ("marks", "Tattoos and marks", 2),
-        ("family", "Family", 3),
-        ("work", "Occupation and public profile", 4),
-        ("home", "Home", 5),
-        ("vehicle", "Vehicle", 5),
-        ("pets", "Pets", 5),
-        ("personality", "Personality and values", 6),
-        ("humour", "Humour", 7),
-        ("passions", "Passions", 8),
+        ("look", "Look, style and marks", 0),
+        ("family", "Family", 1),
+        ("work", "Occupation and public profile", 2),
+        ("home", "Home", 3),
+        ("vehicle", "Vehicle", 3),
+        ("pets", "Pets", 3),
+        ("personality", "Personality, humour, passions", 4),
     ]
 
     def _persona_pieces(self, parts: list[str], request: httpx2.Request) -> httpx2.Response:
@@ -861,14 +857,10 @@ class FakeServer:
         paragraphs: list[str] = []
         for group in (
             ["look"],
-            ["style"],
-            ["marks"],
             ["family"],
             ["work"],
             ["home", "vehicle", "pets"],
             ["personality"],
-            ["humour"],
-            ["passions"],
         ):
             texts = [p["text"].strip() for slot in group for p in chosen.get(slot, [])]
             if len(group) == 1:

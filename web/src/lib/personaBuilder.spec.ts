@@ -16,28 +16,28 @@ import {
 
 const SLOTS: Slot[] = [
 	{ key: 'name', label: 'Name', paragraph: null },
-	{ key: 'look', label: 'Identity and look', paragraph: 0 },
-	{ key: 'home', label: 'Home', paragraph: 5 },
-	{ key: 'vehicle', label: 'Vehicle', paragraph: 5 },
-	{ key: 'pets', label: 'Pets', paragraph: 5 },
-	{ key: 'humour', label: 'Humour', paragraph: 7 }
+	{ key: 'look', label: 'Look, style and marks', paragraph: 0 },
+	{ key: 'home', label: 'Home', paragraph: 3 },
+	{ key: 'vehicle', label: 'Vehicle', paragraph: 3 },
+	{ key: 'pets', label: 'Pets', paragraph: 3 },
+	{ key: 'personality', label: 'Personality, humour, passions', paragraph: 4 }
 ];
 
 describe('the checklist', () => {
 	it('gives each slot a row, and slots that share a paragraph one row together', () => {
 		expect(groupSlots(SLOTS).map((g) => [g.key, g.label, g.slots.length])).toEqual([
 			['name', 'Name', 1],
-			['look', 'Identity and look', 1],
+			['look', 'Look, style and marks', 1],
 			['home+vehicle+pets', 'Home · Vehicle · Pets', 3],
-			['humour', 'Humour', 1]
+			['personality', 'Personality, humour, passions', 1]
 		]);
 	});
 
 	it('asks for a needed slot, lets an optional one go, and counts a shared row', () => {
-		const [name, look, homeRow, humour] = groupSlots(SLOTS);
+		const [name, look, homeRow, personality] = groupSlots(SLOTS);
 		expect(rowHint(name)).toBe('Pick one');
 		expect(rowHint(look)).toBe('Pick one');
-		expect(rowHint(humour)).toBe('Pick one, or leave it');
+		expect(rowHint(personality)).toBe('Pick one, or leave it');
 		expect(rowHint(homeRow)).toBe('One paragraph, up to 3 pieces');
 	});
 

@@ -349,3 +349,8 @@ and CI runs them on every pull request. (The original also required the deployed
     of item 6 stands. The Render services were created under the old name and keep it, names and
     URLs (`lustjinn-staging.onrender.com`), because Render cannot rename a URL. Items 2 and 3
     above are left as the record of what came before.
+12. **Eight persona slots, not twelve** (Step 22, milestone 24). The owner, curating the pool,
+    found the style, the marks, the humour and the passions never picked apart from the look and
+    the personality: a look piece now holds its three paragraphs, a personality piece up to
+    three. The measure of the pool is that every persona the owner wrote rebuilds from it
+    exactly, which the extractor proves on each run.

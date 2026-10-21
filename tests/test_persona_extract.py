@@ -31,15 +31,18 @@ PARAGRAPHS = [
 TEXT = "\n".join(PARAGRAPHS)
 SLOTS = [
     PieceSlot.LOOK,
-    PieceSlot.STYLE,
-    PieceSlot.MARKS,
+    PieceSlot.LOOK,  # the style
+    PieceSlot.LOOK,  # the marks
     PieceSlot.FAMILY,
     PieceSlot.WORK,
     PieceSlot.HOME,
     PieceSlot.PERSONALITY,
-    PieceSlot.HUMOUR,
-    PieceSlot.PASSIONS,
+    PieceSlot.PERSONALITY,  # the humour
+    PieceSlot.PERSONALITY,  # the passions
 ]
+PIECES = 6
+"""What the persona gives: a name, a look of three paragraphs, a family, a work, a home, and a
+personality of three paragraphs (#254)."""
 
 
 # --- the suggestions -----------------------------------------------------------------------------
@@ -73,13 +76,46 @@ def test_the_persona_s_name_becomes_the_placeholders() -> None:
 
     pieces = plan.pieces()
 
-    assert pieces[0] == (
-        PieceSlot.LOOK,
-        "{name} is a tall, quiet physician from Leeds with grey eyes and a soft accent.",
+    assert pieces[0][0] is PieceSlot.LOOK
+    assert pieces[0][1].startswith(
+        "{name} is a tall, quiet physician from Leeds with grey eyes and a soft accent.\n"
     )
-    assert pieces[3][1] == (
+    assert pieces[1][1] == (
         "{short} is the son of a miner and a teacher. His younger sister, Isla, runs a bakery."
     )
+
+
+def test_the_look_and_the_personality_hold_their_three_paragraphs_each() -> None:
+    """The style and the marks follow the look into one piece, the humour and the passions the
+    personality (#254); the other slots keep a piece a paragraph."""
+    pieces = plan_persona("owen", TEXT).pieces()
+
+    assert [slot for slot, _ in pieces] == [
+        PieceSlot.LOOK,
+        PieceSlot.FAMILY,
+        PieceSlot.WORK,
+        PieceSlot.HOME,
+        PieceSlot.PERSONALITY,
+    ]
+    assert pieces[0][1].count("\n") == 2
+    assert pieces[0][1].endswith("His tattoos are small and private. A swallow rests on his wrist.")
+    assert pieces[4][1] == "\n".join(PARAGRAPHS[6:])
+
+
+def test_two_personality_paragraphs_apart_from_each_other_stay_apart() -> None:
+    """Only paragraphs that follow each other merge: the joiner keeps a persona's order, and a
+    personality paragraph before the home one cannot rejoin the one after it."""
+    plan = plan_persona("owen", TEXT)
+    plan.paragraphs[4].slot = PieceSlot.PERSONALITY  # the work paragraph, before the home one
+
+    assert [slot for slot, _ in plan.pieces()] == [
+        PieceSlot.LOOK,
+        PieceSlot.FAMILY,
+        PieceSlot.PERSONALITY,
+        PieceSlot.HOME,
+        PieceSlot.PERSONALITY,
+    ]
+    assert not plan.rejoins()
 
 
 # --- the proof -----------------------------------------------------------------------------------
@@ -195,12 +231,14 @@ async def test_saving_makes_a_piece_of_each_paragraph_and_a_name_piece(
 
     report = await save(session, await plans_for_all(session))
 
-    assert (report.personas, report.created, report.reused, report.skipped) == (1, 10, 0, [])
+    assert (report.personas, report.created, report.reused, report.skipped) == (1, PIECES, 0, [])
     pieces = list(await session.scalars(select(PersonaPiece)))
     assert {p.voice for p in pieces} == {Voice.HE}
     [name] = [p for p in pieces if p.slot is PieceSlot.NAME]
     assert (name.text, name.short, name.name) == ("Dr. Owen Quill", "Owen", "Dr. Owen Quill")
-    assert len([p for p in pieces if p.slot is not PieceSlot.NAME]) == 9
+    assert len([p for p in pieces if p.slot is not PieceSlot.NAME]) == PIECES - 1
+    [look] = [p for p in pieces if p.slot is PieceSlot.LOOK]
+    assert look.text.split("\n")[1] == PARAGRAPHS[1]  # the style paragraph, inside the look
 
 
 async def test_a_paragraph_two_personas_share_becomes_one_piece(session: AsyncSession) -> None:
@@ -211,8 +249,8 @@ async def test_a_paragraph_two_personas_share_becomes_one_piece(session: AsyncSe
     report = await save(session, await plans_for_all(session))
 
     assert report.personas == 2
-    assert report.created == 10  # the roommate's eight paragraphs and its name already exist
-    assert report.reused == 9
+    assert report.created == PIECES  # the roommate's four pieces and its name already exist
+    assert report.reused == PIECES - 1
     homes = list(await session.scalars(select(PersonaPiece).where(PersonaPiece.slot == "home")))
     assert len(homes) == 1
 
@@ -223,8 +261,8 @@ async def test_running_it_again_adds_nothing(session: AsyncSession) -> None:
 
     again = await save(session, await plans_for_all(session))
 
-    assert (again.created, again.reused) == (0, 10)
-    assert len(list(await session.scalars(select(PersonaPiece)))) == 10
+    assert (again.created, again.reused) == (0, PIECES)
+    assert len(list(await session.scalars(select(PersonaPiece)))) == PIECES
 
 
 async def test_the_personas_are_never_touched(session: AsyncSession) -> None:
@@ -246,7 +284,9 @@ async def test_a_plan_that_does_not_rejoin_is_left_out_and_named(session: AsyncS
     assert report.personas == 1
 
 
-async def test_two_paragraphs_of_one_slot_get_two_names(session: AsyncSession) -> None:
+async def test_two_family_paragraphs_are_two_pieces_with_two_names(session: AsyncSession) -> None:
+    """A slot outside the look and the personality keeps a piece a paragraph, so a builder may
+    pick the parents without the twin."""
     twins = TEXT.replace(
         PARAGRAPHS[3], PARAGRAPHS[3] + "\nHis twin sister, Macarena, is a gifted visual artist."
     )

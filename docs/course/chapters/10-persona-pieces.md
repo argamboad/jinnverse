@@ -48,18 +48,18 @@ A closed list is an enum, and an enum here is two things at once:
 ```python
 class PieceSlot(StrEnum):
     NAME = "name"
-    LOOK = "look"
-    STYLE = "style"
-    MARKS = "marks"
+    LOOK = "look"          # identity and look, with the style and the marks
     FAMILY = "family"
     WORK = "work"
     HOME = "home"
     VEHICLE = "vehicle"
     PETS = "pets"
-    PERSONALITY = "personality"
-    HUMOUR = "humour"
-    PASSIONS = "passions"
+    PERSONALITY = "personality"  # with the humour and the passions
 ```
+
+Eight slots, not twelve: the first version gave the style, the marks, the humour and the passions
+a slot each, and the section at the end of this chapter tells why they folded into the look and
+the personality, and how a closed list changes once rows exist.
 
 The **declaration order is the persona's paragraph order**: a client that lists the slots in
 this order shows them in the order the text will read. The same list is written a second time,
@@ -105,21 +105,18 @@ Everything the feature knows about the persona's shape is one pure function and 
 ```python
 PARAGRAPHS: tuple[tuple[PieceSlot, ...], ...] = (
     (PieceSlot.LOOK,),
-    (PieceSlot.STYLE,),
-    (PieceSlot.MARKS,),
     (PieceSlot.FAMILY,),
     (PieceSlot.WORK,),
     (PieceSlot.HOME, PieceSlot.VEHICLE, PieceSlot.PETS),
     (PieceSlot.PERSONALITY,),
-    (PieceSlot.HUMOUR,),
-    (PieceSlot.PASSIONS,),
 )
 ```
 
 Home, vehicle and pets share one paragraph, their sentences joined with a space, because that is
 where the owner's personas keep them: "He lives in a penthouse. He rides a Royal Enfield." is one
-paragraph. Every other slot writes paragraphs of its own, and a piece may hold more than one (the
-work slot does in two of the personas). `assemble` walks the groups:
+paragraph. Every other slot writes paragraphs of its own, and a piece may hold more than one: a
+look piece is three (the look, the style, the marks), a personality piece up to three, and the
+work slot has two in one of the personas. `assemble` walks the groups:
 
 ```python
 def assemble(picks: Mapping[PieceSlot, Sequence[PersonaPiece]]) -> str:
@@ -224,9 +221,11 @@ The rules for a paragraph are simple, deliberately, and there is no model call:
 
 ```python
 RULES: tuple[tuple[PieceSlot, re.Pattern[str]], ...] = (
-    (PieceSlot.MARKS, re.compile(r"^(his|her|their)\s+(tattoos?|scars?|piercings?)\b", …)),
-    (PieceSlot.HUMOUR, re.compile(r"^(his|her|their)\s+humou?r\b", …)),
-    (PieceSlot.PASSIONS, re.compile(r"^(his|her|their)\s+(passions|interests|hobbies)\b", …)),
+    (PieceSlot.LOOK,  # the marks
+     re.compile(r"^(his|her|their)\s+(tattoos?|scars?|piercings?)\b", …)),
+    (PieceSlot.PERSONALITY, re.compile(r"^(his|her|their)\s+humou?r\b", …)),
+    (PieceSlot.PERSONALITY,  # the passions
+     re.compile(r"^(his|her|their)\s+(passions|interests|hobbies)\b", …)),
     (PieceSlot.HOME, re.compile(r"\b(lives? in|penthouse|apartment|…|rides an?)\b", …)),
     (PieceSlot.FAMILY, re.compile(r"\b(son of|daughter of|sister|brother|twin|…)\b", …)),
     …
@@ -234,7 +233,10 @@ RULES: tuple[tuple[PieceSlot, re.Pattern[str]], ...] = (
 ```
 
 The first paragraph is always the look, the first rule a paragraph matches decides its slot, and
-the work slot takes what is left. A model would have been more flexible and less honest: it would
+the work slot takes what is left. In the look and the personality, paragraphs that follow each
+other become **one piece**, a line break between them, which is how a look piece comes to hold
+the style and the marks; every other slot keeps a piece a paragraph, so a builder may pick the
+parents without the twin. A model would have been more flexible and less honest: it would
 have answered confidently when the rule did not hold, and it would have cost a call per paragraph
 and given a different answer on a re-run. A rule that is wrong is wrong the same way every time,
 and the next step catches it.
@@ -376,3 +378,65 @@ appear.
 - A shelf and an editor for the pieces themselves, with a description, in both clients.
 - Two decisions to note. The slot list is closed on purpose, and the voice is a tag on a piece,
   not a substitution in the text.
+
+## Fewer slots: how a closed list changes (Step 22)
+
+The twelve slots came from the skeleton, one slot a paragraph, and that was the mistake: the
+owner, curating the pool a week later, found twelve rows too many to pick through, and three of
+them — the look, the style, the marks — never picked apart from each other, nor the personality,
+the humour and the passions. So four slots folded into two (#254), and the look piece became
+three paragraphs, the personality piece up to three. The joiner did not change: a piece could
+already hold more than one paragraph, and `PARAGRAPHS` only lost four groups.
+
+What a closed list costs shows here. The enum is written in three places — the Python class, the
+`CHECK` constraint, and the rows that already carry a slot — and the first two cannot shrink
+while rows in the third would fail the new constraint. So the change is a **migration that moves
+data**, not an edit:
+
+```python
+ABSORBED = {"style": "look", "marks": "look", "humour": "personality", "passions": "personality"}
+
+def upgrade() -> None:
+    connection = op.get_bind()
+    moving = connection.execute(sa.text(
+        "SELECT id, slot, voice, name FROM persona_pieces "
+        "WHERE slot IN ('style', 'marks', 'humour', 'passions')")).all()
+    for piece_id, slot, voice, name in moving:
+        new_slot = ABSORBED[slot]
+        connection.execute(sa.text("UPDATE persona_pieces SET slot = :new_slot, name = :name "
+                                   "WHERE id = :id"),
+                           {"new_slot": new_slot,
+                            "name": _free_name(connection, new_slot, voice, name),
+                            "id": piece_id})
+    op.drop_constraint("ck_persona_pieces_slot", "persona_pieces", type_="check")
+    op.create_check_constraint("ck_persona_pieces_slot", "persona_pieces", f"slot IN {NEW}")
+```
+
+Rows first, constraint last, and the unique index of (slot, voice, lower(name)) watched on the
+way: a style piece called "Classic" moving into a look slot that already has a "Classic" gets a
+number, as the API gives one. Nothing is deleted, and no persona is touched, because the whole
+chapter rests on a persona holding a copy of its text. The downgrade widens the constraint again
+and leaves the moved rows where they are: a migration cannot split a three-paragraph piece back
+into three, so it does not pretend to.
+
+::: dotnet
+An EF Core migration with `migrationBuilder.Sql(...)` in `Up()`, run before the
+`AlterColumn`/check-constraint change — a *data* migration, which EF scaffolds nothing for.
+`op.get_bind()` is the migration's open connection, the way `Database.GetDbConnection()` would be
+inside `Up()`. Enums stored as text, as here, are what make this a row update and not a type
+change; a Postgres `ENUM` type would have needed `ALTER TYPE … RENAME VALUE` and a type of its own.
+:::
+
+The extractor learned one rule — in the look and the personality, paragraphs that follow each
+other are one piece — and was run again against the owner's personas, with the same proof as the
+first time: a persona is saved as pieces only when they rejoin to its text exactly. The six real
+personas did, from one look piece and one personality piece each, which was the point of the
+exercise: the pool is right when every persona the owner wrote can be built back from it, and a
+new one from the same pieces.
+
+One more thing the second run made visible. A piece reads `{name} is an athletic young man …`
+and, further down, `{short} descends from Clan Donald …` next to `He dresses …`. That is not a
+muddle: `{name}` stands exactly where the persona wrote the full name (once, in the opening
+sentence), `{short}` where it wrote the short name on its own, and a pronoun stays a pronoun. The
+placeholders are what let the same piece serve another name, and the proof depends on them being
+placed where the name was, not where a reader might prefer it.

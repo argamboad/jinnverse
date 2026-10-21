@@ -1,11 +1,13 @@
 """Turning the personas already in the library into pieces (#155).
 
 A persona is paragraphs, and the paragraphs follow the skeleton the pieces are slotted by. Each
-paragraph becomes a piece: the slot is suggested by simple rules (position and keywords, no model
-call) and the owner confirms it; the persona's own name is replaced by the placeholders the
-joiner fills in again; paragraphs several personas share become one piece. A persona is only
-saved when its pieces, joined by the joiner, give back its text exactly — that is the proof the
-format was not broken — and the persona itself is never touched.
+paragraph is given a slot by simple rules (position and keywords, no model call) and the owner
+confirms it; a paragraph becomes a piece, except in the look and personality slots, where the
+paragraphs that follow each other become one piece (the look with its style and marks, the
+personality with its humour and passions, #254); the persona's own name is replaced by the
+placeholders the joiner fills in again; paragraphs several personas share become one piece. A
+persona is only saved when its pieces, joined by the joiner, give back its text exactly — that is
+the proof the format was not broken — and the persona itself is never touched.
 """
 
 import re
@@ -21,15 +23,18 @@ from jinnverse.persona_pieces import FULL_NAME, SHORT_NAME, SLOT_LABELS, PieceEr
 TITLES = frozenset({"professor", "prof.", "dr.", "dr", "mr.", "mrs.", "ms.", "miss", "sir", "lady"})
 """Words a name may start with that are not the name a persona is called by."""
 
+MERGED = frozenset({PieceSlot.LOOK, PieceSlot.PERSONALITY})
+"""The slots whose paragraphs, when they follow each other, make one piece."""
+
 # The first rule a paragraph matches decides its slot. The first paragraph is always the look.
 RULES: tuple[tuple[PieceSlot, re.Pattern[str]], ...] = (
     (
-        PieceSlot.MARKS,
+        PieceSlot.LOOK,  # the marks
         re.compile(r"^(his|her|their)\s+(tattoos?|scars?|piercings?)\b", re.IGNORECASE),
     ),
-    (PieceSlot.HUMOUR, re.compile(r"^(his|her|their)\s+humou?r\b", re.IGNORECASE)),
+    (PieceSlot.PERSONALITY, re.compile(r"^(his|her|their)\s+humou?r\b", re.IGNORECASE)),
     (
-        PieceSlot.PASSIONS,
+        PieceSlot.PERSONALITY,  # the passions
         re.compile(r"^(his|her|their)\s+(passions|interests|hobbies)\b", re.IGNORECASE),
     ),
     (
@@ -48,7 +53,7 @@ RULES: tuple[tuple[PieceSlot, re.Pattern[str]], ...] = (
         ),
     ),
     (
-        PieceSlot.STYLE,
+        PieceSlot.LOOK,  # the style
         re.compile(
             r"\b(dresses|dressed|wardrobe|clothing|clothes|groomed|wears|satchel|backpack)\b",
             re.IGNORECASE,
@@ -105,8 +110,17 @@ class Plan:
     paragraphs: list[Paragraph] = field(default_factory=list[Paragraph])
 
     def pieces(self) -> list[tuple[PieceSlot, str]]:
-        """The (slot, text) of each paragraph, the persona's name replaced by placeholders."""
-        return [(p.slot, self._placeholders(p.text)) for p in self.paragraphs]
+        """The (slot, text) of each piece, the persona's name replaced by placeholders: a
+        paragraph each, but for the look and the personality, where the paragraphs that follow
+        each other are one piece of several paragraphs."""
+        pieces: list[tuple[PieceSlot, str]] = []
+        for paragraph in self.paragraphs:
+            text = self._placeholders(paragraph.text)
+            if pieces and paragraph.slot in MERGED and pieces[-1][0] is paragraph.slot:
+                pieces[-1] = (paragraph.slot, f"{pieces[-1][1]}\n{text}")
+            else:
+                pieces.append((paragraph.slot, text))
+        return pieces
 
     def _placeholders(self, text: str) -> str:
         if self.full_name:

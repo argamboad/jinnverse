@@ -1,10 +1,10 @@
 """Persona pieces: a pool of texts, one slot each, and the joiner that builds a persona from a pick.
 
 A persona stays what it always was — a name and a page of text, linked from stories — and the
-page has a fixed shape: identity and look, style, marks, family, work, home, personality, humour,
-passions, one paragraph each. This module keeps the pieces of those paragraphs and joins a pick
-into that exact shape. The text is copied into an ordinary persona: editing a piece later changes
-no persona already made.
+page has a fixed shape: identity and look (with the style and the marks), family, work, home,
+personality (with the humour and the passions), a paragraph or three each. This module keeps the
+pieces of those paragraphs and joins a pick into that exact shape. The text is copied into an
+ordinary persona: editing a piece later changes no persona already made.
 
 The slots are a closed list on purpose. A persona has to come out in the card's format, and free
 text dropped into one may be ignored or overused by the model.
@@ -44,18 +44,16 @@ the first mention ("Allan Sanlúcar El Kettani", then "Allan")."""
 
 PARAGRAPHS: tuple[tuple[PieceSlot, ...], ...] = (
     (PieceSlot.LOOK,),
-    (PieceSlot.STYLE,),
-    (PieceSlot.MARKS,),
     (PieceSlot.FAMILY,),
     (PieceSlot.WORK,),
     (PieceSlot.HOME, PieceSlot.VEHICLE, PieceSlot.PETS),
     (PieceSlot.PERSONALITY,),
-    (PieceSlot.HUMOUR,),
-    (PieceSlot.PASSIONS,),
 )
 """The persona's paragraphs, in order, and the slots that write each. Home, vehicle and pets share
 one paragraph, their sentences joined with a space, as the vehicle and the Hi-Fi sit in the home
-paragraph of the personas this was taken from."""
+paragraph of the personas this was taken from. A look piece is three paragraphs (the look, the
+style, the marks) and a personality piece up to three (the personality, the humour, the
+passions): they were six slots once, and too many to pick through (#254)."""
 
 
 @dataclass(frozen=True)
@@ -68,17 +66,13 @@ class SlotInfo:
 
 SLOT_LABELS: dict[PieceSlot, str] = {
     PieceSlot.NAME: "Name",
-    PieceSlot.LOOK: "Identity and look",
-    PieceSlot.STYLE: "Style and what they carry",
-    PieceSlot.MARKS: "Tattoos and marks",
+    PieceSlot.LOOK: "Look, style and marks",
     PieceSlot.FAMILY: "Family",
     PieceSlot.WORK: "Occupation and public profile",
     PieceSlot.HOME: "Home",
     PieceSlot.VEHICLE: "Vehicle",
     PieceSlot.PETS: "Pets",
-    PieceSlot.PERSONALITY: "Personality and values",
-    PieceSlot.HUMOUR: "Humour",
-    PieceSlot.PASSIONS: "Passions",
+    PieceSlot.PERSONALITY: "Personality, humour, passions",
 }
 
 
