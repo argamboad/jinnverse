@@ -90,6 +90,7 @@ class FakeServer:
         self.down = False  # every call fails, as if the network were gone
         self.valid_tokens: set[str] = {TOKEN}
         self.stories: list[dict[str, Any]] = []
+        self.deleted: list[dict[str, Any]] = []  # hidden by DELETE, kept until a purge
         self.library: dict[str, list[dict[str, Any]]] = {
             "characters": [],
             "personas": [],
@@ -471,6 +472,21 @@ class FakeServer:
             200, json={"dry_run": False, "tokens_after": 1058, "cost": "0.0004", **plan}
         )
 
+    def _purge(self, request: httpx2.Request) -> httpx2.Response:
+        """``POST /stories/purge``: every deleted story, erased — or counted, as a dry run."""
+        dry_run = request.url.params.get("dry_run") == "true"
+        report = {
+            "dry_run": dry_run,
+            "stories": len(self.deleted),
+            "names": sorted(s["name"] for s in self.deleted),
+            "messages": sum(len(s.get("messages", [])) for s in self.deleted),
+            "ledger_rows_kept": 0,
+            "ledger_cost_kept": "0",
+        }
+        if not dry_run:
+            self.deleted.clear()
+        return httpx2.Response(200, json=report)
+
     def _stories(self, parts: list[str], request: httpx2.Request) -> httpx2.Response:
         if len(parts) == 1 and request.method == "GET":
             ordered = sorted(
@@ -479,6 +495,8 @@ class FakeServer:
             return httpx2.Response(200, json=[self._listed(s) for s in ordered])
         if len(parts) == 1 and request.method == "POST":
             return self._create(json.loads(request.content))
+        if len(parts) == 2 and parts[1] == "purge" and request.method == "POST":
+            return self._purge(request)
         found = next((s for s in self.stories if s["id"] == parts[1]), None)
         if found is None:
             return httpx2.Response(404, json={"detail": "There is no such story."})
@@ -493,6 +511,7 @@ class FakeServer:
             return httpx2.Response(200, json=self._listed(found))
         if len(parts) == 2 and request.method == "DELETE":
             self.stories.remove(found)
+            self.deleted.append(found)
             return httpx2.Response(204)
         if len(parts) == 3 and parts[2] in {"send", "continue", "reroll"}:
             return self._turn(found, request)

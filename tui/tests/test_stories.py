@@ -1,5 +1,6 @@
 """The stories screen: the list loads and shows the preview, moves, filters as you type, renames
-in place, deletes after asking, refreshes, and opens the story on Enter."""
+in place, deletes after asking, erases the deleted for good after asking, refreshes, and opens
+the story on Enter."""
 
 from lustjinn_tui.app import LustjinnApp
 from lustjinn_tui.confirm import ConfirmScreen
@@ -220,3 +221,56 @@ async def test_a_click_selects_and_a_second_click_opens(
         await pilot.click(Rows, offset=(2, 1))
         await pilot.pause()
         assert isinstance(app.screen, ConversationScreen)
+
+
+async def test_shift_delete_counts_first_then_erases_every_deleted_story_after_asking(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    server.add("Keep", "a line")
+    server.add("Gone", "one", "two")
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause(0.1)
+        await pilot.press("shift+delete")
+        await pilot.pause(0.1)
+        assert isinstance(app.screen, StoriesScreen)
+        assert stories(app).status_line.text == "No deleted stories to erase."
+
+        await pilot.press("delete", "enter")  # delete hides "Gone", the newest
+        await pilot.pause(0.1)
+        assert server.deleted
+        assert names(app) == ["Keep"]
+        await pilot.press("shift+delete")
+        await pilot.pause(0.1)
+        assert isinstance(app.screen, ConfirmScreen)
+        assert app.screen.query_one(Masthead).crumbs == ("Stories", "Erase")
+        question = str(app.screen.query_one(".question").render())
+        assert "Erase 1 deleted story for good?" in question
+        said = " ".join(str(line.render()) for line in app.screen.query(".consequence"))
+        assert '"Gone": 2 messages and their memory go.' in said
+        await pilot.press("escape")  # anything but Enter is no
+        await pilot.pause()
+        assert server.deleted
+        assert stories(app).status_line.text == "Cancelled."
+
+        await pilot.press("shift+delete")
+        await pilot.pause(0.1)
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert isinstance(app.screen, StoriesScreen)
+        assert server.deleted == []
+        assert names(app) == ["Keep"]
+        assert stories(app).status_line.text == "Erased 1 deleted story."
+        assert server.paths("POST").count("/stories/purge") == 4  # three dry runs, one erase
+
+
+async def test_delete_says_the_story_is_hidden_not_erased(
+    app: LustjinnApp, server: fake.FakeServer
+) -> None:
+    server.add("Only")
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause(0.1)
+        await pilot.press("delete")
+        await pilot.pause()
+        said = " ".join(str(line.render()) for line in app.screen.query(".consequence"))
+        assert "hidden, not erased" in said
+        assert "Shift+Del" in said

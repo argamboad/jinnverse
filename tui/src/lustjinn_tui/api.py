@@ -255,6 +255,18 @@ def piece_entry(piece: Piece, label: str) -> PieceEntry:
     )
 
 
+class PurgedAll(BaseModel):
+    """What erasing every deleted story did — or, as a dry run, what it would erase. The spend
+    rows are kept: they report under "(purged)"."""
+
+    dry_run: bool
+    stories: int
+    names: list[str] = Field(default_factory=list[str])
+    messages: int = 0
+    ledger_rows_kept: int = 0
+    ledger_cost_kept: Decimal = Decimal(0)
+
+
 class Cut(BaseModel):
     """What deleting from a message left behind."""
 
@@ -708,6 +720,13 @@ class Api:
 
     async def delete_story(self, story_id: uuid.UUID) -> None:
         await self._request("DELETE", f"/stories/{story_id}")
+
+    async def purge_deleted(self, *, dry_run: bool = False) -> PurgedAll:
+        """Erases every deleted story for good — or, with ``dry_run``, says what would go."""
+        params = {"dry_run": "true"} if dry_run else None
+        return PurgedAll.model_validate(
+            await self._request("POST", "/stories/purge", params=params)
+        )
 
     async def branch(
         self, story_id: uuid.UUID, message_id: uuid.UUID, name: str | None = None
