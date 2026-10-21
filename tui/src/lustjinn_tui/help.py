@@ -67,7 +67,8 @@ SECTIONS: Final[tuple[Section, ...]] = (
             Row("M", "Library"),
             Row("/", "Filter this list as you type"),
             Row("F2", "Rename the story"),
-            Row("Del", "Delete the story, after confirming"),
+            Row("Del", "Delete (hide) the story, after confirming"),
+            Row("Shift+Del", "Erase every deleted story for good, after confirming"),
         ),
     ),
     Section(

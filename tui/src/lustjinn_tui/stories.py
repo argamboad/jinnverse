@@ -5,7 +5,8 @@ The list is read once on arrival and kept; ``R`` re-reads it. Filtering happens 
 held list on every keystroke, which is why ``/`` opens an inline field rather than a prompt —
 the list narrows as you type without a round trip. A rename is edited in the same place, for the
 same reason: it is one short string and a whole screen for it would be ceremony. Delete asks
-first, naming the story, because there is no undo.
+first, naming the story; it only hides it. ``Shift+Del`` erases every deleted story for good,
+after a dry run says how many and a confirmation names what goes, because that has no undo.
 
 Three tenths of the width go to the list and the rest to the preview: names and ages are short,
 a reply is prose and needs the room to be read at all.
@@ -131,6 +132,7 @@ class StoriesScreen(View):
         Binding("m,M", "library", "Library", show=False),
         Binding("f2", "rename", "Rename", show=False),
         Binding("delete", "delete", "Delete", show=False),
+        Binding("shift+delete", "erase_deleted", "Erase deleted", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
         Binding("slash", "filter", "Filter", show=False),
     ]
@@ -174,6 +176,11 @@ class StoriesScreen(View):
             PaletteCommand("Rename the story", "the one the cursor is on", self.action_rename),
             PaletteCommand(
                 "Delete the story", "the one the cursor is on; asks first", self.action_delete
+            ),
+            PaletteCommand(
+                "Erase deleted stories",
+                "every deleted story, for good; asks first",
+                self.action_erase_deleted,
             ),
             PaletteCommand(
                 "Filter the list", "show only the stories whose name matches", self.action_filter
@@ -467,10 +474,47 @@ class StoriesScreen(View):
                 "Delete",
                 f'Delete the story "{story.name}"?',
                 (
-                    "The whole story goes, every message in it, from the server itself.",
-                    "This cannot be undone.",
+                    "It leaves this list, but it is hidden, not erased: its messages stay on the "
+                    "server until you erase deleted stories (Shift+Del).",
                 ),
                 "Delete",
                 delete,
+            )
+        )
+
+    # -- erasing for good -----------------------------------------------------------------------
+
+    def action_erase_deleted(self) -> None:
+        if self._mode != "list":
+            return
+        self.run_worker(self._erase_deleted, exclusive=True)
+
+    async def _erase_deleted(self) -> None:
+        app = self.lustjinn
+        found = await app.call("Counting deleted stories", app.api.purge_deleted(dry_run=True))
+        if found is None:
+            return
+        if found.stories == 0:
+            self.status("No deleted stories to erase.", Kind.INFO)
+            return
+
+        async def erase() -> None:
+            done = await app.api.purge_deleted()
+            self.status(
+                f"Erased {count(done.stories, 'deleted story', 'deleted stories')}.", Kind.SUCCESS
+            )
+
+        named = ", ".join(f'"{name}"' for name in found.names)
+        app.push_screen(
+            ConfirmScreen(
+                "Erase",
+                f"Erase {count(found.stories, 'deleted story', 'deleted stories')} for good?",
+                (
+                    f"{named}: {count(found.messages, 'message')} and their memory go.",
+                    "Their spending stays in the reports.",
+                    "This cannot be undone.",
+                ),
+                "Erase",
+                erase,
             )
         )
