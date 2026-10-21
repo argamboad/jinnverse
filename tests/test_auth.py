@@ -7,9 +7,9 @@ import httpx2
 import pytest
 from pydantic import SecretStr
 
-from lustjinn.auth import issue_token, sign
-from lustjinn.main import app, create_app
-from lustjinn.settings import Settings
+from jinnverse.auth import issue_token, sign
+from jinnverse.main import app, create_app
+from jinnverse.settings import Settings
 
 OPEN = {"/health", "/auth/sign-in", "/emoji"}
 """The only routes that answer without a token. /emoji is a public table (#132)."""
@@ -187,23 +187,23 @@ async def test_no_browser_origin_is_allowed_unless_the_settings_name_it(
 
 
 async def test_an_origin_the_settings_name_is_allowed(settings: Settings) -> None:
-    allowing = settings.model_copy(update={"cors_origins": ["https://lustjinn.example"]})
+    allowing = settings.model_copy(update={"cors_origins": ["https://jinnverse.example"]})
     transport = httpx2.ASGITransport(app=create_app(allowing))
 
     async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
-        ours = await client.get("/health", headers={"Origin": "https://lustjinn.example"})
+        ours = await client.get("/health", headers={"Origin": "https://jinnverse.example"})
         theirs = await client.get("/health", headers={"Origin": "https://somewhere.example"})
         # The browser's question before a request that carries the token: "may I send this?"
         preflight = await client.options(
             "/stories",
             headers={
-                "Origin": "https://lustjinn.example",
+                "Origin": "https://jinnverse.example",
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "authorization",
             },
         )
 
-    assert ours.headers["Access-Control-Allow-Origin"] == "https://lustjinn.example"
+    assert ours.headers["Access-Control-Allow-Origin"] == "https://jinnverse.example"
     assert "Access-Control-Allow-Origin" not in theirs.headers
     assert preflight.status_code == 200
     assert "authorization" in preflight.headers["Access-Control-Allow-Headers"].lower()

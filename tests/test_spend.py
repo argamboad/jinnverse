@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Spend, SpendKind, new_id
+from jinnverse.models import Spend, SpendKind, new_id
 from tests.factories import a_spend, a_story
 
 

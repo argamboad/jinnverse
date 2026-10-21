@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Message, Role
+from jinnverse.models import Message, Role
 from tests.factories import a_message, a_story
 
 

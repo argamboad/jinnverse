@@ -21,17 +21,17 @@ from sqlalchemy import Connection, make_url, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from lustjinn.auth import issue_token
-from lustjinn.db import get_session
-from lustjinn.main import app
-from lustjinn.openrouter import get_openrouter
-from lustjinn.settings import Settings, get_settings
+from jinnverse.auth import issue_token
+from jinnverse.db import get_session
+from jinnverse.main import app
+from jinnverse.openrouter import get_openrouter
+from jinnverse.settings import Settings, get_settings
 from scripts.seed_dummy import Dummy, load
 from tests.scripted_model import ScriptedModel
 
 # Any database on the server will do to connect to; the tests create their own beside it.
 SERVER = os.environ.get(
-    "LUSTJINN_TEST_DATABASE_URL", "postgresql+asyncpg://lustjinn:lustjinn@localhost:5440/postgres"
+    "JINNVERSE_TEST_DATABASE_URL", "postgresql+asyncpg://lustjinn:lustjinn@localhost:5440/postgres"
 )
 
 
@@ -48,7 +48,7 @@ def migrate(connection: Connection, revision: str = "head") -> None:
 @pytest_asyncio.fixture(scope="session")
 async def database_url() -> AsyncGenerator[str]:
     """Creates an empty database for this test run and drops it afterwards."""
-    name = f"lustjinn_test_{uuid.uuid4().hex[:12]}"
+    name = f"jinnverse_test_{uuid.uuid4().hex[:12]}"
     # CREATE DATABASE cannot run inside a transaction, hence AUTOCOMMIT.
     server = create_async_engine(SERVER, isolation_level="AUTOCOMMIT", poolclass=NullPool)
     try:

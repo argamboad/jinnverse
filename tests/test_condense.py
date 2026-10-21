@@ -6,8 +6,8 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import condense
-from lustjinn.models import Spend, SpendKind, Story, Summary
+from jinnverse import condense
+from jinnverse.models import Spend, SpendKind, Story, Summary
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send
 from tests.test_summaries import a_long_story

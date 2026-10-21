@@ -7,9 +7,9 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import facts
-from lustjinn.models import Fact, SpendKind, Story, Summary
-from lustjinn.settings import Settings
+from jinnverse import facts
+from jinnverse.models import Fact, SpendKind, Story, Summary
+from jinnverse.settings import Settings
 from scripts.seed_dummy import Dummy
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

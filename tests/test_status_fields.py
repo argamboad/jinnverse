@@ -4,8 +4,8 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import blocks
-from lustjinn.models import StatusKind, StatusScope
+from jinnverse import blocks
+from jinnverse.models import StatusKind, StatusScope
 from tests.test_turns import a_played_story
 
 

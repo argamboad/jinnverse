@@ -7,8 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from lustjinn.models import Base
-from lustjinn.settings import get_settings
+from jinnverse.models import Base
+from jinnverse.settings import get_settings
 
 # What the models say the schema should be; `alembic revision --autogenerate` and the
 # migrations-match-the-models test compare the database against it.

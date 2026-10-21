@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import served from '../../../src/lustjinn/emoji.json';
+import served from '../../../src/jinnverse/emoji.json';
 import { emojiTable, loadEmoji, type Shortcode } from './emoji';
 import { appendSnippet, expandEmoji, findEmoji, searchEmoji, tokenAt } from './shortcodes';
 

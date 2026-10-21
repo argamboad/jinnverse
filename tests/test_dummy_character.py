@@ -3,7 +3,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Character, Persona
+from jinnverse.models import Character, Persona
 from scripts.seed_dummy import Dummy, seed
 
 

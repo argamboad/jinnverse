@@ -9,7 +9,7 @@ from sqlalchemy import Connection, delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from lustjinn.models import Base, Character, Message, Role, Story, new_id
+from jinnverse.models import Base, Character, Message, Role, Story, new_id
 from tests.conftest import migrate
 from tests.factories import a_character, a_message, a_persona, a_story
 

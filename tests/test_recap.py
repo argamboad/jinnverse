@@ -4,8 +4,8 @@ import httpx2
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Role, Summary
-from lustjinn.recap import HEADING, MOST_RECAP_TURNS, RECAP_TURNS, count_from
+from jinnverse.models import Role, Summary
+from jinnverse.recap import HEADING, MOST_RECAP_TURNS, RECAP_TURNS, count_from
 from tests.factories import a_message, a_story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

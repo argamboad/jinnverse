@@ -8,7 +8,7 @@ a re-typed message.
 
 import httpx2
 
-from lustjinn.commands import COMMANDS, Command, Incomplete, Prose, Unknown, find, parse
+from jinnverse.commands import COMMANDS, Command, Incomplete, Prose, Unknown, find, parse
 
 
 def test_ordinary_prose_is_a_message() -> None:

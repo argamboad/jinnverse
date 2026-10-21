@@ -10,11 +10,11 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import turns
-from lustjinn.context import PERSONA_FRAME
-from lustjinn.main import app
-from lustjinn.models import Message, Role, Spend, SpendKind, Story, new_id
-from lustjinn.settings import Settings, get_settings
+from jinnverse import turns
+from jinnverse.context import PERSONA_FRAME
+from jinnverse.main import app
+from jinnverse.models import Message, Role, Spend, SpendKind, Story, new_id
+from jinnverse.settings import Settings, get_settings
 from scripts.seed_dummy import Dummy, seed
 from tests.factories import a_character, a_message, a_persona, a_story
 from tests.scripted_model import ScriptedModel

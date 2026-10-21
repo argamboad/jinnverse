@@ -53,7 +53,7 @@
       "request": "launch",
       "module": "uvicorn",
       // No --reload: the debugger would not stop in the reloader's child. Ctrl+Shift+F5 restarts.
-      "args": ["lustjinn.main:app", "--port", "8000"],
+      "args": ["jinnverse.main:app", "--port", "8000"],
       "cwd": "${workspaceFolder}",
       "presentation": { "hidden": true }
     },

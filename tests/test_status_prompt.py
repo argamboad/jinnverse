@@ -4,10 +4,10 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import blocks
-from lustjinn.blocks import FRAME, MOST_CHARACTERS, RECENT_TURNS, STANDS, render
-from lustjinn.context import Layers, build
-from lustjinn.models import Character, Message, Role, StatusField, StatusValue
+from jinnverse import blocks
+from jinnverse.blocks import FRAME, MOST_CHARACTERS, RECENT_TURNS, STANDS, render
+from jinnverse.context import Layers, build
+from jinnverse.models import Character, Message, Role, StatusField, StatusValue
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send, stream
 from tests.test_status_reading import a_story_with_fields, the_fields

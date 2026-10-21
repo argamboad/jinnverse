@@ -5,8 +5,8 @@ from decimal import Decimal
 import pytest
 from pydantic import SecretStr
 
-from lustjinn.openrouter import ChatMessage, ModelError, Reply
-from lustjinn.settings import Settings
+from jinnverse.openrouter import ChatMessage, ModelError, Reply
+from jinnverse.settings import Settings
 from tests.scripted_model import ScriptedModel
 
 HELLO = [ChatMessage("system", "You are Elena."), ChatMessage("user", "Hello.")]
@@ -96,8 +96,8 @@ async def test_the_key_travels_as_a_bearer_token_with_the_attribution_headers(
 
     request = model.requests[-1]
     assert request.headers["Authorization"] == "Bearer sk-or-test"
-    assert request.headers["HTTP-Referer"] == "https://github.com/argamboad/lustjinn"
-    assert request.headers["X-Title"] == "Lustjinn"
+    assert request.headers["HTTP-Referer"] == "https://github.com/argamboad/jinnverse"
+    assert request.headers["X-Title"] == "JinnVerse"
     assert str(request.url) == "https://openrouter.ai/api/v1/chat/completions"
 
 
@@ -172,7 +172,7 @@ async def test_a_missing_key_fails_before_anything_is_sent(
 ) -> None:
     model.says("Hm.")
 
-    with pytest.raises(ModelError, match="LUSTJINN_OPENROUTER_API_KEY") as refused:
+    with pytest.raises(ModelError, match="JINNVERSE_OPENROUTER_API_KEY") as refused:
         await model.client(configured(settings, openrouter_api_key=None)).complete(HELLO)
 
     assert refused.value.status == 401

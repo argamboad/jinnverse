@@ -15,8 +15,8 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.db import dispose_engine, get_sessionmaker
-from lustjinn.models import AppSettings, Character, Persona
+from jinnverse.db import dispose_engine, get_sessionmaker
+from jinnverse.models import AppSettings, Character, Persona
 
 FIXTURES = Path(__file__).parent.parent / "tests" / "fixtures" / "dummy"
 CHARACTER_NAME = "The Gilded Heron"

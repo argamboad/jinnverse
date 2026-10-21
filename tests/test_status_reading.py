@@ -5,9 +5,9 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import blocks
-from lustjinn.blocks import Reading, read
-from lustjinn.models import Message, StatusField, StatusValue, Story
+from jinnverse import blocks
+from jinnverse.blocks import Reading, read
+from jinnverse.models import Message, StatusField, StatusValue, Story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send, stream
 from tests.test_turns import a_played_story

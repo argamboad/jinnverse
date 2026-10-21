@@ -6,10 +6,10 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import trackers
-from lustjinn.models import Story, Tracker
-from lustjinn.settings import Settings
-from lustjinn.trackers import HEADER, MOVEMENT, SHAPE, absorb, bar, render, split_command
+from jinnverse import trackers
+from jinnverse.models import Story, Tracker
+from jinnverse.settings import Settings
+from jinnverse.trackers import HEADER, MOVEMENT, SHAPE, absorb, bar, render, split_command
 from scripts.seed_dummy import Dummy
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

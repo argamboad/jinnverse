@@ -2,9 +2,9 @@
 
 import pytest
 
-from lustjinn.background import once_more_if_worth_it, worth_another_go
-from lustjinn.openrouter import ChatMessage, ModelError
-from lustjinn.settings import Settings
+from jinnverse.background import once_more_if_worth_it, worth_another_go
+from jinnverse.openrouter import ChatMessage, ModelError
+from jinnverse.settings import Settings
 from tests.scripted_model import ScriptedModel
 
 ASK = [ChatMessage("system", "Summarise."), ChatMessage("user", "Rowan: Hello.")]

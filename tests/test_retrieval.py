@@ -12,11 +12,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import tokens
-from lustjinn.context import MEMORIES_FRAME
-from lustjinn.memory import BACKFILL_AT_MOST, LONGEST_QUERY, recall_query
-from lustjinn.models import Embedding, Message, Role, SpendKind, Story, Summary
-from lustjinn.settings import Settings
+from jinnverse import tokens
+from jinnverse.context import MEMORIES_FRAME
+from jinnverse.memory import BACKFILL_AT_MOST, LONGEST_QUERY, recall_query
+from jinnverse.models import Embedding, Message, Role, SpendKind, Story, Summary
+from jinnverse.settings import Settings
 from tests.factories import a_message, a_story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

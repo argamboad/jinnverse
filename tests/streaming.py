@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx2
 
-from lustjinn.sse import events
+from jinnverse.sse import events
 
 Json = dict[str, Any]
 

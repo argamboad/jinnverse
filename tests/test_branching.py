@@ -7,9 +7,9 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import facts as facts_module
-from lustjinn.context import WORLD_FRAME
-from lustjinn.models import (
+from jinnverse import facts as facts_module
+from jinnverse.context import WORLD_FRAME
+from jinnverse.models import (
     Aside,
     DialValue,
     Embedding,

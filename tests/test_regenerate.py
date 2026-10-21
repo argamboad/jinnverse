@@ -4,8 +4,8 @@ import httpx2
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import regenerate
-from lustjinn.regenerate import FRAME, NOTES, Reason, directive
+from jinnverse import regenerate
+from jinnverse.regenerate import FRAME, NOTES, Reason, directive
 from tests.scripted_model import ScriptedModel
 from tests.streaming import Streamed, send, stream
 from tests.test_turns import a_played_story, messages

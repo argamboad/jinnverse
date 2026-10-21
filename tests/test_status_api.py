@@ -3,8 +3,8 @@
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import blocks
-from lustjinn.status_api import split_command
+from jinnverse import blocks
+from jinnverse.status_api import split_command
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send, stream
 from tests.test_status_reading import a_story_with_fields

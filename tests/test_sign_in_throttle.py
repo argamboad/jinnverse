@@ -9,9 +9,9 @@ import httpx2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.main import create_app
-from lustjinn.models import SignInFailure
-from lustjinn.settings import Settings
+from jinnverse.main import create_app
+from jinnverse.models import SignInFailure
+from jinnverse.settings import Settings
 
 RIGHT = {"username": "reader", "password": "correct horse battery staple"}
 WRONG = {"username": "reader", "password": "tr0ub4dor&3"}

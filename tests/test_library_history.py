@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
 
-from lustjinn.models import Character, LibraryHistory, LibraryKind, Persona
+from jinnverse.models import Character, LibraryHistory, LibraryKind, Persona
 from tests.factories import a_character, a_persona
 
 Json = dict[str, Any]
@@ -125,7 +125,7 @@ async def test_the_history_outlives_the_entry(
 
 
 async def test_an_entry_that_never_existed_has_no_history(client: httpx2.AsyncClient) -> None:
-    from lustjinn.models import new_id
+    from jinnverse.models import new_id
 
     assert (await client.get(f"/library/personas/{new_id()}/history")).status_code == 404
 
