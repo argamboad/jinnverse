@@ -8,9 +8,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import dials
-from lustjinn.context import DIRECTIVES_FRAME, PERSONA_FRAME, REMINDERS_FRAME
-from lustjinn.dials import (
+from jinnverse import dials
+from jinnverse.context import DIRECTIVES_FRAME, PERSONA_FRAME, REMINDERS_FRAME
+from jinnverse.dials import (
     Kind,
     Lever,
     Pack,
@@ -21,8 +21,8 @@ from lustjinn.dials import (
     reminders,
     sampler,
 )
-from lustjinn.models import DialValue
-from lustjinn.settings import Settings
+from jinnverse.models import DialValue
+from jinnverse.settings import Settings
 from scripts.seed_dummy import Dummy
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

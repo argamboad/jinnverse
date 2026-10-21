@@ -1,1 +1,0 @@
-"""Lustjinn in the terminal."""

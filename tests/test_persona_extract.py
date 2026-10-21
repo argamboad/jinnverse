@@ -7,8 +7,8 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Persona, PersonaPiece, PieceSlot, Voice
-from lustjinn.persona_extract import (
+from jinnverse.models import Persona, PersonaPiece, PieceSlot, Voice
+from jinnverse.persona_extract import (
     plan_persona,
     plans_for_all,
     review,

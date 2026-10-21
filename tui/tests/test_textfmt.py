@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from lustjinn_tui.textfmt import age, count, fit, pad
+from jinnverse_tui.textfmt import age, count, fit, pad
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
 

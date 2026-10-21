@@ -1,4 +1,4 @@
-"""A stand-in for the Lustjinn API behind httpx2's ``MockTransport``: the routes the client uses,
+"""A stand-in for the JinnVerse API behind httpx2's ``MockTransport``: the routes the client uses,
 answered from memory, with switches for the failures the screens must survive.
 
 The tests script a server the way the API's tests script a model: set the state, run the client,

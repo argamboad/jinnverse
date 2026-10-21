@@ -1,0 +1,317 @@
+"""Facts: what is true in a story right now.
+
+The summary says what happened over a stretch; the facts say what it left true — a trait, a
+possession, an injury, a commitment, a standing between people. Each fact has a validity range
+in turns: `valid_from` is where it became true, `valid_to` is set when a later stretch made it
+false. A world state that only accumulated would end up asserting both that she distrusts the
+reader and that she trusts them, and the model would believe whichever it read last.
+
+A fact a person stated is pinned: the extractor cannot retire it. It is not derived from the
+transcript — it may be about something the story never mentioned — so nothing can prove it wrong.
+"""
+
+import json
+import logging
+import uuid
+from collections.abc import AsyncIterator, Sequence
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, ConfigDict, StringConstraints
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from jinnverse import background, ledger
+from jinnverse.context import Fact as WorldFact
+from jinnverse.deps import Session
+from jinnverse.memory import transcript
+from jinnverse.models import Fact, Message, Persona, SpendKind, Story
+from jinnverse.openrouter import ChatMessage, OpenRouter, Reply
+from jinnverse.settings import Settings
+from jinnverse.stories import visible_story
+from jinnverse.streams import Said, event
+
+log = logging.getLogger(__name__)
+
+FACTS_TEMPERATURE = 0.2
+"""Colder than the summariser: an invented fact is injected into every prompt from then on."""
+FACTS_MAX_TOKENS = 8000
+"""Generous: a reasoning model thinks first, and the JSON comes after. At 4,000 it was tight: one
+extraction on staging thought for 2,687 of its 2,902 tokens, and one in 73 reached the ceiling
+(#227)."""
+INSTRUCTION = (
+    "You are maintaining the world state of a roleplay conversation. You are given the facts "
+    "currently believed to be true, numbered, and a new stretch of transcript.\n\n"
+    "Reply with JSON only, in this shape:\n"
+    "{\n"
+    '  "facts": [ { "subject": "...", "text": "..." } ],\n'
+    '  "retired": [ <the number of a fact that is no longer true as written> ]\n'
+    "}\n\n"
+    "Rules:\n"
+    '- "facts" holds only what the new transcript establishes and the existing list does not '
+    "already say. Say nothing twice.\n"
+    '- "subject" is who or what it is about: a character\'s name, a place, or a pair such as '
+    '"Elena and Marcus". Always a name. Never "User", "the user" or "the reader" — every '
+    'person in the transcript is named there, and the story does not know who "the user" '
+    "is.\n"
+    '- "text" is one plain sentence, in the language of the transcript, stating something '
+    "durable: a trait, a possession, an injury, a commitment, a standing between people.\n"
+    "- Do not record what merely happened — a post published, a message sent, a meal eaten; "
+    "that is the summary's job. Record only what it left true.\n"
+    '- "retired" lists the numbers of existing facts the new transcript has made false or left '
+    "behind: a change of heart, a wound that healed, a promise broken or kept — and a plan, "
+    "invitation or appointment that has now happened, or a state a newer one replaces. When a "
+    "plan happened, retire it and record what it left true as a new fact. Retire only on what "
+    "the transcript shows, never on a guess.\n"
+    "- If there is nothing to add and nothing to retire, reply with empty arrays."
+)
+"""The extractor's rule on retiring was once "only when the transcript contradicts it", and in
+27 calls on a real story it retired nothing: a plan that happened contradicts nothing (#231)."""
+
+
+async def live_facts(session: AsyncSession, story_id: uuid.UUID) -> list[Fact]:
+    """What the story believes right now, oldest first."""
+    rows = await session.scalars(
+        select(Fact)
+        .where(Fact.story_id == story_id, Fact.valid_to_sequence.is_(None))
+        .order_by(Fact.valid_from_sequence, Fact.created_at)
+    )
+    return list(rows)
+
+
+def world(facts: Sequence[Fact]) -> list[WorldFact]:
+    """The live facts as the context builder's world layer."""
+    return [WorldFact(fact.subject, fact.text) for fact in facts]
+
+
+def listed(facts: Sequence[Fact]) -> str:
+    """The existing facts as the extractor sees them, numbered from 1 in the order given — the
+    order `retire` counts in. They were once named by the first eight characters of their id,
+    and ids are UUIDv7, time-ordered: fifty-two facts of one story shared one seven-character
+    prefix, and a model cannot tell `01a155b4` from `01a155b8` (#231)."""
+    if not facts:
+        return "(none yet)"
+    return "\n".join(f"{n}. {fact.subject} | {fact.text}" for n, fact in enumerate(facts, 1))
+
+
+def parse(answer: str) -> tuple[list[tuple[str, str]], list[int]]:
+    """The facts and the retired numbers in the model's answer, read generously: the JSON is
+    taken from the first `{` to the last `}`, so a code fence or a sentence around it does no
+    harm. Anything that is not the agreed shape is skipped rather than guessed at; a number
+    written as a string still counts."""
+    start, end = answer.find("{"), answer.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("no JSON object in the answer")
+    document = json.loads(answer[start : end + 1])
+    if not isinstance(document, dict):
+        raise ValueError("the answer is not a JSON object")
+    found: list[tuple[str, str]] = []
+    for entry in document.get("facts") or []:  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        if not isinstance(entry, dict):
+            continue
+        subject = entry.get("subject")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        text = entry.get("text")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if isinstance(subject, str) and isinstance(text, str) and subject.strip() and text.strip():
+            found.append((subject.strip()[:200], text.strip()))
+    retired: list[int] = []
+    for item in document.get("retired") or []:  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            retired.append(item)
+        elif isinstance(item, str) and item.strip().isdigit():
+            retired.append(int(item.strip()))
+    return found, retired
+
+
+def retire(facts: Sequence[Fact], number: int, at_sequence: int) -> Fact | None:
+    """Retires fact `number` — counted from 1 in `facts`, the order `listed` showed them — when
+    it is live and not pinned. A number off the list, a fact already retired, or a pinned one:
+    nothing happens."""
+    if not 1 <= number <= len(facts):
+        return None
+    fact = facts[number - 1]
+    if fact.valid_to_sequence is not None or fact.pinned:
+        return None
+    fact.valid_to_sequence = at_sequence
+    return fact
+
+
+def add(
+    story: Story, subject: str, text: str, at_sequence: int, *, model: str | None = None
+) -> Fact:
+    """A fact that became true at `at_sequence`. Without a model it was stated by a person,
+    and it is pinned."""
+    return Fact(
+        story_id=story.id,
+        subject=subject,
+        text=text,
+        valid_from_sequence=at_sequence,
+        model=model,
+        pinned=model is None,
+    )
+
+
+async def extract(
+    session: AsyncSession,
+    openrouter: OpenRouter,
+    settings: Settings,
+    story: Story,
+    persona: Persona | None,
+    stretch: Sequence[Message],
+) -> tuple[int, int]:
+    """Reads a just-summarised stretch for what it left true. Returns (added, retired).
+
+    Billed before the answer is judged, like the summary: an unparseable answer was still a
+    call. A failure is the caller's to log — the summary stands either way.
+    """
+    existing = await live_facts(session, story.id)
+    messages = [
+        ChatMessage("system", INSTRUCTION),
+        ChatMessage(
+            "user",
+            f"Existing facts:\n{listed(existing)}\n\nNew transcript:\n"
+            + transcript(stretch, story, persona),
+        ),
+    ]
+
+    async def call() -> Reply:
+        return await openrouter.complete(
+            messages,
+            model=settings.background_model or settings.model,
+            temperature=FACTS_TEMPERATURE,
+            max_tokens=FACTS_MAX_TOKENS,
+        )
+
+    reply = await background.once_more_if_worth_it(call)
+    session.add(ledger.row(story.id, SpendKind.FACTS, reply))
+    if reply.truncated:
+        # Its end is missing — the retirements come last — so none of it is believed.
+        log.warning(
+            "fact extraction cut off at the %d-token ceiling, nothing recorded", FACTS_MAX_TOKENS
+        )
+        await session.commit()
+        return 0, 0
+    try:
+        found, retired_ids = parse(reply.text)
+    except (ValueError, json.JSONDecodeError) as error:
+        log.warning("fact extraction unreadable, nothing recorded: %s", error)
+        await session.commit()
+        return 0, 0
+
+    first, last = stretch[0].sequence, stretch[-1].sequence
+    for subject, text in found:
+        session.add(add(story, subject, text, first, model=reply.model))
+    retired = sum(1 for number in retired_ids if retire(existing, number, last) is not None)
+    await session.commit()
+    return len(found), retired
+
+
+# --- editing by hand ------------------------------------------------------------------------------
+#
+# A wrong fact is injected into every prompt until something contradicts it — and since the
+# character acts on it, nothing does. So a person can see what the story believes, add to it,
+# and retire from it. What a person adds is pinned: the extractor cannot retire it. What a
+# person retires is retired, pinned or not.
+
+
+async def newest_sequence(session: AsyncSession, story_id: uuid.UUID) -> int:
+    """Where the story stands: the newest visible turn, or 0 before any."""
+    found = await session.scalar(
+        select(func.max(Message.sequence)).where(
+            Message.story_id == story_id, Message.deleted_at.is_(None)
+        )
+    )
+    return found or 0
+
+
+async def pin(session: AsyncSession, story: Story, subject: str, text: str) -> Fact:
+    """Records a statement as true from now on, pinned."""
+    fact = add(story, subject.strip(), text.strip(), await newest_sequence(session, story.id))
+    session.add(fact)
+    await session.commit()
+    return fact
+
+
+async def retire_by_hand(session: AsyncSession, fact: Fact) -> Fact:
+    """Retires a fact at the story's current turn, whoever stated it. Already retired: unchanged."""
+    if fact.valid_to_sequence is None:
+        fact.valid_to_sequence = max(
+            fact.valid_from_sequence, await newest_sequence(session, fact.story_id)
+        )
+        await session.commit()
+    return fact
+
+
+async def pin_fact(session: AsyncSession, story: Story, statement: str) -> AsyncIterator[str]:
+    """`/fact <statement>`: true from now on, pinned, filed under the character — a fact is
+    about someone, and the one this story is about is the one a reader means when they do
+    not say. No model call."""
+    await pin(session, story, story.character.name, statement)
+    yield event(
+        "done",
+        Said(
+            text=f"Pinned under {story.character.name}. It is in every prompt from the next "
+            "turn on, and the extractor cannot retire it."
+        ),
+    )
+
+
+router = APIRouter(prefix="/stories/{story_id}/facts", tags=["facts"])
+Words = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+Subject = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class NewFact(BaseModel):
+    subject: Subject
+    text: Words
+
+
+class FactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    subject: str
+    text: str
+    valid_from_sequence: int
+    valid_to_sequence: int | None
+    """None while the fact is live."""
+    model: str | None
+    """None when a person stated it."""
+    pinned: bool
+    created_at: datetime
+
+
+async def _required(session: AsyncSession, story_id: uuid.UUID, fact_id: uuid.UUID) -> Fact:
+    fact = await session.scalar(select(Fact).where(Fact.id == fact_id, Fact.story_id == story_id))
+    if fact is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This story has no fact with that id.")
+    return fact
+
+
+@router.get("")
+async def list_facts(story_id: uuid.UUID, session: Session, all: bool = False) -> list[FactOut]:
+    """What the story believes right now; with `all`, what it once believed too."""
+    await visible_story(session, story_id)
+    query = select(Fact).where(Fact.story_id == story_id)
+    if not all:
+        query = query.where(Fact.valid_to_sequence.is_(None))
+    rows = await session.scalars(query.order_by(Fact.valid_from_sequence, Fact.created_at))
+    return [FactOut.model_validate(row) for row in rows]
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def add_fact(story_id: uuid.UUID, new: NewFact, session: Session) -> FactOut:
+    """States a fact. It is in every prompt from the next turn on, and the extractor cannot
+    retire it; a person can."""
+    story = await visible_story(session, story_id)
+    return FactOut.model_validate(await pin(session, story, new.subject, new.text))
+
+
+@router.delete("/{fact_id}")
+async def retire_fact(story_id: uuid.UUID, fact_id: uuid.UUID, session: Session) -> FactOut:
+    """Retires a fact at the current turn. The row stays, with the stretch it held for."""
+    await visible_story(session, story_id)
+    fact = await _required(session, story_id, fact_id)
+    return FactOut.model_validate(await retire_by_hand(session, fact))

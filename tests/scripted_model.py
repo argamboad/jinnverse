@@ -14,8 +14,8 @@ from typing import Any, Self
 
 import httpx2
 
-from lustjinn.openrouter import OpenRouter
-from lustjinn.settings import Settings
+from jinnverse.openrouter import OpenRouter
+from jinnverse.settings import Settings
 
 Json = dict[str, Any]
 

@@ -15,8 +15,8 @@ are never changed, and running it again adds nothing that is already in the pool
 import argparse
 import asyncio
 
-from lustjinn.db import dispose_engine, get_sessionmaker
-from lustjinn.persona_extract import describe, plans_for_all, review, save
+from jinnverse.db import dispose_engine, get_sessionmaker
+from jinnverse.persona_extract import describe, plans_for_all, review, save
 
 
 async def main(dry_run: bool, yes: bool) -> None:

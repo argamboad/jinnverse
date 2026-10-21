@@ -1,6 +1,6 @@
 """Counting tokens with the model's own vocabulary."""
 
-from lustjinn.tokens import PER_MESSAGE, count, encoding, for_message
+from jinnverse.tokens import PER_MESSAGE, count, encoding, for_message
 from scripts.seed_dummy import Dummy
 
 

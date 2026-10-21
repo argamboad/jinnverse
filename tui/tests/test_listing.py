@@ -1,7 +1,7 @@
 """The list state's arithmetic (``Ui/ListState.cs``): selection in range, a scroll margin of
 two, a click mapped back to an index."""
 
-from lustjinn_tui.listing import ListState
+from jinnverse_tui.listing import ListState
 
 
 def test_an_empty_list_selects_nothing_and_a_count_keeps_the_selection_in_range() -> None:

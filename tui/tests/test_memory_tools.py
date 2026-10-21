@@ -6,17 +6,17 @@ from typing import Any
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.panes import ReviewScreen
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.panes import ReviewScreen
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 OPENING = '*The door opens.* "You came," she says.'
 
 
-async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen:
+async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -62,20 +62,20 @@ PROPOSALS: list[dict[str, Any]] = [
 ]
 
 
-def consequences(app: LustjinnApp) -> str:
+def consequences(app: JinnverseApp) -> str:
     screen = app.screen
     assert isinstance(screen, ConfirmScreen)
     return "\n".join(str(static.render()) for static in screen.query(".consequence"))
 
 
-def proposals_shown(app: LustjinnApp) -> list[str]:
+def proposals_shown(app: JinnverseApp) -> list[str]:
     screen = app.screen
     assert isinstance(screen, ReviewScreen)
     return [str(static.render()) for static in screen.query(".proposal")]
 
 
 async def test_review_asks_first_with_the_price_and_esc_calls_nothing(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.proposals[told["id"]] = PROPOSALS
@@ -98,7 +98,7 @@ async def test_review_asks_first_with_the_price_and_esc_calls_nothing(
 
 
 async def test_the_proposals_are_listed_and_the_kept_ones_applied_as_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.proposals[told["id"]] = PROPOSALS
@@ -140,7 +140,7 @@ async def test_the_proposals_are_listed_and_the_kept_ones_applied_as_one(
 
 
 async def test_esc_on_the_proposals_applies_nothing(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.proposals[told["id"]] = PROPOSALS
@@ -161,7 +161,7 @@ async def test_esc_on_the_proposals_applies_nothing(
 
 
 async def test_a_review_with_nothing_to_propose_says_so(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.proposals[told["id"]] = []
@@ -180,7 +180,7 @@ async def test_a_review_with_nothing_to_propose_says_so(
 
 
 async def test_condense_asks_with_what_would_merge_and_then_merges(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.summaries[told["id"]] = [(1, 10, 800), (11, 20, 700), (21, 30, 600)]
@@ -204,7 +204,7 @@ async def test_condense_asks_with_what_would_merge_and_then_merges(
 
 
 async def test_condense_takes_a_count_and_refuses_a_bad_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.summaries[told["id"]] = [(1, 10, 800), (11, 20, 700), (21, 30, 600)]
@@ -226,7 +226,7 @@ async def test_condense_takes_a_count_and_refuses_a_bad_one(
 
 
 async def test_a_story_with_too_few_summaries_is_told_so(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.summaries[told["id"]] = [(1, 10, 800)]

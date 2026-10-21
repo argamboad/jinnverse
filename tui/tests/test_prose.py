@@ -1,6 +1,6 @@
 """The prose rules, the same cases the web app's port passes."""
 
-from lustjinn_tui.prose import Run, content, painted, paragraphs, plain, runs, styled
+from jinnverse_tui.prose import Run, content, painted, paragraphs, plain, runs, styled
 
 
 def test_tells_action_emphasis_and_dialogue_from_narration_and_drops_the_markers() -> None:

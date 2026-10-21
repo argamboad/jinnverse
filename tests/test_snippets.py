@@ -3,7 +3,7 @@
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.snippets import by_name, expand
+from jinnverse.snippets import by_name, expand
 from tests.factories import a_character, a_snippet, a_story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

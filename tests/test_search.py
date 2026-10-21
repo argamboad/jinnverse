@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Role
-from lustjinn.search import MESSAGE_SCORE, NAME_SCORE, snippet
+from jinnverse.models import Role
+from jinnverse.search import MESSAGE_SCORE, NAME_SCORE, snippet
 from scripts.seed_dummy import seed
 from tests.factories import a_message, a_story
 from tests.test_turns import a_played_story

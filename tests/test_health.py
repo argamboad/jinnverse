@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from lustjinn.main import app
+from jinnverse.main import app
 
 client = TestClient(app)
 

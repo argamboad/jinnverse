@@ -7,7 +7,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from lustjinn.library import Slug
+from jinnverse.library import Slug
 from tests.factories import a_character, a_persona, a_story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

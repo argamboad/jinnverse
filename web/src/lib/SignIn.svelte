@@ -34,8 +34,8 @@
 <main class="sign-in">
 	<form onsubmit={submit} autocomplete="on">
 		<div class="head">
-			<Lamp size={92} label="LustJinn" />
-			<h1>Lust<span>Jinn</span></h1>
+			<Lamp size={92} label="JinnVerse" />
+			<h1>Jinn<span>Verse</span></h1>
 			<p class="muted">Sign in once. This device stays signed in for a month.</p>
 		</div>
 		{#if session.note}

@@ -4,20 +4,20 @@ the line under each name with its version and how many stories use it (#215)."""
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.library import LibraryScreen
-from lustjinn_tui.newstory import NewStoryScreen, Panel
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.library import LibraryScreen
+from jinnverse_tui.newstory import NewStoryScreen, Panel
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
-def library(app: LustjinnApp) -> LibraryScreen:
+def library(app: JinnverseApp) -> LibraryScreen:
     screen = app.screen
     assert isinstance(screen, LibraryScreen)
     return screen
 
 
-async def open_library(app: LustjinnApp, pilot: Pilot[None]) -> LibraryScreen:
+async def open_library(app: JinnverseApp, pilot: Pilot[None]) -> LibraryScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
@@ -25,16 +25,16 @@ async def open_library(app: LustjinnApp, pilot: Pilot[None]) -> LibraryScreen:
     return library(app)
 
 
-def tabs(app: LustjinnApp) -> str:
+def tabs(app: JinnverseApp) -> str:
     return str(library(app).query_one("#tabs").render())
 
 
-def description(app: LustjinnApp) -> str:
+def description(app: JinnverseApp) -> str:
     return str(library(app).query_one("#description").render())
 
 
 async def test_the_tabs_say_how_many_entries_each_shelf_holds(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.")
     server.shelve("characters", "Marta", "You are Marta.")
@@ -47,7 +47,7 @@ async def test_the_tabs_say_how_many_entries_each_shelf_holds(
 
 
 async def test_a_name_starting_with_an_underscore_is_not_counted(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.")
     server.shelve("characters", "_template", "A template.")
@@ -56,7 +56,7 @@ async def test_a_name_starting_with_an_underscore_is_not_counted(
         assert " Characters 1 " in tabs(app)
 
 
-async def test_a_refresh_counts_again(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_a_refresh_counts_again(app: JinnverseApp, server: fake.FakeServer) -> None:
     server.shelve("characters", "Elena", "You are Elena.")
     async with app.run_test(size=(100, 30)) as pilot:
         await open_library(app, pilot)
@@ -68,7 +68,7 @@ async def test_a_refresh_counts_again(app: LustjinnApp, server: fake.FakeServer)
 
 
 async def test_the_description_of_the_selected_entry_sits_over_its_text(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="The innkeeper.")
     server.shelve("characters", "Marta", "You are Marta.")
@@ -81,12 +81,12 @@ async def test_the_description_of_the_selected_entry_sits_over_its_text(
         assert not library(app).query_one("#description").display  # none: nothing shown
 
 
-def row_lines(app: LustjinnApp) -> list[str]:
+def row_lines(app: JinnverseApp) -> list[str]:
     return [line.rstrip() for line in library(app).rows.render().plain.splitlines()]
 
 
 async def test_under_each_name_the_version_the_use_and_the_description(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """As the web's list has it (#215): two rows an entry, the second muted."""
     server.shelve("personas", "Elena", "You are Elena.", description="The innkeeper")
@@ -105,7 +105,7 @@ async def test_under_each_name_the_version_the_use_and_the_description(
 
 
 async def test_the_line_counts_the_stories_that_use_the_entry(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = server.shelve("characters", "Elena", "You are Elena.")
     marta = server.shelve("characters", "Marta", "You are Marta.")
@@ -120,7 +120,7 @@ async def test_the_line_counts_the_stories_that_use_the_entry(
 
 
 async def test_a_snippet_says_its_version_and_no_stories(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("snippets", "storm", "Rain on the glass.\nThunder later.")
     async with app.run_test(size=(140, 30)) as pilot:
@@ -131,7 +131,7 @@ async def test_a_snippet_says_its_version_and_no_stories(
 
 
 async def test_a_long_description_is_cut_to_the_width_of_the_row(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="x" * 120)
     async with app.run_test(size=(80, 30)) as pilot:
@@ -143,7 +143,7 @@ async def test_a_long_description_is_cut_to_the_width_of_the_row(
 
 
 async def test_e_edits_the_description_on_one_line_and_saves_it_as_a_version(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -160,7 +160,7 @@ async def test_e_edits_the_description_on_one_line_and_saves_it_as_a_version(
 
 
 async def test_a_description_can_be_cleared_by_saving_it_empty(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="The innkeeper.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -176,7 +176,7 @@ async def test_a_description_can_be_cleared_by_saving_it_empty(
 
 
 async def test_an_unchanged_description_saves_nothing(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="The innkeeper.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -188,7 +188,7 @@ async def test_an_unchanged_description_saves_nothing(
 
 
 async def test_escape_leaves_the_description_as_it_was(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="The innkeeper.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -200,7 +200,7 @@ async def test_escape_leaves_the_description_as_it_was(
 
 
 async def test_the_new_story_form_shows_the_description_of_the_character_and_the_persona(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.", description="The innkeeper.")
     server.default_persona = server.shelve(
@@ -217,12 +217,12 @@ async def test_the_new_story_form_shows_the_description_of_the_character_and_the
         assert "The pianist." in str(persona.render())
 
 
-def hidden_hint(app: LustjinnApp) -> str:
+def hidden_hint(app: JinnverseApp) -> str:
     return next(h.label for h in library(app).hints() if h.key == "_")
 
 
 async def test_underscore_shows_the_hidden_entries_marked_and_puts_them_away(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """A name starting with `_` is kept but not listed; `_` lists it too (#214)."""
     server.shelve("characters", "Elena", "You are Elena.")
@@ -244,7 +244,7 @@ async def test_underscore_shows_the_hidden_entries_marked_and_puts_them_away(
 
 
 async def test_an_entry_renamed_to_underscore_can_be_reached_again(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("personas", "Draft", "Notes towards someone.")
     async with app.run_test(size=(140, 30)) as pilot:
@@ -268,7 +268,7 @@ async def test_an_entry_renamed_to_underscore_can_be_reached_again(
 
 
 async def test_the_pieces_shelf_has_nothing_hidden(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(140, 30)) as pilot:
         screen = await open_library(app, pilot)

@@ -5,17 +5,17 @@ from collections.abc import Callable
 
 from textual.worker import WorkerState
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import TokenStore
-from lustjinn_tui.signin import SignInScreen
-from lustjinn_tui.status import StatusLine
-from lustjinn_tui.stories import StoriesScreen
-from lustjinn_tui.waking import WakingScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import TokenStore
+from jinnverse_tui.signin import SignInScreen
+from jinnverse_tui.status import StatusLine
+from jinnverse_tui.stories import StoriesScreen
+from jinnverse_tui.waking import WakingScreen
 from tui_support import fake_server as fake
 
 
 async def test_the_lamp_shows_until_the_server_answers_then_the_stories(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer
 ) -> None:
     server.asleep_for = 1000
     app = make_app()
@@ -31,7 +31,7 @@ async def test_the_lamp_shows_until_the_server_answers_then_the_stories(
 
 
 async def test_the_knock_loop_outlives_its_widgets_without_an_error(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer
 ) -> None:
     """When the app closes mid-wait, Textual removes the screen's widgets before it cancels the
     screen's worker, and a knock that wakes in between must not draw on what is gone (#222).
@@ -50,7 +50,7 @@ async def test_the_knock_loop_outlives_its_widgets_without_an_error(
 
 
 async def test_without_a_token_the_reader_signs_in_and_letters_type_into_the_fields(
-    make_app: Callable[..., LustjinnApp], tokens: TokenStore
+    make_app: Callable[..., JinnverseApp], tokens: TokenStore
 ) -> None:
     app = make_app(signed_in=False)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -67,7 +67,7 @@ async def test_without_a_token_the_reader_signs_in_and_letters_type_into_the_fie
 
 
 async def test_a_wrong_password_stays_on_the_screen_with_the_servers_sentence(
-    make_app: Callable[..., LustjinnApp],
+    make_app: Callable[..., JinnverseApp],
 ) -> None:
     app = make_app(signed_in=False)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -79,7 +79,7 @@ async def test_a_wrong_password_stays_on_the_screen_with_the_servers_sentence(
 
 
 async def test_a_401_later_sends_the_reader_back_to_sign_in(
-    app: LustjinnApp, server: fake.FakeServer, tokens: TokenStore
+    app: JinnverseApp, server: fake.FakeServer, tokens: TokenStore
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
@@ -94,7 +94,7 @@ async def test_a_401_later_sends_the_reader_back_to_sign_in(
 
 
 async def test_a_lost_server_sends_the_reader_back_to_the_lamp(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
@@ -107,7 +107,9 @@ async def test_a_lost_server_sends_the_reader_back_to_the_lamp(
         assert isinstance(app.screen, StoriesScreen)
 
 
-async def test_a_refusal_lands_in_the_status_row(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_a_refusal_lands_in_the_status_row(
+    app: JinnverseApp, server: fake.FakeServer
+) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await app.call("Opening", app.api.story(fake.uuid.uuid4()))

@@ -5,14 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from lustjinn.main import app
-from lustjinn.settings import Settings, get_settings
+from jinnverse.main import app
+from jinnverse.settings import Settings, get_settings
 
 VALID = {
-    "LUSTJINN_DATABASE_URL": "postgresql+asyncpg://someone:secret@localhost:5440/lustjinn",
-    "LUSTJINN_USERNAME": "reader",
-    "LUSTJINN_PASSWORD": "a password",
-    "LUSTJINN_TOKEN_SECRET": "x" * 32,
+    "JINNVERSE_DATABASE_URL": "postgresql+asyncpg://someone:secret@localhost:5440/jinnverse",
+    "JINNVERSE_USERNAME": "reader",
+    "JINNVERSE_PASSWORD": "a password",
+    "JINNVERSE_TOKEN_SECRET": "x" * 32,
 }
 
 
@@ -51,7 +51,7 @@ def test_a_secret_does_not_print_itself(environment: pytest.MonkeyPatch) -> None
 
 
 def test_a_list_is_read_as_json(environment: pytest.MonkeyPatch) -> None:
-    environment.setenv("LUSTJINN_CORS_ORIGINS", '["http://localhost:5173"]')
+    environment.setenv("JINNVERSE_CORS_ORIGINS", '["http://localhost:5173"]')
 
     assert read().cors_origins == ["http://localhost:5173"]
 
@@ -67,14 +67,14 @@ def test_a_missing_required_variable_is_refused(
 
 
 def test_a_short_token_secret_is_refused(environment: pytest.MonkeyPatch) -> None:
-    environment.setenv("LUSTJINN_TOKEN_SECRET", "too short")
+    environment.setenv("JINNVERSE_TOKEN_SECRET", "too short")
 
     with pytest.raises(ValidationError):
         read()
 
 
 def test_a_database_url_for_another_driver_is_refused(environment: pytest.MonkeyPatch) -> None:
-    environment.setenv("LUSTJINN_DATABASE_URL", "postgresql://someone:secret@localhost/lustjinn")
+    environment.setenv("JINNVERSE_DATABASE_URL", "postgresql://someone:secret@localhost/jinnverse")
 
     with pytest.raises(ValidationError, match="asyncpg"):
         read()
@@ -82,7 +82,7 @@ def test_a_database_url_for_another_driver_is_refused(environment: pytest.Monkey
 
 @pytest.mark.usefixtures("fresh_settings")
 def test_the_app_refuses_to_start_without_its_settings(environment: pytest.MonkeyPatch) -> None:
-    environment.delenv("LUSTJINN_PASSWORD")
+    environment.delenv("JINNVERSE_PASSWORD")
 
     # Entering the client runs the app's start-up, as uvicorn would.
     with pytest.raises(ValidationError), TestClient(app):

@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from lustjinn_tui.api import Shortcode
+from jinnverse_tui.api import Shortcode
 
-SOURCE = Path(__file__).resolve().parents[3] / "src" / "lustjinn" / "emoji.json"
+SOURCE = Path(__file__).resolve().parents[3] / "src" / "jinnverse" / "emoji.json"
 
 
 def served() -> list[dict[str, Any]]:

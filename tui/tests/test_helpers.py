@@ -1,7 +1,7 @@
 """The composer's helpers as pure functions: the donor's ``GraphemeTests``,
 ``EmojiShortcodeTests`` and ``WordCompletionTests``, in Python."""
 
-from lustjinn_tui import emoji, graphemes, shortcodes, words
+from jinnverse_tui import emoji, graphemes, shortcodes, words
 
 FAMILY = "\U0001f468‍\U0001f469‍\U0001f467"  # four code points joined: one cluster
 THUMBS = "\U0001f44d\U0001f3fd"  # a thumbs-up and a skin tone

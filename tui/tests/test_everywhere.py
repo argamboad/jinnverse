@@ -6,20 +6,20 @@ from pathlib import Path
 from textual.command import CommandPalette
 from textual.pilot import Pilot
 
-from lustjinn_tui.api import Export
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import Config
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.export import ExportScreen, write_export
-from lustjinn_tui.library import LibraryScreen
-from lustjinn_tui.palette import commands_of
-from lustjinn_tui.search import SearchScreen
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.api import Export
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import Config
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.export import ExportScreen, write_export
+from jinnverse_tui.library import LibraryScreen
+from jinnverse_tui.palette import commands_of
+from jinnverse_tui.search import SearchScreen
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
-async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen:
+async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -30,7 +30,7 @@ async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen
 
 
 async def test_the_palette_lists_the_screens_commands_then_the_global_ones(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -46,7 +46,7 @@ async def test_the_palette_lists_the_screens_commands_then_the_global_ones(
 
 
 async def test_ctrl_p_opens_the_palette_and_a_command_runs_as_its_key_would(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -71,7 +71,7 @@ async def test_ctrl_p_opens_the_palette_and_a_command_runs_as_its_key_would(
 
 
 async def test_a_colon_in_a_text_field_is_a_colon(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -83,7 +83,7 @@ async def test_a_colon_in_a_text_field_is_a_colon(
 
 
 async def test_ctrl_f_searches_every_story_and_enter_opens_a_hit(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Fog Tale", "The fog came in.", "No fog here.")
     server.add("Other", "Clear skies.")
@@ -125,7 +125,7 @@ async def test_ctrl_f_searches_every_story_and_enter_opens_a_hit(
 
 
 async def test_e_exports_with_a_preview_per_format_and_writes_the_file(
-    app: LustjinnApp, server: fake.FakeServer, tmp_path: Path
+    app: JinnverseApp, server: fake.FakeServer, tmp_path: Path
 ) -> None:
     server.add("Tale", "An opening.", "Hi")
     app.config = Config(server="http://api.test", export_directory=str(tmp_path / "out"))

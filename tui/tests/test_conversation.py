@@ -3,34 +3,34 @@ cut, against the fake server."""
 
 from textual import events
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.composer import Composer
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.regenerate import REASONS, RegenerateScreen
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
-from lustjinn_tui.transcript import Transcript
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.composer import Composer
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.regenerate import REASONS, RegenerateScreen
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
+from jinnverse_tui.transcript import Transcript
 from tui_support import fake_server as fake
 
 OPENING = '*The door opens.* "You came," she says.'
 
 
-def conversation(app: LustjinnApp) -> ConversationScreen:
+def conversation(app: JinnverseApp) -> ConversationScreen:
     screen = app.screen
     assert isinstance(screen, ConversationScreen)
     return screen
 
 
-def header(app: LustjinnApp) -> str:
+def header(app: JinnverseApp) -> str:
     return str(conversation(app).query_one("#header").render())
 
 
-def texts(app: LustjinnApp) -> list[str]:
+def texts(app: JinnverseApp) -> list[str]:
     return [m.text for m in conversation(app).messages]
 
 
-async def open_story(app: LustjinnApp, pilot: object) -> ConversationScreen:
+async def open_story(app: JinnverseApp, pilot: object) -> ConversationScreen:
     from textual.pilot import Pilot
 
     assert isinstance(pilot, Pilot)
@@ -42,7 +42,7 @@ async def open_story(app: LustjinnApp, pilot: object) -> ConversationScreen:
 
 
 async def test_the_story_opens_on_its_newest_turn_with_the_header_and_the_cost(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "I did.", "She smiles.")
     server.spend[told["id"]] = ("0.0123", "0.0010")
@@ -65,7 +65,7 @@ async def test_the_story_opens_on_its_newest_turn_with_the_header_and_the_cost(
 
 
 async def test_the_header_names_the_version_of_the_card_the_story_reads(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """As the web's story head has it (#216): always the newest, which is the one read."""
     elena = server.shelve("characters", "Elena", "You are Elena.")
@@ -81,7 +81,7 @@ async def test_the_header_names_the_version_of_the_card_the_story_reads(
 
 
 async def test_the_arrows_and_pages_move_and_the_header_follows(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING, "One.", "Two.", "Three.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -99,7 +99,7 @@ async def test_the_arrows_and_pages_move_and_the_header_follows(
 
 
 async def test_writing_sends_on_enter_and_the_reply_streams_in(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     server.reply = "She looks up. *A pause.* Then she laughs."
@@ -127,7 +127,7 @@ async def test_writing_sends_on_enter_and_the_reply_streams_in(
 
 
 async def test_the_other_new_line_keys_still_break_the_line_where_they_arrive(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """Ctrl+J is the one the hints name, because Windows Terminal hands over neither Alt+Enter
     nor Shift+Enter (#209); a terminal that tells them from Enter still gets a line break."""
@@ -142,7 +142,7 @@ async def test_the_other_new_line_keys_still_break_the_line_where_they_arrive(
 
 
 async def test_a_paste_with_line_breaks_is_text_not_a_send(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -156,7 +156,7 @@ async def test_a_paste_with_line_breaks_is_text_not_a_send(
 
 
 async def test_esc_keeps_the_draft_and_a_failed_turn_keeps_or_stores_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -179,7 +179,7 @@ async def test_esc_keeps_the_draft_and_a_failed_turn_keeps_or_stores_it(
 
 
 async def test_a_refusal_before_the_stream_keeps_the_draft(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -193,7 +193,7 @@ async def test_a_refusal_before_the_stream_keeps_the_draft(
 
 
 async def test_carry_on_needs_a_reply_and_then_streams_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -211,7 +211,7 @@ async def test_carry_on_needs_a_reply_and_then_streams_one(
 
 
 async def test_regenerate_asks_for_a_reason_and_replaces_the_reply(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING, "Hi", "Old reply.")
     server.reply = "New reply."
@@ -241,7 +241,7 @@ async def test_regenerate_asks_for_a_reason_and_replaces_the_reply(
         assert REASONS[0].value == "none"
 
 
-async def test_the_opening_is_not_regenerated(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_the_opening_is_not_regenerated(app: JinnverseApp, server: fake.FakeServer) -> None:
     told = server.add("Tale", OPENING)
     told["messages"][0]["model"] = None
     async with app.run_test(size=(100, 30)) as pilot:
@@ -254,7 +254,7 @@ async def test_the_opening_is_not_regenerated(app: LustjinnApp, server: fake.Fak
 
 
 async def test_search_finds_counts_and_steps_round_the_matches(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "The fog came in.", "No fog here.", "Clear skies.", "Fog again.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -283,7 +283,7 @@ async def test_search_finds_counts_and_steps_round_the_matches(
 
 
 async def test_branch_names_a_copy_and_delete_from_asks_first(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING, "One.", "Two.", "Three.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -309,7 +309,7 @@ async def test_branch_names_a_copy_and_delete_from_asks_first(
 
 
 async def test_copy_puts_the_selected_turn_on_the_clipboard(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING, "Mine.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -321,7 +321,7 @@ async def test_copy_puts_the_selected_turn_on_the_clipboard(
 
 
 async def test_esc_while_waiting_stops_and_says_the_message_went(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -339,7 +339,7 @@ async def test_esc_while_waiting_stops_and_says_the_message_went(
 
 
 async def test_the_composer_and_transcript_widgets_exist_once(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:

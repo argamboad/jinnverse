@@ -12,7 +12,7 @@ services:
     plan: free
     branch: develop
     buildCommand: uv sync --locked --no-dev
-    startCommand: uv run --no-sync uvicorn lustjinn.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uv run --no-sync uvicorn jinnverse.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeployTrigger: "off"        # quoted: bare `off` is a boolean to some YAML parsers
     envVars:
@@ -21,7 +21,7 @@ services:
 
   # The web app: a static site, which never sleeps, built from web/ with the API's URL baked in.
   # VITE_API_URL is set in the dashboard once the API service has its URL (docs/DEPLOYMENT.md);
-  # the API's LUSTJINN_CORS_ORIGINS must then name this site's URL, or the browser is refused.
+  # the API's JINNVERSE_CORS_ORIGINS must then name this site's URL, or the browser is refused.
   - type: web
     name: lustjinn-web-staging
     runtime: static

@@ -4,7 +4,7 @@
 </script>
 
 <main class="wake">
-	<Lamp size={140} glow label="LustJinn" />
+	<Lamp size={140} glow label="JinnVerse" />
 	{#if server.state === 'down'}
 		<h1>The server is not answering</h1>
 		<p>

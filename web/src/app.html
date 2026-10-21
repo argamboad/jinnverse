@@ -8,7 +8,7 @@
 		<meta name="theme-color" content="#f9f2e9" media="(prefers-color-scheme: light)" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-		<meta name="apple-mobile-web-app-title" content="LustJinn" />
+		<meta name="apple-mobile-web-app-title" content="JinnVerse" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
 		<link rel="icon" href="%sveltekit.assets%/icons/favicon.svg" type="image/svg+xml" />
 		<link rel="icon" href="%sveltekit.assets%/icons/favicon-32.png" sizes="32x32" />
@@ -21,9 +21,12 @@
 		/>
 		<script>
 			// The remembered theme, applied before the first paint so a light-theme reader never
-			// sees a navy flash. The app's theme store takes over once it runs (lib/theme.svelte.ts).
+			// sees a navy flash. The app's theme store takes over once it runs (lib/theme.svelte.ts),
+			// and lib/storage.ts moves an entry still under the app's former name; until then the
+			// old key is read as the fallback, so the first paint after the rename is right too.
 			try {
-				var mode = localStorage.getItem('lustjinn-theme');
+				var mode =
+					localStorage.getItem('jinnverse-theme') || localStorage.getItem('lustjinn-theme');
 				if (mode === 'dark' || mode === 'light') document.documentElement.dataset.theme = mode;
 			} catch (e) {}
 		</script>

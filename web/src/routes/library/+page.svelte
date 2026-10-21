@@ -6,6 +6,7 @@
 	import { api, type Counts, type Defaults, type Entry, type Piece, type Shelf } from '#lib/api.ts';
 	import { blurb, entryMeta, piecesSummary } from '#lib/library.ts';
 	import { Media } from '#lib/media.svelte.ts';
+	import { KEYS } from '#lib/storage.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
 	/** The three shelves. The persona pieces live under Personas, as a card that builds a persona
@@ -30,7 +31,7 @@
 
 	onMount(() => {
 		try {
-			const saved = localStorage.getItem('lustjinn-shelf');
+			const saved = localStorage.getItem(KEYS.shelf);
 			if (saved === 'personas' || saved === 'snippets') shelf = saved;
 		} catch {
 			/* a convenience only */
@@ -77,7 +78,7 @@
 		shelf = next;
 		hidden = false;
 		try {
-			localStorage.setItem('lustjinn-shelf', next);
+			localStorage.setItem(KEYS.shelf, next);
 		} catch {
 			/* a convenience only */
 		}

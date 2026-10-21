@@ -1,4 +1,4 @@
-# Lustjinn
+# JinnVerse
 
 A web app for roleplay with a memory that does not forget — a Python successor to **airp**
 (`argamboad/custom-airp`, .NET 10).
@@ -19,11 +19,11 @@ docker compose up -d                        # Postgres 17 + pgvector on localhos
 uv sync                                     # create .venv from uv.lock
 uv run alembic upgrade head                 # create or update the tables
 uv run python scripts/seed_dummy.py         # optional: a dummy character and persona to play with
-uv run uvicorn lustjinn.main:app --reload   # http://127.0.0.1:8000/health, /docs
+uv run uvicorn jinnverse.main:app --reload   # http://127.0.0.1:8000/health, /docs
 ```
 
 The web app lives in `web/` (SvelteKit 5, static, installable as a PWA). With the API running and
-`LUSTJINN_CORS_ORIGINS=["http://localhost:5173"]` in `.env`:
+`JINNVERSE_CORS_ORIGINS=["http://localhost:5173"]` in `.env`:
 
 ```
 cd web
@@ -40,32 +40,34 @@ list never has to name localhost.
 *Terminal · local API*, *Terminal · staging API* and *Test · this file*; breakpoints work in
 `.py`, `.ts` and `.svelte` files. The web entries go through `API_PROXY`.
 
-The terminal client (`tui/`) runs from the repo with `uv run lustjinn-tui [--server URL]`, or as
+The terminal client (`tui/`) runs from the repo with `uv run jinnverse-tui [--server URL]`, or as
 an installed command that stays as it is until you update it:
 
 ```
-./scripts/install-tui.ps1                   # runs its tests, installs or updates `lustjinn-tui`
+./scripts/install-tui.ps1                   # runs its tests, installs or updates `jinnverse-tui`
 ./scripts/install-tui.sh                    # the same on Linux or WSL (--skip-tests to skip them)
-lustjinn-tui --server https://lustjinn-staging.onrender.com
+jinnverse-tui --server https://lustjinn-staging.onrender.com
 ```
 
-Its settings are `config.toml` (written on first run, commented) in `%LOCALAPPDATA%\lustjinn` on
-Windows and `~/.config/lustjinn` on Linux, its token sits beside it, and `installed.txt` says which
-commit the command was built from. On WSL, clone the repo inside WSL (`~/…`), not through
-`/mnt/c`: the tests' `uv run` there would put a Linux environment in the Windows checkout's
-`.venv`, so the script refuses. WSL keeps its own settings and sign-in, apart from Windows'.
+Its settings are `config.toml` (written on first run, commented) in `%LOCALAPPDATA%\jinnverse` on
+Windows and `~/.config/jinnverse` on Linux, its token sits beside it, and `installed.txt` says which
+commit the command was built from. A settings directory left from the app's former name
+(`lustjinn`) is moved there on the first start, sign-in included. On WSL, clone the repo inside
+WSL (`~/…`), not through `/mnt/c`: the tests' `uv run` there would put a Linux environment in
+the Windows checkout's `.venv`, so the script refuses. WSL keeps its own settings and sign-in,
+apart from Windows'.
 
 It trusts the public certificate authorities only, never the machine's own store, so a proxy that
 decrypts HTTPS (a company's iBoss, say) is refused and named rather than trusted;
 `proxy = "none"` in the config connects directly instead of through `HTTPS_PROXY`.
 
 Sign in with `POST /auth/sign-in`; every other endpoint needs the token it returns. On `/docs`,
-press **Authorize** and paste it. The docs are served only when `LUSTJINN_DOCS=true` (it is, in
+press **Authorize** and paste it. The docs are served only when `JINNVERSE_DOCS=true` (it is, in
 `.env.example`); a deployed API leaves them off. Five wrong sign-ins within fifteen minutes lock
 sign-in for the rest of the window, even with the right password, and each wrong one is answered
 a second late.
 
-Playing needs an OpenRouter key in `.env` (`LUSTJINN_OPENROUTER_API_KEY`). `POST /stories/{id}/send`
+Playing needs an OpenRouter key in `.env` (`JINNVERSE_OPENROUTER_API_KEY`). `POST /stories/{id}/send`
 takes what the reader typed and streams the reply back as server-sent events. The slash commands
 are read before anything is stored: `/ask <question>` asks about the story out of character,
 `/do <direction>` steers the next reply (alone, or over a message after a blank line), `/focus
@@ -77,7 +79,7 @@ are read before anything is stored: `/ask <question>` asks about the story out o
 How a story is written is set per story: `/dials` lists the pack and `/stories/{id}/dials` holds
 the story's values (each dial reaches the prompt or the sampler, never the transcript);
 `/stories/{id}/trackers` holds its meters, drawn by the model at the end of each reply and read
-back. Every story plays on the configured model (`LUSTJINN_MODEL`): a model per story was
+back. Every story plays on the configured model (`JINNVERSE_MODEL`): a model per story was
 built and taken out again (#140).
 
 A story can be taken two ways or cut back: `POST /stories/{id}/branch` copies it up to a turn with the memory those turns built, and `DELETE /stories/{id}/messages/{message_id}` hides a turn and everything after it, memory included — the rows stay. `GET /search?q=` finds where a phrase was said, across stories or inside one; `GET /stories/{id}/export?format=` renders the transcript as Markdown, JSON or text; `GET /spend` and `GET /stories/{id}/spend` report what the ledger holds, discarded replies and unpriced calls told apart. `/stories/{id}/facts` lists, pins and retires what the story believes (`/fact <statement>` pins from the composer); `POST /stories/{id}/memory/rebuild` makes the summaries and facts again from the transcript; and `POST /stories/{id}/purge` erases a deleted story for good, keeping only its spend.

@@ -4,9 +4,9 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import facts
-from lustjinn.context import WORLD_FRAME
-from lustjinn.models import Fact, Role
+from jinnverse import facts
+from jinnverse.context import WORLD_FRAME
+from jinnverse.models import Fact, Role
 from tests.factories import a_message
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send

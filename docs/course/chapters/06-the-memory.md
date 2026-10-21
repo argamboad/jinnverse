@@ -243,7 +243,7 @@ length — a test proves it with a three-number vector.
 ::: note
 DeepSeek has no embeddings endpoint, so the embedding model stays on OpenRouter
 (`openai/text-embedding-3-small`) whatever writes the replies. Setting
-`LUSTJINN_EMBEDDING_MODEL` to empty switches retrieval off entirely — summaries and facts keep
+`JINNVERSE_EMBEDDING_MODEL` to empty switches retrieval off entirely — summaries and facts keep
 working.
 :::
 
@@ -304,7 +304,7 @@ easy to forget — in the budget, in the bill, and in the tests.
 Make the memory work in front of you. Set a small budget so compression starts early:
 
 ```
-LUSTJINN_CONTEXT_BUDGET=6000
+JINNVERSE_CONTEXT_BUDGET=6000
 ```
 
 Run `uv run python scripts/seed_dummy.py` once more if you have not since chapter 4, so the

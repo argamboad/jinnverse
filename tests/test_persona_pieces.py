@@ -11,8 +11,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Persona, PersonaPiece, PieceSlot, Voice
-from lustjinn.persona_pieces import PieceError, assemble, check_voice, slots, slug
+from jinnverse.models import Persona, PersonaPiece, PieceSlot, Voice
+from jinnverse.persona_pieces import PieceError, assemble, check_voice, slots, slug
 
 Json = dict[str, Any]
 

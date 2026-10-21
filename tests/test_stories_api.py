@@ -6,7 +6,7 @@ from typing import Any
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Message, Role, Story, new_id
+from jinnverse.models import Message, Role, Story, new_id
 from scripts.seed_dummy import Dummy, seed
 from tests.factories import a_character, a_message, a_persona, a_story
 

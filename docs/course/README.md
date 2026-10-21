@@ -1,6 +1,6 @@
 # The course
 
-`lustjinn-course.pdf` teaches Python as a backend by following this app as it is built, mapped to
+`jinnverse-course.pdf` teaches Python as a backend by following this app as it is built, mapped to
 .NET. One chapter per roadmap step (see `../KICKOFF.md`), in `chapters/`, ordered by file name.
 
 ## Keeping it up to date
@@ -14,8 +14,8 @@ chapter and the code disagree, the chapter is the bug.
 Needs **pandoc** and **Typst** on `PATH` (`winget install JohnMacFarlane.Pandoc Typst.Typst`).
 
 ```powershell
-./docs/course/build.ps1          # lustjinn-course.pdf — dark, committed
-./docs/course/build.ps1 -Light   # lustjinn-course-light.pdf — for printing, not committed
+./docs/course/build.ps1          # jinnverse-course.pdf — dark, committed
+./docs/course/build.ps1 -Light   # jinnverse-course-light.pdf — for printing, not committed
 ```
 
 | File | Role |

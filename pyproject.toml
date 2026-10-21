@@ -1,5 +1,5 @@
 [project]
-name = "lustjinn"
+name = "jinnverse"
 version = "0.1.0"
 description = "Roleplay with a memory that does not forget."
 authors = [
@@ -29,12 +29,12 @@ build-backend = "uv_build"
 members = ["tui"]
 
 [tool.uv.sources]
-lustjinn-tui = { workspace = true }
+jinnverse-tui = { workspace = true }
 
 [dependency-groups]
 dev = [
     "httpx2>=2.13.1",
-    "lustjinn-tui",
+    "jinnverse-tui",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -75,7 +75,7 @@ select = [
 
 [tool.ruff.lint.isort]
 # Both packages and the test helpers are ours: isort groups them after the third-party imports.
-known-first-party = ["lustjinn", "lustjinn_tui", "tests", "tui_support"]
+known-first-party = ["jinnverse", "jinnverse_tui", "tests", "tui_support"]
 
 [tool.pyright]
 include = ["src", "tests", "scripts", "tui"]

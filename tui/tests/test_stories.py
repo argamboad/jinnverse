@@ -2,32 +2,32 @@
 in place, deletes after asking, erases the deleted for good after asking, refreshes, and opens
 the story on Enter."""
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.listing import Rows
-from lustjinn_tui.masthead import Masthead
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import Preview, StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.listing import Rows
+from jinnverse_tui.masthead import Masthead
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import Preview, StoriesScreen
 from tui_support import fake_server as fake
 
 
-def stories(app: LustjinnApp) -> StoriesScreen:
+def stories(app: JinnverseApp) -> StoriesScreen:
     screen = app.screen
     assert isinstance(screen, StoriesScreen)
     return screen
 
 
-def names(app: LustjinnApp) -> list[str]:
+def names(app: JinnverseApp) -> list[str]:
     return [s.name for s in stories(app).rows.items]
 
 
-def drawn(app: LustjinnApp) -> str:
+def drawn(app: JinnverseApp) -> str:
     return stories(app).rows.render().plain
 
 
 async def test_the_list_loads_newest_first_with_the_selected_storys_preview(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Older", "A dusty opening.", "Hello", '*She looks up.* "A week," she says.')
     server.add("Empty one")
@@ -51,7 +51,7 @@ async def test_the_list_loads_newest_first_with_the_selected_storys_preview(
 
 
 async def test_the_keys_move_the_cursor_and_the_ends(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     for n in range(40):
         server.add(f"Story {n:02}")
@@ -74,7 +74,7 @@ async def test_the_keys_move_the_cursor_and_the_ends(
 
 
 async def test_the_filter_narrows_as_you_type_and_esc_clears_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Professor")
     server.add("Captain")
@@ -108,7 +108,7 @@ async def test_the_filter_narrows_as_you_type_and_esc_clears_it(
 
 
 async def test_f2_renames_in_place_and_the_list_is_re_read(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Draft")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -128,7 +128,7 @@ async def test_f2_renames_in_place_and_the_list_is_re_read(
 
 
 async def test_a_rename_to_nothing_or_to_the_same_name_changes_nothing(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Draft")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -148,7 +148,7 @@ async def test_a_rename_to_nothing_or_to_the_same_name_changes_nothing(
 
 
 async def test_delete_asks_first_and_enter_is_the_only_yes(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Keep")
     server.add("Gone")
@@ -174,7 +174,7 @@ async def test_delete_asks_first_and_enter_is_the_only_yes(
         assert "DELETE" in " ".join(server.paths())
 
 
-async def test_r_re_reads_the_list(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_r_re_reads_the_list(app: JinnverseApp, server: fake.FakeServer) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         assert "No stories yet" in drawn(app)
@@ -186,7 +186,7 @@ async def test_r_re_reads_the_list(app: LustjinnApp, server: fake.FakeServer) ->
 
 
 async def test_enter_opens_the_story_and_coming_back_re_reads_quietly(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -207,7 +207,7 @@ async def test_enter_opens_the_story_and_coming_back_re_reads_quietly(
 
 
 async def test_a_click_selects_and_a_second_click_opens(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("First")
     server.add("Second")
@@ -224,7 +224,7 @@ async def test_a_click_selects_and_a_second_click_opens(
 
 
 async def test_shift_delete_counts_first_then_erases_every_deleted_story_after_asking(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Keep", "a line")
     server.add("Gone", "one", "two")
@@ -264,7 +264,7 @@ async def test_shift_delete_counts_first_then_erases_every_deleted_story_after_a
 
 
 async def test_delete_says_the_story_is_hidden_not_erased(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Only")
     async with app.run_test(size=(100, 30)) as pilot:

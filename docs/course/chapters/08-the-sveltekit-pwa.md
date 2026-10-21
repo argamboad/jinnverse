@@ -261,7 +261,7 @@ Every saved version is a sheet away and any of them can be put back in the edito
 `render.yaml` gained a second service: a static site built from `web/`, every path rewritten to
 `index.html`, `noindex` and `no-referrer` headers, the service worker never cached, and the
 commit written to `/version.txt` by the build command. The API's URL is baked in at build time
-from `VITE_API_URL`; the API's `LUSTJINN_CORS_ORIGINS` must name the site. That is a two-step
+from `VITE_API_URL`; the API's `JINNVERSE_CORS_ORIGINS` must name the site. That is a two-step
 dance done once in Render's dashboard, written down in `docs/DEPLOYMENT.md`. CI's deploy input
 gained `web-staging` and `both`; the web deploy job fires the hook and waits until the site
 reports the commit. Nothing was triggered: the cloud comes when the owner says so.
@@ -277,8 +277,8 @@ in `.svelte` files carry their `.ts` extension, or svelte-check cannot find them
 cannot be called `state` in a runes file, since `$state` is the rune.
 
 ::: try
-Run the API and the web app side by side — `uv run uvicorn lustjinn.main:app` and, in `web/`,
-`npm run dev` — with `LUSTJINN_CORS_ORIGINS=["http://localhost:5173"]` in `.env`. Open
+Run the API and the web app side by side — `uv run uvicorn jinnverse.main:app` and, in `web/`,
+`npm run dev` — with `JINNVERSE_CORS_ORIGINS=["http://localhost:5173"]` in `.env`. Open
 http://localhost:5173, sign in, and play a turn on the dummy. Then switch the theme on the *You*
 screen, open the dials with ◐, set Lust to Explicit and watch the next reply's audit line gain a
 `directives` layer in the rail. On a phone on the same network, `npm run dev -- --host` and

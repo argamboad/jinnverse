@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.db import dispose_engine, get_engine, get_session
-from lustjinn.settings import get_settings
+from jinnverse.db import dispose_engine, get_engine, get_session
+from jinnverse.settings import get_settings
 
 
 async def test_the_database_answers(session: AsyncSession) -> None:
@@ -41,10 +41,10 @@ async def test_the_apps_own_session_reaches_the_database(
 ) -> None:
     """The path a request takes: settings → engine → session."""
     monkeypatch.chdir(tmp_path)  # no .env here
-    monkeypatch.setenv("LUSTJINN_DATABASE_URL", database_url)
-    monkeypatch.setenv("LUSTJINN_USERNAME", "reader")
-    monkeypatch.setenv("LUSTJINN_PASSWORD", "a password")
-    monkeypatch.setenv("LUSTJINN_TOKEN_SECRET", "x" * 32)
+    monkeypatch.setenv("JINNVERSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("JINNVERSE_USERNAME", "reader")
+    monkeypatch.setenv("JINNVERSE_PASSWORD", "a password")
+    monkeypatch.setenv("JINNVERSE_TOKEN_SECRET", "x" * 32)
     get_settings.cache_clear()
     try:
         async for session in get_session():

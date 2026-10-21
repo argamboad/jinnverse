@@ -5,7 +5,7 @@ from decimal import Decimal
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Role, SpendKind
+from jinnverse.models import Role, SpendKind
 from tests.factories import a_character, a_message, a_story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import Streamed, send, stream

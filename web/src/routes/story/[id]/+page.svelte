@@ -13,6 +13,7 @@
 	import StoryHead from '#lib/StoryHead.svelte';
 	import StoryRail from '#lib/StoryRail.svelte';
 	import StorySheet from '#lib/StorySheet.svelte';
+	import { KEYS } from '#lib/storage.ts';
 	import {
 		api,
 		ApiError,
@@ -81,7 +82,7 @@
 		return parts.join(' · ');
 	});
 
-	const HINT_KEY = 'lustjinn-turn-hint';
+	const HINT_KEY = KEYS.turnHint;
 
 	function openTurn(message: Message) {
 		menuFor = message;

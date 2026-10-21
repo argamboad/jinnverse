@@ -2,7 +2,7 @@
 
 import httpx2
 
-from lustjinn.emoji import CACHE_SECONDS, shipped
+from jinnverse.emoji import CACHE_SECONDS, shipped
 
 
 def test_the_shipped_table_is_the_donors_whole_list() -> None:

@@ -1,6 +1,6 @@
 # Builds the course PDF from chapters/*.md, in file-name order.
-#   ./docs/course/build.ps1          -> lustjinn-course.pdf (dark)
-#   ./docs/course/build.ps1 -Light   -> lustjinn-course-light.pdf (for printing)
+#   ./docs/course/build.ps1          -> jinnverse-course.pdf (dark)
+#   ./docs/course/build.ps1 -Light   -> jinnverse-course-light.pdf (for printing)
 # Needs pandoc and typst on PATH (winget: JohnMacFarlane.Pandoc, Typst.Typst).
 #
 # Two stages: pandoc turns the Markdown into Typst source (course.typ, gitignored), then typst
@@ -13,7 +13,7 @@ Set-Location $PSScriptRoot
 
 # @(...) keeps it an array even with one chapter: splatting a lone string passes it letter by letter.
 $chapters = @(Get-ChildItem chapters -Filter *.md | Sort-Object Name | ForEach-Object { "chapters/$($_.Name)" })
-$out = if ($Light) { 'lustjinn-course-light.pdf' } else { 'lustjinn-course.pdf' }
+$out = if ($Light) { 'jinnverse-course-light.pdf' } else { 'jinnverse-course.pdf' }
 $variant = if ($Light) { @('-V', 'light=true') } else { @() }
 
 pandoc @chapters `

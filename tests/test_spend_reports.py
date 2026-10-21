@@ -7,8 +7,8 @@ from decimal import Decimal
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Role, Spend, SpendKind, Story
-from lustjinn.spend import NOTE, PURGED
+from jinnverse.models import Role, Spend, SpendKind, Story
+from jinnverse.spend import NOTE, PURGED
 from tests.factories import a_character, a_message, a_story
 
 MARCH = datetime(2026, 3, 10, 12, tzinfo=UTC)

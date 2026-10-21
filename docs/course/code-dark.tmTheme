@@ -3,7 +3,7 @@
 <!-- Code colours for the dark edition of the course. Typst highlights with these TextMate scopes. -->
 <plist version="1.0">
 <dict>
-  <key>name</key><string>lustjinn dark</string>
+  <key>name</key><string>jinnverse dark</string>
   <key>settings</key>
   <array>
     <dict><key>settings</key><dict>

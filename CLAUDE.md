@@ -3,7 +3,7 @@
 > Operating manual for Claude Code on this project. Auto-loaded each session — keep it tight.
 
 ## What this project is
-**Lustjinn** is a web app for NSFW roleplay with a memory that does not forget: a Python rebuild of
+**JinnVerse** is a web app for NSFW roleplay with a memory that does not forget: a Python rebuild of
 the good parts of airp (`argamboad/custom-airp`, .NET 10). **The full brief is `docs/KICKOFF.md` —
 read it whole before the first task of a session.** It holds the decided stack, the data-model
 sketch, the lessons airp paid for, and the roadmap.
@@ -28,7 +28,7 @@ sketch, the lessons airp paid for, and the roadmap.
 ## Commands
 - `uv sync` — environment from `uv.lock`. Python is pinned in `.python-version` (3.14).
 - `docker compose up -d` — the local Postgres (17 + pgvector, port 5440). The tests need it: they
-  create their own throwaway database on it and never touch the `lustjinn` one.
+  create their own throwaway database on it and never touch the `jinnverse` one.
 - `uv run alembic upgrade head` — apply the migrations. A schema change is a model edit **and** a
   migration (`uv run alembic revision --autogenerate -m "…"`, then read and tidy it); a test fails
   when the two disagree. Database rules a model cannot express (triggers) are hand-written SQL in
@@ -38,7 +38,7 @@ sketch, the lessons airp paid for, and the roadmap.
 - **A test that scripts a summary also scripts the fact extraction that follows it**
   (`model.summarises(…).extracts(…).says(…)`), or the extractor eats the reply meant for the
   reader. The ledger then holds `summary`, `facts` and `reply` rows.
-- `uv run uvicorn lustjinn.main:app --reload` — the API locally; settings come from `.env`
+- `uv run uvicorn jinnverse.main:app --reload` — the API locally; settings come from `.env`
   (see `.env.example`).
 - **Token counting needs the network once:** tiktoken downloads `o200k_base` from
   `openaipublic.blob.core.windows.net` on first use and caches it. A cloud environment with a
@@ -51,13 +51,13 @@ sketch, the lessons airp paid for, and the roadmap.
   commit. The design tokens are `web/src/lib/theme.css`; every colour is a token defined for
   both themes, and no component names a colour of its own. `node scripts/icons.mjs` renders the
   icon set from `brand/logo.svg` when the logo changes.
-- **The terminal client lives in `tui/`** (Textual, a uv workspace member named `lustjinn-tui`):
-  `uv run lustjinn-tui` opens it; its tests are `tui/tests/` and run with the root `uv run pytest`,
-  headless, through Textual's pilot. One dark theme, `tui/src/lustjinn_tui/theme.py`: every colour
+- **The terminal client lives in `tui/`** (Textual, a uv workspace member named `jinnverse-tui`):
+  `uv run jinnverse-tui` opens it; its tests are `tui/tests/` and run with the root `uv run pytest`,
+  headless, through Textual's pilot. One dark theme, `tui/src/jinnverse_tui/theme.py`: every colour
   is a role there, reached as a theme variable (`$muted`); no view names a colour of its own.
-  A debugger starts it as `python -m lustjinn_tui`, never `-m lustjinn_tui.app` (a second copy of
+  A debugger starts it as `python -m jinnverse_tui`, never `-m jinnverse_tui.app` (a second copy of
   the module; the screens' `isinstance` checks fail). `./scripts/install-tui.ps1` installs or
-  updates the owner's `lustjinn-tui` command (tests first, a frozen `uv tool` copy);
+  updates the owner's `jinnverse-tui` command (tests first, a frozen `uv tool` copy);
   `./scripts/install-tui.sh` is its Linux/WSL twin, and refuses a checkout under `/mnt`. The owner
   runs either when they judge the code safe.
 - **Debugging is in `.vscode/launch.json`** (Web · local/staging API, Terminal · local/staging API,
@@ -90,8 +90,9 @@ sketch, the lessons airp paid for, and the roadmap.
 - Labels follow the sibling repos: `type/*`, `area/*`, `needs-decision`, `owner/you`.
 
 ## Repository
-- `origin` is **GitHub** (`https://github.com/argamboad/lustjinn.git`, private); issues, PRs and
-  merges happen there, with `gh`.
+- `origin` is **GitHub** (`https://github.com/argamboad/jinnverse.git`, public); issues, PRs and
+  merges happen there, with `gh`. The repository was `argamboad/lustjinn` until Step 21 (#252);
+  the old URL redirects.
 - **`develop` is the default branch: branch from it, and every PR merges into it. `main` is for
   releases only.**
 - **Actions minutes are billed.** CI runs on PRs and on `main` pushes, never on a `develop` push.

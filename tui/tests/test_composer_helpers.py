@@ -5,11 +5,11 @@ and an emoji is one character to the cursor (the donor's ``EmojiComposerTests`` 
 
 from textual.pilot import Pilot
 
-from lustjinn_tui import emoji
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.completion import Strip
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui import emoji
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.completion import Strip
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 OPENING = "An opening."
@@ -17,7 +17,7 @@ SMILE = "\U0001f604"
 FAMILY = "\U0001f468‍\U0001f469‍\U0001f467"
 
 
-async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen:
+async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -33,7 +33,7 @@ def offered(screen: ConversationScreen) -> list[str]:
 
 
 async def test_the_first_story_opened_reads_the_emoji_table_from_the_api(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     emoji.load([])  # as the app starts: nothing read yet
     server.add("Tale", OPENING)
@@ -46,7 +46,7 @@ async def test_the_first_story_opened_reads_the_emoji_table_from_the_api(
 
 
 async def test_a_colon_offers_emoji_and_tab_inserts_the_glyph(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -69,7 +69,7 @@ async def test_a_colon_offers_emoji_and_tab_inserts_the_glyph(
 
 
 async def test_a_closed_shortcode_becomes_its_emoji_as_the_colon_lands(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -84,7 +84,7 @@ async def test_a_closed_shortcode_becomes_its_emoji_as_the_colon_lands(
 
 
 async def test_a_snippet_completion_inserts_its_page_still_editable(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     server.shelve("snippets", "storm", "The storm breaks over the bay.\nRain, then hail.\n")
@@ -105,7 +105,7 @@ async def test_a_snippet_completion_inserts_its_page_still_editable(
 
 
 async def test_a_bare_trigger_is_sent_as_typed_and_emoji_names_as_real_text(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -118,7 +118,7 @@ async def test_a_bare_trigger_is_sent_as_typed_and_emoji_names_as_real_text(
 
 
 async def test_words_complete_after_three_letters_in_the_readers_case(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -144,7 +144,7 @@ async def test_words_complete_after_three_letters_in_the_readers_case(
 
 
 async def test_enter_sends_even_with_words_on_offer(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -158,7 +158,7 @@ async def test_enter_sends_even_with_words_on_offer(
 
 
 async def test_an_emoji_is_one_character_to_the_cursor(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:

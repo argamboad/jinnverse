@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.export import slug
-from lustjinn.models import Role
+from jinnverse.export import slug
+from jinnverse.models import Role
 from scripts.seed_dummy import Dummy
 from tests.factories import a_message
 from tests.test_turns import a_played_story

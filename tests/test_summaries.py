@@ -12,15 +12,15 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import memory, tokens
-from lustjinn.memory import (
+from jinnverse import memory, tokens
+from jinnverse.memory import (
     SUMMARY_INSTRUCTION,
     batch_to_compress,
     credible,
     dropped_to_compress,
 )
-from lustjinn.models import Fact, Message, Role, SpendKind, Story, Summary
-from lustjinn.settings import Settings
+from jinnverse.models import Fact, Message, Role, SpendKind, Story, Summary
+from jinnverse.settings import Settings
 from scripts.seed_dummy import Dummy
 from tests.factories import a_message, a_story
 from tests.scripted_model import ScriptedModel

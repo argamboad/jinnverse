@@ -4,8 +4,8 @@ import httpx2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.context import WORLD_FRAME
-from lustjinn.models import Aside, Fact, Summary, Tracker
+from jinnverse.context import WORLD_FRAME
+from jinnverse.models import Aside, Fact, Summary, Tracker
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send
 from tests.test_branching import a_story_with_a_memory

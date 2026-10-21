@@ -6,7 +6,7 @@ import httpx2
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import (
+from jinnverse.models import (
     Aside,
     DialValue,
     Embedding,
@@ -20,7 +20,7 @@ from lustjinn.models import (
     Summary,
     Tracker,
 )
-from lustjinn.spend import PURGED
+from jinnverse.spend import PURGED
 from tests.test_branching import a_story_with_a_memory
 
 TABLES = (

@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn.models import Message, Role
+from jinnverse.models import Message, Role
 from tests.factories import a_message, a_story
 
 
@@ -110,7 +110,7 @@ async def test_a_purge_that_announces_itself_may_delete(session: AsyncSession) -
     assert await count(session) == 1
 
     # What SET LOCAL does, as a function call: on for this transaction only.
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
     await session.execute(delete(Message))
 
     assert await count(session) == 0
@@ -118,7 +118,7 @@ async def test_a_purge_that_announces_itself_may_delete(session: AsyncSession) -
 
 async def test_even_a_purge_cannot_rewrite_a_message(session: AsyncSession) -> None:
     message = await a_message(session, await a_story(session))
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
 
     with pytest.raises(IntegrityError, match="cannot be changed"):
         await session.execute(
@@ -128,8 +128,8 @@ async def test_even_a_purge_cannot_rewrite_a_message(session: AsyncSession) -> N
 
 async def test_the_guard_is_back_once_the_purge_is_over(session: AsyncSession) -> None:
     message = await a_message(session, await a_story(session))
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'off', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'off', true)"))
 
     with pytest.raises(IntegrityError, match="never deleted"):
         await session.execute(delete(Message).where(Message.id == message.id))

@@ -4,19 +4,19 @@ persona, Enter walks the fields, and creating opens the story. The donor's
 
 from datetime import datetime
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.newstory import NewStoryScreen, Panel, Picker, default_name
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.newstory import NewStoryScreen, Panel, Picker, default_name
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 WORLD = "You are Elena. " + "The resort sits on a cliff. " * 40
 PERSONA = "A tall man in his forties, quiet."
 
 
-def form(app: LustjinnApp) -> NewStoryScreen:
+def form(app: JinnverseApp) -> NewStoryScreen:
     screen = app.screen
     assert isinstance(screen, NewStoryScreen)
     return screen
@@ -30,7 +30,7 @@ def library(server: fake.FakeServer) -> None:
 
 
 async def test_the_pickers_read_the_library_and_the_panels_show_what_will_be_sent(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 40)) as pilot:
@@ -49,7 +49,7 @@ async def test_the_pickers_read_the_library_and_the_panels_show_what_will_be_sen
 
 
 async def test_picking_changes_the_panels_and_the_page_keys_follow_the_focus(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 24)) as pilot:
@@ -86,7 +86,7 @@ async def test_picking_changes_the_panels_and_the_page_keys_follow_the_focus(
 
 
 async def test_the_whole_flow_creates_a_story_and_opens_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -113,7 +113,7 @@ async def test_the_whole_flow_creates_a_story_and_opens_it(
 
 
 async def test_ctrl_s_creates_from_anywhere_and_a_nameless_story_is_named_after_the_character(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -132,7 +132,7 @@ def test_the_default_name_is_the_character_and_the_day() -> None:
 
 
 async def test_an_empty_library_is_a_warning_not_a_crash(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
@@ -147,7 +147,7 @@ async def test_an_empty_library_is_a_warning_not_a_crash(
 
 
 async def test_escape_with_nothing_typed_closes_and_with_something_typed_asks_first(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -171,7 +171,7 @@ async def test_escape_with_nothing_typed_closes_and_with_something_typed_asks_fi
 
 
 async def test_a_refused_creation_keeps_the_form_with_the_servers_sentence(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:

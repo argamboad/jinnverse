@@ -4,8 +4,8 @@ framed direction as the prompt's last layer, and none of them puts a word into `
 import httpx2
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import directions
-from lustjinn.models import Role, SpendKind
+from jinnverse import directions
+from jinnverse.models import Role, SpendKind
 from tests.scripted_model import ScriptedModel
 from tests.streaming import Streamed, send, stream
 from tests.test_reroll import reroll

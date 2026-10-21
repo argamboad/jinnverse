@@ -1,7 +1,7 @@
 [project]
-name = "lustjinn-tui"
+name = "jinnverse-tui"
 version = "0.1.0"
-description = "Lustjinn in the terminal: a Textual client of the Lustjinn API."
+description = "JinnVerse in the terminal: a Textual client of the JinnVerse API."
 authors = [
     { name = "Allan Gamboa", email = "argamboad@msn.com" }
 ]
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lustjinn-tui = "lustjinn_tui.app:main"
+jinnverse-tui = "jinnverse_tui.app:main"
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]

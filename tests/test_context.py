@@ -3,8 +3,8 @@
 Pure tests — no database, no network — on the dummy character, which is the size of a real one.
 """
 
-from lustjinn import tokens
-from lustjinn.context import (
+from jinnverse import tokens
+from jinnverse.context import (
     DIRECTIVES_FRAME,
     MEMORIES_FRAME,
     PERSONA_FRAME,
@@ -16,7 +16,7 @@ from lustjinn.context import (
     build,
     reader_name,
 )
-from lustjinn.models import Character, Message, Persona, Role
+from jinnverse.models import Character, Message, Persona, Role
 from scripts.seed_dummy import Dummy
 
 

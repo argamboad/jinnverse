@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import facts
-from lustjinn.context import WORLD_FRAME
-from lustjinn.models import Fact, SpendKind, Story
-from lustjinn.settings import Settings
+from jinnverse import facts
+from jinnverse.context import WORLD_FRAME
+from jinnverse.models import Fact, SpendKind, Story
+from jinnverse.settings import Settings
 from scripts.seed_dummy import Dummy
 from tests.factories import a_story
 from tests.scripted_model import ScriptedModel

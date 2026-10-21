@@ -34,7 +34,7 @@ putting them before the transcript would invalidate the cache from that point do
 
 ## The shape: dataclasses in, dataclasses out
 
-`src/lustjinn/context.py` has one input type and one output type:
+`src/jinnverse/context.py` has one input type and one output type:
 
 ```python
 @dataclass(frozen=True, kw_only=True)
@@ -76,7 +76,7 @@ and 7 will produce; they exist now so the builder's shape does not change when t
 ## Counting tokens
 
 A budget is measured in tokens, and there is exactly one honest way to count them: the way the
-model does. `src/lustjinn/tokens.py`:
+model does. `src/jinnverse/tokens.py`:
 
 ```python
 ENCODING = "o200k_base"
@@ -243,7 +243,7 @@ GET /stories/{id}/audit
 ```
 
 Compare `estimated_prompt_tokens` with `prompt_tokens` on the newest reply. Then set
-`LUSTJINN_CONTEXT_BUDGET=4000` in `.env`, restart the server, play another turn, and look again:
+`JINNVERSE_CONTEXT_BUDGET=4000` in `.env`, restart the server, play another turn, and look again:
 `history` now shows `(n dropped)`, and the total sits just under 4,000 — unless the card alone is
 bigger than that, in which case the total is over and the history is exactly one message. Put the
 budget back.

@@ -12,8 +12,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lustjinn import facts, review
-from lustjinn.models import Fact, SpendKind, Story
+from jinnverse import facts, review
+from jinnverse.models import Fact, SpendKind, Story
 from tests.scripted_model import ScriptedModel
 from tests.streaming import send
 from tests.test_turns import a_played_story, ledger

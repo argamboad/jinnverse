@@ -1,22 +1,22 @@
 """The frame: the app opens on the stories, the footer shows the keys, help opens once, Esc goes
 back and then out. Driven with Textual's pilot, headless."""
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.help import SECTIONS, HelpScreen
-from lustjinn_tui.masthead import Masthead
-from lustjinn_tui.status import Kind, StatusLine
-from lustjinn_tui.stories import StoriesScreen
-from lustjinn_tui.theme import NAME
-from lustjinn_tui.view import View
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.help import SECTIONS, HelpScreen
+from jinnverse_tui.masthead import Masthead
+from jinnverse_tui.status import Kind, StatusLine
+from jinnverse_tui.stories import StoriesScreen
+from jinnverse_tui.theme import NAME
+from jinnverse_tui.view import View
 
 
-def view(app: LustjinnApp) -> View:
+def view(app: JinnverseApp) -> View:
     screen = app.screen
     assert isinstance(screen, View)
     return screen
 
 
-async def test_the_app_opens_on_the_stories_in_the_one_dark_theme(app: LustjinnApp) -> None:
+async def test_the_app_opens_on_the_stories_in_the_one_dark_theme(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         assert isinstance(app.screen, StoriesScreen)
@@ -25,7 +25,7 @@ async def test_the_app_opens_on_the_stories_in_the_one_dark_theme(app: LustjinnA
         assert view(app).query_one(Masthead).crumbs == ("Stories",)
 
 
-async def test_the_legend_shows_the_screens_keys_in_order(app: LustjinnApp) -> None:
+async def test_the_legend_shows_the_screens_keys_in_order(app: JinnverseApp) -> None:
     async with app.run_test(size=(140, 30)) as pilot:
         await pilot.pause(0.1)
         text = view(app).legend.text
@@ -34,7 +34,7 @@ async def test_the_legend_shows_the_screens_keys_in_order(app: LustjinnApp) -> N
         assert "All keys" not in text
 
 
-async def test_a_narrow_legend_ends_with_the_pointer(app: LustjinnApp) -> None:
+async def test_a_narrow_legend_ends_with_the_pointer(app: JinnverseApp) -> None:
     async with app.run_test(size=(70, 30)) as pilot:
         await pilot.pause(0.1)
         text = view(app).legend.text
@@ -42,7 +42,7 @@ async def test_a_narrow_legend_ends_with_the_pointer(app: LustjinnApp) -> None:
         assert text.endswith(" ? All keys")
 
 
-async def test_help_opens_once_and_esc_closes_it(app: LustjinnApp) -> None:
+async def test_help_opens_once_and_esc_closes_it(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await pilot.press("question_mark")
@@ -58,7 +58,7 @@ async def test_help_opens_once_and_esc_closes_it(app: LustjinnApp) -> None:
         assert isinstance(app.screen, StoriesScreen)
 
 
-async def test_help_lists_every_section(app: LustjinnApp) -> None:
+async def test_help_lists_every_section(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await pilot.press("f1")
@@ -67,7 +67,7 @@ async def test_help_lists_every_section(app: LustjinnApp) -> None:
         assert shown == [section.name for section in SECTIONS]
 
 
-async def test_esc_on_the_last_screen_quits(app: LustjinnApp) -> None:
+async def test_esc_on_the_last_screen_quits(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await pilot.press("escape")
@@ -75,7 +75,7 @@ async def test_esc_on_the_last_screen_quits(app: LustjinnApp) -> None:
     assert app.return_code == 0
 
 
-async def test_q_quits(app: LustjinnApp) -> None:
+async def test_q_quits(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await pilot.press("q")
@@ -83,7 +83,7 @@ async def test_q_quits(app: LustjinnApp) -> None:
     assert app.return_code == 0
 
 
-async def test_the_status_row_keeps_a_message_until_replaced(app: LustjinnApp) -> None:
+async def test_the_status_row_keeps_a_message_until_replaced(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         line = view(app).query_one(StatusLine)
@@ -99,7 +99,7 @@ async def test_the_status_row_keeps_a_message_until_replaced(app: LustjinnApp) -
         assert not line.is_busy
 
 
-async def test_ctrl_l_redraws_and_says_so(app: LustjinnApp) -> None:
+async def test_ctrl_l_redraws_and_says_so(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.1)
         await pilot.press("ctrl+l")

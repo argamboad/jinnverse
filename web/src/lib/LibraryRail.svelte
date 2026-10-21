@@ -3,6 +3,7 @@
 	import { api, type Counts, type Defaults, type Entry, type Shelf } from '#lib/api.ts';
 	import { blurb, entryMeta } from '#lib/library.ts';
 	import RailHead from '#lib/RailHead.svelte';
+	import { KEYS } from '#lib/storage.ts';
 
 	/** The wide library's left rail: the shelves as tabs, the entries of the one shown (the open
 	 * one marked), the hidden `_name` ones on request, and the way to write another. The shelf it
@@ -70,7 +71,7 @@
 		shown = next;
 		hidden = false;
 		try {
-			localStorage.setItem('lustjinn-shelf', next);
+			localStorage.setItem(KEYS.shelf, next);
 		} catch {
 			/* a convenience only */
 		}

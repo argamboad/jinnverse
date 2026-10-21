@@ -3,7 +3,7 @@
 import json
 from collections.abc import AsyncIterator
 
-from lustjinn.sse import Event, events, format_event
+from jinnverse.sse import Event, events, format_event
 
 
 async def lines(text: str) -> AsyncIterator[str]:

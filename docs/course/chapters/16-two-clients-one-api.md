@@ -1,6 +1,6 @@
 # Two clients, one API
 
-Lustjinn has one API and two clients, and until Step 11 every feature arrived in both: a web
+JinnVerse has one API and two clients, and until Step 11 every feature arrived in both: a web
 issue and a terminal twin in the same milestone. Then came a web redesign, four steps long,
 built from a design handoff for the web alone. Each of those steps was right on its own terms,
 and at the end of them the terminal client had quietly fallen behind on the library, the part of
