@@ -5,13 +5,13 @@ import re
 
 import pytest
 
-from lustjinn_tui.builder import PersonaBuilderScreen
-from lustjinn_tui.help import SECTIONS
-from lustjinn_tui.history import HistoryScreen
-from lustjinn_tui.legend import Hint
-from lustjinn_tui.library import LibraryScreen
-from lustjinn_tui.newstory import NewStoryScreen
-from lustjinn_tui.panes import ReviewScreen
+from jinnverse_tui.builder import PersonaBuilderScreen
+from jinnverse_tui.help import SECTIONS
+from jinnverse_tui.history import HistoryScreen
+from jinnverse_tui.legend import Hint
+from jinnverse_tui.library import LibraryScreen
+from jinnverse_tui.newstory import NewStoryScreen
+from jinnverse_tui.panes import ReviewScreen
 
 
 def keys(text: str) -> set[str]:

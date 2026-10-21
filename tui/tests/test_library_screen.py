@@ -5,31 +5,31 @@ from collections.abc import Callable
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.library import ConflictScreen, LibraryScreen
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.library import ConflictScreen, LibraryScreen
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 CARD = "You are Elena.\n\n=== THE WORLD ===\n\nA resort on a cliff."
 
 
-def library(app: LustjinnApp) -> LibraryScreen:
+def library(app: JinnverseApp) -> LibraryScreen:
     screen = app.screen
     assert isinstance(screen, LibraryScreen)
     return screen
 
 
-def names(app: LustjinnApp) -> list[str]:
+def names(app: JinnverseApp) -> list[str]:
     return [e.name for e in library(app).rows.items]
 
 
-def prose(app: LustjinnApp) -> str:
+def prose(app: JinnverseApp) -> str:
     return str(library(app).query_one("#prose").render())
 
 
-async def open_library(app: LustjinnApp, pilot: Pilot[None]) -> LibraryScreen:
+async def open_library(app: JinnverseApp, pilot: Pilot[None]) -> LibraryScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
@@ -41,7 +41,7 @@ def scripted_editor(replies: list[str | None]) -> Callable[..., str | None]:
     """An editor that answers from a script and records what it was handed."""
     handed: list[str] = []
 
-    def edit(app: LustjinnApp, text: str, suffix: str) -> str | None:
+    def edit(app: JinnverseApp, text: str, suffix: str) -> str | None:
         handed.append(text)
         return replies.pop(0) if replies else None
 
@@ -50,7 +50,7 @@ def scripted_editor(replies: list[str | None]) -> Callable[..., str | None]:
 
 
 async def test_the_shelves_list_their_entries_with_the_text_beside(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = server.shelve("characters", "Elena", CARD, opening="*The door opens.*")
     server.shelve("characters", "Marta", "You are Marta.")
@@ -86,7 +86,7 @@ async def test_the_shelves_list_their_entries_with_the_text_beside(
 
 
 async def test_n_names_a_new_entry_asks_its_note_and_opens_the_editor_on_its_skeleton(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     editor = scripted_editor(["You are Sofia. The rest.\n"])  # the opening is then left alone
     app.editor = editor
@@ -115,7 +115,7 @@ async def test_n_names_a_new_entry_asks_its_note_and_opens_the_editor_on_its_ske
 
 
 async def test_a_new_character_writes_its_opening_in_the_same_pass(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     app.editor = scripted_editor(["You are Sofia.\n", "*Sofia waves from the stage.*\n"])
     async with app.run_test(size=(100, 30)) as pilot:
@@ -132,7 +132,7 @@ async def test_a_new_character_writes_its_opening_in_the_same_pass(
 
 
 async def test_a_new_persona_has_no_opening_to_write(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     editor = scripted_editor(["A tall man.\n"])
     app.editor = editor
@@ -147,7 +147,7 @@ async def test_a_new_persona_has_no_opening_to_write(
 
 
 async def test_enter_edits_and_an_unchanged_text_saves_nothing(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", CARD)
     app.editor = scripted_editor([None, CARD + "\nMore.\n"])
@@ -165,7 +165,7 @@ async def test_enter_edits_and_an_unchanged_text_saves_nothing(
 
 
 async def test_o_edits_the_opening_and_only_a_character_has_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", CARD)
     server.shelve("personas", "Me", "A tall man.")
@@ -184,7 +184,7 @@ async def test_o_edits_the_opening_and_only_a_character_has_one(
 
 
 async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = server.shelve("characters", "Elena", CARD)
     app.editor = scripted_editor(["Mine.\n", "Mine again.\n"])
@@ -216,7 +216,7 @@ async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
 
 
 async def test_f2_renames_and_d_makes_a_persona_the_default(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("personas", "Me", "A tall man.")
     server.shelve("personas", "Someone", "A stranger.")
@@ -245,7 +245,7 @@ async def test_f2_renames_and_d_makes_a_persona_the_default(
 
 
 async def test_del_asks_and_the_server_refuses_while_a_story_uses_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = server.shelve("characters", "Elena", CARD)
     server.shelve("characters", "Spare", "Unused.")

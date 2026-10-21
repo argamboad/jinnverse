@@ -7,15 +7,15 @@ from collections.abc import Callable
 
 import pytest
 
-from lustjinn_tui import buttons as phone
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import Config
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.legend import Legend
-from lustjinn_tui.masthead import Masthead
-from lustjinn_tui.status import StatusLine
-from lustjinn_tui.stories import Preview, StoriesScreen
-from lustjinn_tui.view import NARROW
+from jinnverse_tui import buttons as phone
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import Config
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.legend import Legend
+from jinnverse_tui.masthead import Masthead
+from jinnverse_tui.status import StatusLine
+from jinnverse_tui.stories import Preview, StoriesScreen
+from jinnverse_tui.view import NARROW
 from tui_support import fake_server as fake
 
 OPENING = '*The door opens.* "You came," she says.'
@@ -41,7 +41,7 @@ def test_the_bar_fits_from_the_left_and_keeps_the_ellipsis() -> None:
 
 
 async def test_the_frame_is_one_row_top_and_bottom_and_comes_back_when_wider(
-    app: LustjinnApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
+    app: JinnverseApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.05)
     server.add("Tale", OPENING)
@@ -80,7 +80,7 @@ async def test_the_frame_is_one_row_top_and_bottom_and_comes_back_when_wider(
 
 
 async def test_a_message_borrows_the_phones_row_for_a_few_seconds(
-    app: LustjinnApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
+    app: JinnverseApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.2)
     server.add("Tale")
@@ -98,7 +98,7 @@ async def test_a_message_borrows_the_phones_row_for_a_few_seconds(
 
 
 async def test_on_a_phone_the_conversation_takes_the_width_and_enter_is_a_new_line(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "Hi")
     server.spend[told["id"]] = ("0.0123", "0")
@@ -131,7 +131,7 @@ async def test_on_a_phone_the_conversation_takes_the_width_and_enter_is_a_new_li
 
 
 async def test_with_the_mouse_on_the_bottom_row_is_buttons_that_press_keys(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.05)
     server.add("Tale", OPENING)
@@ -163,7 +163,7 @@ async def test_with_the_mouse_on_the_bottom_row_is_buttons_that_press_keys(
 
 
 async def test_without_the_mouse_the_row_stays_a_legend(
-    app: LustjinnApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
+    app: JinnverseApp, server: fake.FakeServer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.05)
     server.add("Tale")

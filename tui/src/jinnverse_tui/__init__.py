@@ -1,0 +1,1 @@
+"""JinnVerse in the terminal."""

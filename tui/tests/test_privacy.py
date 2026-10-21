@@ -10,10 +10,10 @@ import certifi
 import httpx2
 import pytest
 
-from lustjinn_tui.api import Api, InterceptedError, UnreachableError, public_trust
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import Config, TokenStore, load
-from lustjinn_tui.waking import WakingScreen
+from jinnverse_tui.api import Api, InterceptedError, UnreachableError, public_trust
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import Config, TokenStore, load
+from jinnverse_tui.waking import WakingScreen
 
 
 def refusing(error: BaseException) -> httpx2.MockTransport:
@@ -66,7 +66,7 @@ def test_direct_ignores_the_machines_proxy_settings(tmp_path: Path) -> None:
 async def test_the_lamp_says_intercepted_instead_of_asleep(tmp_path: Path) -> None:
     verify = ssl.SSLCertVerificationError(1, "[SSL: CERTIFICATE_VERIFY_FAILED]")
     api = Api("https://api.test", TokenStore(tmp_path / "t"), transport=refusing(verify))
-    app = LustjinnApp(Config(server="https://api.test"), api, wake_waits=(0.02,))
+    app = JinnverseApp(Config(server="https://api.test"), api, wake_waits=(0.02,))
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause(0.2)
         screen = app.screen

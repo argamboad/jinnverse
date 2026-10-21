@@ -3,24 +3,24 @@ makes no request, the panes, the ask screen and its one key."""
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.completion import Strip
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.panes import AskScreen, TextPaneScreen
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.completion import Strip
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.panes import AskScreen, TextPaneScreen
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 OPENING = '*The door opens.* "You came," she says.'
 
 
-def conversation(app: LustjinnApp) -> ConversationScreen:
+def conversation(app: JinnverseApp) -> ConversationScreen:
     screen = app.screen
     assert isinstance(screen, ConversationScreen)
     return screen
 
 
-async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen:
+async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -29,7 +29,7 @@ async def open_story(app: LustjinnApp, pilot: Pilot[None]) -> ConversationScreen
 
 
 async def test_a_slash_offers_the_commands_and_tab_completes_the_name(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -67,7 +67,7 @@ async def test_a_slash_offers_the_commands_and_tab_completes_the_name(
 
 
 async def test_an_unknown_command_is_refused_and_nothing_is_sent(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -87,7 +87,7 @@ async def test_an_unknown_command_is_refused_and_nothing_is_sent(
 
 
 async def test_a_server_command_typed_before_the_list_is_read_is_refused_not_sent(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     server.commands_unreadable = True
@@ -111,7 +111,7 @@ async def test_a_server_command_typed_before_the_list_is_read_is_refused_not_sen
 
 
 async def test_the_command_list_is_read_once_for_the_app(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -124,7 +124,7 @@ async def test_the_command_list_is_read_once_for_the_app(
 
 
 async def test_a_doubled_slash_sends_a_message_that_starts_with_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
@@ -135,7 +135,7 @@ async def test_a_doubled_slash_sends_a_message_that_starts_with_one(
 
 
 async def test_ask_opens_the_answer_and_f_pins_it_as_a_fact(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "Hi", "Hello.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -163,7 +163,7 @@ async def test_ask_opens_the_answer_and_f_pins_it_as_a_fact(
         assert isinstance(app.screen, ConversationScreen)
 
 
-async def test_a_refused_ask_keeps_the_question(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_a_refused_ask_keeps_the_question(app: JinnverseApp, server: fake.FakeServer) -> None:
     server.add("Tale", OPENING)
     server.commands = [c for c in server.commands if c["name"] != "ask"]  # the server's list wins
     async with app.run_test(size=(100, 30)) as pilot:
@@ -177,7 +177,7 @@ async def test_a_refused_ask_keeps_the_question(app: LustjinnApp, server: fake.F
 
 
 async def test_the_reading_commands_open_panes_or_say_why_not(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "Hi", "Hello.")
     server.shelve("characters", "Dummy", "You are Dummy.\nA test.")
@@ -228,7 +228,7 @@ async def test_the_reading_commands_open_panes_or_say_why_not(
 
 
 async def test_search_cost_and_audit_from_the_composer(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "The fog came in.", "No fog here.", "Clear.")
     server.spend[told["id"]] = ("0.0200", "0")
@@ -267,7 +267,7 @@ async def test_search_cost_and_audit_from_the_composer(
 
 
 async def test_recap_opens_a_pane_and_the_writes_say_so(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", OPENING, "Hi", "Hello.")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -296,7 +296,7 @@ async def test_recap_opens_a_pane_and_the_writes_say_so(
 
 
 async def test_do_with_a_message_under_it_stores_the_message_only(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:

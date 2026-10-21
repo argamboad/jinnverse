@@ -1,6 +1,6 @@
 """The footer legend's fitting rule, as the donor's Legend did it."""
 
-from lustjinn_tui.legend import ALL_KEYS, DEFAULT_HINTS, RESERVE, Hint, fit, markup
+from jinnverse_tui.legend import ALL_KEYS, DEFAULT_HINTS, RESERVE, Hint, fit, markup
 
 HINTS = (
     Hint("Enter", "Open the story"),  # 5 + 14 + 4 = 23 cells

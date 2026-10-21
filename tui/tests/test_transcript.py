@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 
 from textual.app import ComposeResult
 
-from lustjinn_tui.api import Message
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.transcript import Pending, Transcript, first_row, label_of, last_row, layout
-from lustjinn_tui.view import View
+from jinnverse_tui.api import Message
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.transcript import Pending, Transcript, first_row, label_of, last_row, layout
+from jinnverse_tui.view import View
 from tui_support import fake_server as fake
 
 LONG = "words and *more words* " * 40  # a dozen rows at eighty columns
@@ -95,7 +95,7 @@ class Bare(View):
 
 
 async def test_opening_lands_on_the_newest_turns_first_row_and_the_arrows_read_through_it(
-    make_app: Callable[..., LustjinnApp],
+    make_app: Callable[..., JinnverseApp],
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:
@@ -128,7 +128,7 @@ async def test_opening_lands_on_the_newest_turns_first_row_and_the_arrows_read_t
 
 
 async def test_paging_inside_a_tall_turn_is_never_dragged_back_and_the_selection_follows(
-    make_app: Callable[..., LustjinnApp],
+    make_app: Callable[..., JinnverseApp],
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:
@@ -160,7 +160,7 @@ async def test_paging_inside_a_tall_turn_is_never_dragged_back_and_the_selection
 
 
 async def test_a_streamed_reply_follows_its_tail_then_lands_on_its_first_row(
-    make_app: Callable[..., LustjinnApp],
+    make_app: Callable[..., JinnverseApp],
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:

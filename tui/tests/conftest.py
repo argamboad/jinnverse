@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from lustjinn_tui import emoji
-from lustjinn_tui.api import Api
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import Config, TokenStore
+from jinnverse_tui import emoji
+from jinnverse_tui.api import Api
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import Config, TokenStore
 from tui_support import emoji_table
 from tui_support import fake_server as fake
 
@@ -40,17 +40,19 @@ def api(server: fake.FakeServer, tokens: TokenStore) -> Api:
 
 
 @pytest.fixture
-def make_app(api: Api, tokens: TokenStore) -> Callable[..., LustjinnApp]:
+def make_app(api: Api, tokens: TokenStore) -> Callable[..., JinnverseApp]:
     """An app against the fake server; ``signed_in=False`` starts without a token."""
 
-    def make(*, signed_in: bool = True, config: Config | None = None) -> LustjinnApp:
+    def make(*, signed_in: bool = True, config: Config | None = None) -> JinnverseApp:
         if signed_in:
             tokens.write(fake.TOKEN)
-        return LustjinnApp(config or Config(server="http://api.test"), api, wake_waits=(0.02, 0.02))
+        return JinnverseApp(
+            config or Config(server="http://api.test"), api, wake_waits=(0.02, 0.02)
+        )
 
     return make
 
 
 @pytest.fixture
-def app(make_app: Callable[..., LustjinnApp]) -> LustjinnApp:
+def app(make_app: Callable[..., JinnverseApp]) -> JinnverseApp:
     return make_app()

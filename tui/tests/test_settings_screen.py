@@ -3,22 +3,22 @@ leaves the row where the story really is."""
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.api import Dial, DialLevel
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.settings import ChatSettingsScreen, describe, level_index
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.api import Dial, DialLevel
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.settings import ChatSettingsScreen, describe, level_index
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
-def settings_screen(app: LustjinnApp) -> ChatSettingsScreen:
+def settings_screen(app: JinnverseApp) -> ChatSettingsScreen:
     screen = app.screen
     assert isinstance(screen, ChatSettingsScreen)
     return screen
 
 
-async def open_settings(app: LustjinnApp, pilot: Pilot[None]) -> ChatSettingsScreen:
+async def open_settings(app: JinnverseApp, pilot: Pilot[None]) -> ChatSettingsScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -46,7 +46,7 @@ def test_describe_reads_a_value_the_way_the_row_shows_it() -> None:
     assert describe(toggle, "nope") == ("Off", "Whether.")
 
 
-async def test_the_rows_are_the_enabled_dials(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_the_rows_are_the_enabled_dials(app: JinnverseApp, server: fake.FakeServer) -> None:
     told = server.add("Tale", "An opening.")
     server.dial_values[told["id"]] = {"lust": "3"}
     async with app.run_test(size=(100, 36)) as pilot:
@@ -65,7 +65,7 @@ async def test_the_rows_are_the_enabled_dials(app: LustjinnApp, server: fake.Fak
 
 
 async def test_stepping_stages_and_enter_applies_everything_at_once(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 36)) as pilot:
@@ -102,7 +102,7 @@ async def test_stepping_stages_and_enter_applies_everything_at_once(
 
 
 async def test_esc_discards_staged_changes_before_it_leaves_and_del_clears(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     server.dial_values[told["id"]] = {"lust": "1"}
@@ -129,7 +129,7 @@ async def test_esc_discards_staged_changes_before_it_leaves_and_del_clears(
 
 
 async def test_a_text_dial_is_typed_and_a_refusal_puts_the_row_back(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 36)) as pilot:

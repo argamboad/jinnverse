@@ -6,13 +6,13 @@ from collections.abc import Callable
 
 from textual.pilot import Pilot
 
-from lustjinn_tui import builder
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.builder import PersonaBuilderScreen
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.library import LibraryScreen
-from lustjinn_tui.newstory import NewStoryScreen, Panel
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui import builder
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.builder import PersonaBuilderScreen
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.library import LibraryScreen
+from jinnverse_tui.newstory import NewStoryScreen, Panel
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
@@ -28,25 +28,25 @@ def pool(server: fake.FakeServer) -> dict[str, dict[str, str]]:
     }
 
 
-def screen(app: LustjinnApp) -> PersonaBuilderScreen:
+def screen(app: JinnverseApp) -> PersonaBuilderScreen:
     found = app.screen
     assert isinstance(found, PersonaBuilderScreen)
     return found
 
 
-def preview(app: LustjinnApp) -> str:
+def preview(app: JinnverseApp) -> str:
     return str(screen(app).query_one("#preview-text").render())
 
 
-def slot_keys(app: LustjinnApp) -> list[str]:
+def slot_keys(app: JinnverseApp) -> list[str]:
     return [slot.key for slot in screen(app).slot_rows.items]
 
 
-def piece_names(app: LustjinnApp) -> list[str]:
+def piece_names(app: JinnverseApp) -> list[str]:
     return [piece.name for piece in screen(app).piece_rows.items]
 
 
-async def open_builder(app: LustjinnApp, pilot: Pilot[None]) -> PersonaBuilderScreen:
+async def open_builder(app: JinnverseApp, pilot: Pilot[None]) -> PersonaBuilderScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")  # the library
@@ -65,7 +65,7 @@ async def pick_in(pilot: Pilot[None], slot_downs: int, piece_downs: int = 0) -> 
 
 
 async def test_b_opens_the_builder_on_the_slots_the_server_lists(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -80,7 +80,7 @@ async def test_b_opens_the_builder_on_the_slots_the_server_lists(
 
 
 async def test_moving_down_the_slots_shows_the_pieces_written_for_each(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -97,7 +97,7 @@ async def test_moving_down_the_slots_shows_the_pieces_written_for_each(
 
 
 async def test_the_slots_sharing_a_paragraph_are_one_row_as_on_the_web(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """Home, vehicle and pets write one paragraph: one row, picked within (#218)."""
     pool(server)
@@ -114,7 +114,7 @@ async def test_the_slots_sharing_a_paragraph_are_one_row_as_on_the_web(
 
 
 async def test_a_piece_row_says_what_the_piece_says_and_the_highlighted_one_reads_whole(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     server.piece("look", "Lean", "{name} is lean.\nHe runs.", description="Runner build")
@@ -137,7 +137,7 @@ async def test_a_piece_row_says_what_the_piece_says_and_the_highlighted_one_read
 
 
 async def test_r_on_a_shared_row_picks_for_each_of_its_slots(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -148,7 +148,7 @@ async def test_r_on_a_shared_row_picks_for_each_of_its_slots(
 
 
 async def test_n_on_a_shared_row_asks_for_the_slot_first(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     app.editor = lambda app_, text, suffix: "He drives a pickup."  # type: ignore[method-assign]
@@ -172,7 +172,7 @@ async def test_n_on_a_shared_row_asks_for_the_slot_first(
 
 
 async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -191,7 +191,7 @@ async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
 
 
 async def test_space_on_a_picked_piece_takes_it_back(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -205,7 +205,7 @@ async def test_space_on_a_picked_piece_takes_it_back(
 
 
 async def test_a_pick_the_server_cannot_join_is_explained_in_place_of_the_persona(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -215,7 +215,7 @@ async def test_a_pick_the_server_cannot_join_is_explained_in_place_of_the_person
 
 
 async def test_v_changes_the_voice_and_puts_back_pieces_written_in_another(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -232,7 +232,7 @@ async def test_v_changes_the_voice_and_puts_back_pieces_written_in_another(
 
 
 async def test_r_picks_one_piece_for_the_slot_at_random(
-    app: LustjinnApp, server: fake.FakeServer, monkeypatch: object
+    app: JinnverseApp, server: fake.FakeServer, monkeypatch: object
 ) -> None:
     ids = pool(server)
     server.piece("home", "Loft", "{short} lives in a loft.")
@@ -247,12 +247,12 @@ async def test_r_picks_one_piece_for_the_slot_at_random(
         assert ids  # the pool was not touched
 
 
-def caption(app: LustjinnApp) -> str:
+def caption(app: JinnverseApp) -> str:
     return str(screen(app).query_one("#caption").render())
 
 
 async def test_the_caption_counts_the_slots_picked_and_the_needed_ones_left(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     """In the web builder's words (#217)."""
     pool(server)
@@ -267,7 +267,7 @@ async def test_the_caption_counts_the_slots_picked_and_the_needed_ones_left(
 
 
 async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
-    app: LustjinnApp, server: fake.FakeServer, monkeypatch: object
+    app: JinnverseApp, server: fake.FakeServer, monkeypatch: object
 ) -> None:
     pool(server)
     server.piece("home", "Loft", "{short} lives in a loft.")
@@ -296,12 +296,12 @@ async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
 
 
 async def test_n_writes_a_new_piece_in_the_editor_and_picks_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     handed: list[str] = []
 
-    def editor(app_: LustjinnApp, text: str, suffix: str) -> str | None:
+    def editor(app_: JinnverseApp, text: str, suffix: str) -> str | None:
         handed.append(text)
         return "{name} has dark hair.\n"
 
@@ -326,7 +326,7 @@ async def test_n_writes_a_new_piece_in_the_editor_and_picks_it(
 
 
 async def test_n_in_the_name_slot_asks_for_the_full_and_the_short_name(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
@@ -347,7 +347,7 @@ async def test_n_in_the_name_slot_asks_for_the_full_and_the_short_name(
 
 
 async def test_a_piece_whose_editor_text_is_unchanged_is_not_saved(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     app.editor = lambda app_, text, suffix: text
     async with app.run_test(size=(110, 40)) as pilot:
@@ -359,7 +359,7 @@ async def test_a_piece_whose_editor_text_is_unchanged_is_not_saved(
 
 
 async def test_a_name_taken_in_the_pool_is_refused_with_the_servers_sentence(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     app.editor = lambda app_, text, suffix: "He is tall.\n"
@@ -371,7 +371,7 @@ async def test_a_name_taken_in_the_pool_is_refused_with_the_servers_sentence(
 
 
 async def test_ctrl_s_asks_for_the_name_suggested_by_the_pick_and_makes_the_persona(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -396,7 +396,7 @@ async def test_ctrl_s_asks_for_the_name_suggested_by_the_pick_and_makes_the_pers
 
 
 async def test_a_name_typed_over_the_suggestion_is_the_one_used(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -413,7 +413,7 @@ async def test_a_name_typed_over_the_suggestion_is_the_one_used(
 
 
 async def test_nothing_is_made_from_an_empty_pick(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -427,7 +427,7 @@ async def test_nothing_is_made_from_an_empty_pick(
 
 
 async def test_a_persona_is_not_made_without_its_look_even_with_a_name(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -445,7 +445,7 @@ async def test_a_persona_is_not_made_without_its_look_even_with_a_name(
 
 
 async def test_esc_with_nothing_picked_leaves_and_with_a_pick_asks_first(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -466,7 +466,7 @@ async def test_esc_with_nothing_picked_leaves_and_with_a_pick_asks_first(
 
 
 async def test_the_new_story_form_builds_a_persona_and_picks_it(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.shelve("characters", "Elena", "You are Elena.")
     server.shelve("personas", "Me", "A tall man.")
@@ -496,7 +496,7 @@ async def test_the_new_story_form_builds_a_persona_and_picks_it(
 
 
 async def test_the_builder_survives_a_pool_with_nothing_in_a_slot(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
@@ -510,7 +510,7 @@ async def test_the_builder_survives_a_pool_with_nothing_in_a_slot(
 
 
 def scripted(replies: list[str | None]) -> Callable[..., str | None]:
-    def edit(app: LustjinnApp, text: str, suffix: str) -> str | None:
+    def edit(app: JinnverseApp, text: str, suffix: str) -> str | None:
         return replies.pop(0) if replies else None
 
     return edit

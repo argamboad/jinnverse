@@ -5,12 +5,12 @@ from typing import Any
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.history import HistoryScreen
-from lustjinn_tui.library import ConflictScreen, LibraryScreen
-from lustjinn_tui.status import Kind
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.history import HistoryScreen
+from jinnverse_tui.library import ConflictScreen, LibraryScreen
+from jinnverse_tui.status import Kind
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
@@ -23,7 +23,7 @@ def elena_in_three_versions(server: fake.FakeServer) -> dict[str, Any]:
     return elena
 
 
-async def open_history(app: LustjinnApp, pilot: Pilot[None]) -> HistoryScreen:
+async def open_history(app: JinnverseApp, pilot: Pilot[None]) -> HistoryScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
@@ -44,7 +44,7 @@ def prose(screen: HistoryScreen) -> str:
 
 
 async def test_h_lists_every_version_newest_first_and_reads_the_one_highlighted(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena_in_three_versions(server)
     async with app.run_test(size=(120, 30)) as pilot:
@@ -65,7 +65,7 @@ async def test_h_lists_every_version_newest_first_and_reads_the_one_highlighted(
 
 
 async def test_enter_asks_then_puts_the_old_version_back_as_a_new_one(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = elena_in_three_versions(server)
     async with app.run_test(size=(120, 30)) as pilot:
@@ -92,7 +92,7 @@ async def test_enter_asks_then_puts_the_old_version_back_as_a_new_one(
 
 
 async def test_the_current_version_is_not_put_back(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = elena_in_three_versions(server)
     async with app.run_test(size=(120, 30)) as pilot:
@@ -105,7 +105,7 @@ async def test_the_current_version_is_not_put_back(
 
 
 async def test_esc_on_the_question_leaves_the_entry_as_it_is(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = elena_in_three_versions(server)
     async with app.run_test(size=(120, 30)) as pilot:
@@ -120,7 +120,7 @@ async def test_esc_on_the_question_leaves_the_entry_as_it_is(
 
 
 async def test_a_put_back_over_a_save_made_elsewhere_meets_the_conflict_screen(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     elena = elena_in_three_versions(server)
     async with app.run_test(size=(120, 30)) as pilot:
@@ -134,7 +134,7 @@ async def test_a_put_back_over_a_save_made_elsewhere_meets_the_conflict_screen(
         assert elena["text"] == "Changed on the phone."  # nothing overwritten by accident
 
 
-async def test_a_piece_has_no_history_to_show(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_a_piece_has_no_history_to_show(app: JinnverseApp, server: fake.FakeServer) -> None:
     server.piece("look", "Athletic", "{short} is athletic.")
     async with app.run_test(size=(120, 30)) as pilot:
         await pilot.pause(0.1)

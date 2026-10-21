@@ -1,12 +1,12 @@
 <#
-Installs the terminal client as the `lustjinn-tui` command, or updates it, from this checkout.
+Installs the terminal client as the `jinnverse-tui` command, or updates it, from this checkout.
 
   ./scripts/install-tui.ps1              tests first, then install
   ./scripts/install-tui.ps1 -SkipTests   install as the code stands
 
 The command is a frozen copy with its own environment (`uv tool install`), so it keeps working
 whatever you do in the repo afterwards, until you run this again. Run it when you judge the code
-safe. Your settings and sign-in live apart from it (%LOCALAPPDATA%\lustjinn) and are kept.
+safe. Your settings and sign-in live apart from it (%LOCALAPPDATA%\jinnverse) and are kept.
 #>
 param([switch]$SkipTests)
 
@@ -38,12 +38,18 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw "The terminal client's tests failed; nothing was installed." }
 }
 
-Write-Host "Installing lustjinn-tui from $from..."
+# The command was `lustjinn-tui` until 2026-10-21; a copy left by an earlier run goes.
+if (uv tool list 2>$null | Select-String -Quiet '^lustjinn-tui ') {
+    Write-Host "Removing the old lustjinn-tui command..."
+    uv tool uninstall lustjinn-tui
+}
+
+Write-Host "Installing jinnverse-tui from $from..."
 uv tool install --reinstall ./tui
 if ($LASTEXITCODE -ne 0) { throw "uv could not install the terminal client." }
 
 # Record what is installed, beside the client's own settings.
-$home_ = Join-Path $env:LOCALAPPDATA 'lustjinn'
+$home_ = Join-Path $env:LOCALAPPDATA 'jinnverse'
 New-Item -ItemType Directory -Force $home_ | Out-Null
 "$from, installed $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Set-Content (Join-Path $home_ 'installed.txt')
 
@@ -55,4 +61,4 @@ if (-not ($userPath | Where-Object { $_.TrimEnd('\') -ieq $bin.TrimEnd('\') })) 
     Write-Host "Added $bin to your PATH. Open a new terminal tab for it to take effect."
 }
 
-Write-Host "Done: lustjinn-tui is $from. Run it from any new terminal: lustjinn-tui"
+Write-Host "Done: jinnverse-tui is $from. Run it from any new terminal: jinnverse-tui"

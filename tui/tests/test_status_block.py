@@ -6,20 +6,20 @@ from __future__ import annotations
 
 from textual.pilot import Pilot
 
-from lustjinn_tui.api import StatusBlock, StatusField, StatusValue
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.confirm import ConfirmScreen
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.newstory import NewStoryScreen, Ticks
-from lustjinn_tui.status import Kind
-from lustjinn_tui.statusblock import (
+from jinnverse_tui.api import StatusBlock, StatusField, StatusValue
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.newstory import NewStoryScreen, Ticks
+from jinnverse_tui.status import Kind
+from jinnverse_tui.statusblock import (
     StatusBlockScreen,
     build_items,
     in_scene,
     parse_new_field,
     scene_line,
 )
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
@@ -117,13 +117,13 @@ def test_a_scene_field_that_is_off_is_not_in_the_scene_line() -> None:
 # --- the screen -------------------------------------------------------------------------------
 
 
-def block_screen(app: LustjinnApp) -> StatusBlockScreen:
+def block_screen(app: JinnverseApp) -> StatusBlockScreen:
     screen = app.screen
     assert isinstance(screen, StatusBlockScreen)
     return screen
 
 
-async def open_block(app: LustjinnApp, pilot: Pilot[None]) -> StatusBlockScreen:
+async def open_block(app: JinnverseApp, pilot: Pilot[None]) -> StatusBlockScreen:
     await pilot.pause(0.1)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
@@ -146,7 +146,7 @@ def adopted(server: fake.FakeServer, story: dict[str, object], *keys: str) -> No
 
 
 async def test_a_story_with_no_lines_offers_the_starters_and_adding_one_switches_it_on(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(110, 36)) as pilot:
@@ -167,7 +167,7 @@ async def test_a_story_with_no_lines_offers_the_starters_and_adding_one_switches
 
 
 async def test_space_switches_a_line_on_and_off_and_the_server_is_told(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     adopted(server, told, "time", "outfit")
@@ -188,7 +188,7 @@ async def test_space_switches_a_line_on_and_off_and_the_server_is_told(
 
 
 async def test_a_new_field_is_typed_with_its_scope_and_words(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(110, 36)) as pilot:
@@ -213,7 +213,7 @@ async def test_a_new_field_is_typed_with_its_scope_and_words(
 
 
 async def test_a_character_is_pinned_and_unpinned(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     adopted(server, told, "outfit")
@@ -229,7 +229,7 @@ async def test_a_character_is_pinned_and_unpinned(
         assert screen.status_line.text == "Unpinned."
 
 
-async def test_a_value_is_corrected_and_cleared(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_a_value_is_corrected_and_cleared(app: JinnverseApp, server: fake.FakeServer) -> None:
     told = server.add("Tale", "An opening.")
     adopted(server, told, "time", "outfit")
     server.status_blocks[told["id"]]["values"] = [
@@ -253,7 +253,7 @@ async def test_a_value_is_corrected_and_cleared(app: LustjinnApp, server: fake.F
 
 
 async def test_deleting_a_field_asks_first_and_takes_what_it_holds(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     adopted(server, told, "time", "outfit")
@@ -276,7 +276,7 @@ async def test_deleting_a_field_asks_first_and_takes_what_it_holds(
 
 
 async def test_a_refusal_is_the_status_row_and_the_list_stays(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     told = server.add("Tale", "An opening.")
     adopted(server, told, "time")
@@ -294,7 +294,9 @@ async def test_a_refusal_is_the_status_row_and_the_list_stays(
 # --- the conversation -------------------------------------------------------------------------
 
 
-async def test_the_header_carries_the_scene_line(app: LustjinnApp, server: fake.FakeServer) -> None:
+async def test_the_header_carries_the_scene_line(
+    app: JinnverseApp, server: fake.FakeServer
+) -> None:
     told = server.add("Tale", "An opening.", "My turn.", "A reply.")
     adopted(server, told, "time", "outfit")
     server.status_blocks[told["id"]]["values"] = [
@@ -311,7 +313,7 @@ async def test_the_header_carries_the_scene_line(app: LustjinnApp, server: fake.
 
 
 async def test_the_conversation_has_a_key_for_the_status_block(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(110, 36)) as pilot:
@@ -336,7 +338,7 @@ def starting_form(server: fake.FakeServer) -> None:
 
 
 async def test_the_new_story_form_offers_the_starters_unticked(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -354,7 +356,7 @@ async def test_the_new_story_form_offers_the_starters_unticked(
 
 
 async def test_ticked_lines_are_adopted_when_the_story_is_created(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -383,7 +385,7 @@ async def test_ticked_lines_are_adopted_when_the_story_is_created(
 
 
 async def test_creating_without_ticking_adds_no_lines_and_makes_no_extra_call(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
@@ -398,7 +400,7 @@ async def test_creating_without_ticking_adds_no_lines_and_makes_no_extra_call(
 
 
 async def test_the_form_is_as_it_was_when_the_starters_cannot_be_read(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     starting_form(server)
     server.status_starters = []

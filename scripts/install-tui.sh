@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the terminal client as the `lustjinn-tui` command, or updates it, from this checkout,
+# Installs the terminal client as the `jinnverse-tui` command, or updates it, from this checkout,
 # on Linux or WSL. The Windows twin is install-tui.ps1.
 #
 #   ./scripts/install-tui.sh               tests first, then install
@@ -7,7 +7,7 @@
 #
 # The command is a frozen copy with its own environment (`uv tool install`), so it keeps working
 # whatever you do in the repo afterwards, until you run this again. Run it when you judge the code
-# safe. Your settings and sign-in live apart from it (~/.config/lustjinn) and are kept.
+# safe. Your settings and sign-in live apart from it (~/.config/jinnverse) and are kept.
 set -euo pipefail
 
 skip_tests=false
@@ -24,7 +24,7 @@ cd "$(dirname "$0")/.."
 case "$PWD" in
     /mnt/*)
         echo "This checkout is on the Windows drive ($PWD)." >&2
-        echo "Clone the repo inside WSL (git clone https://github.com/argamboad/lustjinn.git ~/lustjinn) and run this from there." >&2
+        echo "Clone the repo inside WSL (git clone https://github.com/argamboad/jinnverse.git ~/jinnverse) and run this from there." >&2
         exit 1 ;;
 esac
 
@@ -47,12 +47,18 @@ if [ "$skip_tests" = false ]; then
         || { echo "The terminal client's tests failed; nothing was installed." >&2; exit 1; }
 fi
 
-echo "Installing lustjinn-tui from $from..."
+# The command was `lustjinn-tui` until 2026-10-21; a copy left by an earlier run goes.
+if uv tool list 2>/dev/null | grep -q '^lustjinn-tui '; then
+    echo "Removing the old lustjinn-tui command..."
+    uv tool uninstall lustjinn-tui
+fi
+
+echo "Installing jinnverse-tui from $from..."
 uv tool install --reinstall ./tui \
     || { echo "uv could not install the terminal client." >&2; exit 1; }
 
 # Record what is installed, beside the client's own settings (where platformdirs puts them).
-home_="${XDG_CONFIG_HOME:-$HOME/.config}/lustjinn"
+home_="${XDG_CONFIG_HOME:-$HOME/.config}/jinnverse"
 mkdir -p "$home_"
 echo "$from, installed $(date '+%Y-%m-%d %H:%M')" > "$home_/installed.txt"
 
@@ -65,4 +71,4 @@ case ":$PATH:" in
         echo "Added $bin to your PATH. Open a new shell for it to take effect." ;;
 esac
 
-echo "Done: lustjinn-tui is $from. Run it from any new shell: lustjinn-tui"
+echo "Done: jinnverse-tui is $from. Run it from any new shell: jinnverse-tui"

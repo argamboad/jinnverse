@@ -2,8 +2,8 @@
 
 import pytest
 
-from lustjinn_tui.api import Api, ApiError, Delta, SignedOutError, TurnDone, UnreachableError
-from lustjinn_tui.config import TokenStore
+from jinnverse_tui.api import Api, ApiError, Delta, SignedOutError, TurnDone, UnreachableError
+from jinnverse_tui.config import TokenStore
 from tui_support import fake_server as fake
 
 

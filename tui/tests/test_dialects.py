@@ -6,12 +6,12 @@ from collections.abc import Callable
 
 from textual.widgets import Input
 
-from lustjinn_tui.app import LustjinnApp
-from lustjinn_tui.config import Config
-from lustjinn_tui.conversation import ConversationScreen
-from lustjinn_tui.dialect import SWALLOW, dialect_of, translate
-from lustjinn_tui.regenerate import RegenerateScreen
-from lustjinn_tui.stories import StoriesScreen
+from jinnverse_tui.app import JinnverseApp
+from jinnverse_tui.config import Config
+from jinnverse_tui.conversation import ConversationScreen
+from jinnverse_tui.dialect import SWALLOW, dialect_of, translate
+from jinnverse_tui.regenerate import RegenerateScreen
+from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
 
 
@@ -28,7 +28,7 @@ def test_the_tables_say_what_a_letter_means() -> None:
 
 
 async def test_vim_letters_move_the_list_and_still_type_in_a_field(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer
 ) -> None:
     for name in ("One", "Two", "Three"):
         server.add(name)
@@ -58,7 +58,7 @@ async def test_vim_letters_move_the_list_and_still_type_in_a_field(
 
 
 async def test_in_vim_g_is_the_end_and_regenerate_is_ctrl_g(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer
 ) -> None:
     server.add("Tale", "An opening.", "Hi", "Hello.", "More.", "Yes.")
     app = make_app(config=Config(server="http://api.test", keyboard="vim"))
@@ -84,7 +84,7 @@ async def test_in_vim_g_is_the_end_and_regenerate_is_ctrl_g(
 
 
 async def test_in_standard_n_and_shift_n_both_find_the_next_match_and_g_regenerates(
-    app: LustjinnApp, server: fake.FakeServer
+    app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     server.add("Tale", "fog one", "fog two", "clear", "fog four", "a reply")
     async with app.run_test(size=(100, 30)) as pilot:
@@ -110,7 +110,7 @@ async def test_in_standard_n_and_shift_n_both_find_the_next_match_and_g_regenera
 
 
 async def test_in_vim_shift_n_goes_back(
-    make_app: Callable[..., LustjinnApp], server: fake.FakeServer
+    make_app: Callable[..., JinnverseApp], server: fake.FakeServer
 ) -> None:
     server.add("Tale", "fog one", "fog two", "clear", "fog four")
     app = make_app(config=Config(server="http://api.test", keyboard="vim"))

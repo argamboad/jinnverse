@@ -1,6 +1,6 @@
 """The donor's FuzzyMatcher tests, in Python."""
 
-from lustjinn_tui.fuzzy import Match, match, match_all_terms, rank
+from jinnverse_tui.fuzzy import Match, match, match_all_terms, rank
 
 
 def score(query: str, candidate: str) -> int:

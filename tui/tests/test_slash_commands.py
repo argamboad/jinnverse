@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from lustjinn_tui.api import (
+from jinnverse_tui.api import (
     AsideAudit,
     Audit,
     ByKind,
@@ -16,7 +16,7 @@ from lustjinn_tui.api import (
     Tracker,
     TurnAudit,
 )
-from lustjinn_tui.commands import (
+from jinnverse_tui.commands import (
     LOCAL,
     Command,
     Commands,
