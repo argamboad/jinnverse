@@ -19,6 +19,13 @@ One command started the project:
 uv init --package --name lustjinn --python 3.14
 ```
 
+::: note
+The project was born *lustjinn*, and the excerpts of this chapter that date from that day keep
+the name. The app has been **JinnVerse** since step 21 — package `jinnverse`, command
+`jinnverse-tui`, prefix `JINNVERSE_` — and chapter 18 tells what renaming it took. Everywhere
+else this course shows the code as it is.
+:::
+
 and two more added the libraries:
 
 ```
@@ -33,7 +40,7 @@ The result, ignoring the docs:
 pyproject.toml           the project file
 uv.lock                  every package, pinned to an exact version and hash
 .venv/                   the project's private environment (gitignored)
-src/lustjinn/
+src/jinnverse/
     __init__.py          makes the folder a package
     main.py              the FastAPI app
 tests/
@@ -46,10 +53,10 @@ the machine.
 
 ### Why the code lives under `src/`
 
-The package is `src/lustjinn/`, not `lustjinn/` at the root. With the code at the root, `import
-lustjinn` would work in tests simply because the current folder happens to be on the import path —
+The package is `src/jinnverse/`, not `jinnverse/` at the root. With the code at the root, `import
+jinnverse` would work in tests simply because the current folder happens to be on the import path —
 and a test could pass against files that would never be part of the installed app. Under `src/`,
-the only way to import `lustjinn` is to install it, which uv does: `uv sync` installs the project
+the only way to import `jinnverse` is to install it, which uv does: `uv sync` installs the project
 into `.venv` in *editable* mode, meaning the environment points at `src/` instead of copying it, so
 edits are live.
 
@@ -101,7 +108,7 @@ repeatable — `uv.lock` plays the role of `packages.lock.json`, and it is commi
 
 ## The app
 
-The first version of the whole application, `src/lustjinn/main.py` (the deploy, at the end of the
+The first version of the whole application, `src/jinnverse/main.py` (the deploy, at the end of the
 chapter, grows it by one field):
 
 ```python
@@ -109,7 +116,7 @@ chapter, grows it by one field):
 
 from fastapi import FastAPI
 
-app = FastAPI(title="Lustjinn")
+app = FastAPI(title="JinnVerse")
 
 
 @app.get("/health")
@@ -154,10 +161,10 @@ same process. A Python web app is not run; it is **imported by a server**. The s
 **uvicorn**:
 
 ```
-uv run uvicorn lustjinn.main:app --reload
+uv run uvicorn jinnverse.main:app --reload
 ```
 
-`lustjinn.main:app` means *import the module `lustjinn.main` and serve the object called `app` in
+`jinnverse.main:app` means *import the module `jinnverse.main` and serve the object called `app` in
 it*. uvicorn owns the process, the socket and the event loop; FastAPI only answers requests handed
 to it. `--reload` restarts the server when a file changes — for development only.
 
@@ -180,7 +187,7 @@ The first version of `tests/test_health.py`:
 ```python
 from fastapi.testclient import TestClient
 
-from lustjinn.main import app
+from jinnverse.main import app
 
 client = TestClient(app)
 
@@ -231,7 +238,7 @@ and likely-bug checks. One deserves a mention: **`ASYNC`** flags blocking calls 
 pyright can know; an unknown type is an error, not a shrug.
 
 ::: try
-Start the server with `uv run uvicorn lustjinn.main:app --reload` and open
+Start the server with `uv run uvicorn jinnverse.main:app --reload` and open
 `http://127.0.0.1:8000/docs`. Call `/health` from the Swagger page.
 
 Then, in `main.py`, change the return to `{"status": 1}` and run `uv run pyright`. The annotation
@@ -333,7 +340,7 @@ services:
     plan: free
     branch: develop
     buildCommand: uv sync --locked --no-dev
-    startCommand: uv run --no-sync uvicorn lustjinn.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uv run --no-sync uvicorn jinnverse.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeployTrigger: "off"
     envVars:
@@ -392,7 +399,7 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI(title="Lustjinn")
+app = FastAPI(title="JinnVerse")
 
 
 class Health(BaseModel):
@@ -451,7 +458,7 @@ what you would otherwise write in `Dispose()`.
 Run the server with a commit of your own, in PowerShell:
 
 ```powershell
-$env:RENDER_GIT_COMMIT = "hello"; uv run uvicorn lustjinn.main:app
+$env:RENDER_GIT_COMMIT = "hello"; uv run uvicorn jinnverse.main:app
 ```
 
 `/health` now reports `"commit": "hello"`, and `/docs` shows the `Health` schema. Then try

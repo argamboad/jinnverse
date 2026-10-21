@@ -5,7 +5,7 @@ injection buys you, why migrations exist, how `async`/`await` frees a thread. No
 What changes is the vocabulary, the tooling, and a handful of assumptions so deep in .NET that you
 no longer notice them — and those are the ones that bite.
 
-This course follows **Lustjinn** as it is built: a web app for roleplay with a memory that does not
+This course follows **JinnVerse** as it is built: a web app for roleplay with a memory that does not
 forget, the Python successor to airp. Each chapter is one step of the roadmap. Claude writes the
 code; the chapter explains it — what each new piece is, why it is there, and what it would be in
 .NET. When a chapter and the code disagree, the chapter is out of date: that is a bug.
@@ -36,7 +36,7 @@ A small exercise. Optional, but the fastest way to make a concept stick.
 Most of the Python toolchain has a direct counterpart in what you use every day. Keep this table
 nearby; later chapters assume it.
 
-| You know (.NET) | Lustjinn uses (Python) | What it is |
+| You know (.NET) | JinnVerse uses (Python) | What it is |
 |---|---|---|
 | `dotnet` CLI | **uv** | Creates projects, installs packages, runs things |
 | nuget.org | **PyPI** | The public package registry |
@@ -73,7 +73,7 @@ greet(42)   # Runs. Fails only inside, at the "+", with a TypeError.
 
 Nothing stops that call at run time. What stops it is **pyright**, run before the code ships —
 exactly the role the C# compiler plays, except that it is a separate tool and you could skip it.
-Lustjinn runs pyright in **strict** mode, in CI, on every push: that is our `TreatWarningsAsErrors`.
+JinnVerse runs pyright in **strict** mode, in CI, on every push: that is our `TreatWarningsAsErrors`.
 
 ::: dotnet
 `str | None` is Python's `string?`. With nullable reference types on, C# warns when you
@@ -120,7 +120,7 @@ uv python install    # fetch the pinned Python version    ≈ installing an SDK
 ```
 
 ::: warning
-Your Windows machine has an older system Python (3.9) on the `PATH`. Lustjinn never uses it: uv
+Your Windows machine has an older system Python (3.9) on the `PATH`. JinnVerse never uses it: uv
 fetches the version `.python-version` asks for and keeps it separate. If a command ever behaves as
 if it were on 3.9, it was run with `python` instead of `uv run python`.
 :::
@@ -141,7 +141,7 @@ async def handler():
     await asyncio.sleep(2)   # Yields to the loop: other requests keep running.
 ```
 
-This is why Lustjinn uses the async versions of everything that waits: **httpx2**'s
+This is why JinnVerse uses the async versions of everything that waits: **httpx2**'s
 `AsyncClient`, SQLAlchemy's async engine, an async Postgres driver.
 
 ::: dotnet
@@ -159,7 +159,7 @@ on the event loop and must never block.
 ## Smaller differences you will meet soon
 
 - **Files are modules; folders are packages.** There is no `namespace` keyword and no project
-  reference: `from lustjinn.stories import Story` imports by path from the package folder.
+  reference: `from jinnverse.stories import Story` imports by path from the package folder.
 - **Naming:** `snake_case` for functions, variables and modules; `PascalCase` for classes;
   `UPPER_CASE` for constants. The leading underscore (`_helper`) means "private by convention" —
   nothing enforces it.
@@ -185,7 +185,7 @@ The course lives in the repository under `docs/course/`. To rebuild it:
 
 ::: try
 Run `uv --version` and `uv python list`. The second command lists the Python versions uv can
-install, and any it already has. Next chapter, one of them becomes Lustjinn's.
+install, and any it already has. Next chapter, one of them becomes JinnVerse's.
 :::
 
 ## What is next

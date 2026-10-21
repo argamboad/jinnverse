@@ -13,7 +13,7 @@ that work everywhere, the dialects and the phone, the composer's helpers, and th
 
 ## A second package in the workspace
 
-The client is not a module of the API. It lives in `tui/` as its own package, `lustjinn-tui`,
+The client is not a module of the API. It lives in `tui/` as its own package, `jinnverse-tui`,
 and the root `pyproject.toml` makes the two a **uv workspace**:
 
 ```toml
@@ -21,23 +21,23 @@ and the root `pyproject.toml` makes the two a **uv workspace**:
 members = ["tui"]
 
 [tool.uv.sources]
-lustjinn-tui = { workspace = true }
+jinnverse-tui = { workspace = true }
 
 [dependency-groups]
-dev = ["lustjinn-tui", "pyright>=1.1.414", "pytest>=9.1.1", ...]
+dev = ["jinnverse-tui", "pyright>=1.1.414", "pytest>=9.1.1", ...]
 ```
 
-One lock file and one environment, so `uv sync` installs both and `uv run lustjinn-tui` opens
+One lock file and one environment, so `uv sync` installs both and `uv run jinnverse-tui` opens
 the client. But Textual is a dependency of `tui/pyproject.toml`, not of the API's, and the
 client is listed only in the `dev` group: Render installs the API without the terminal, and the
 terminal's tests run under the root `uv run pytest` because `testpaths` names `tui/tests` too.
-Pyright and ruff cover both packages from the root; isort is told that `lustjinn_tui` and the
+Pyright and ruff cover both packages from the root; isort is told that `jinnverse_tui` and the
 test helpers are first-party, so the imports group the way they do in the API.
 
 ::: dotnet
 A workspace is a solution with two projects and a shared `Directory.Packages.props`. The
 `dev` group is the test project's `ProjectReference` to the client: the solution builds it and
-tests it, but publishing the API project does not carry it along. `uv run lustjinn-tui` is the
+tests it, but publishing the API project does not carry it along. `uv run jinnverse-tui` is the
 `[project.scripts]` entry, the `dotnet tool`-style command that `app.py`'s `main()` answers.
 :::
 
@@ -58,7 +58,7 @@ has a counterpart in `src/Airp.Terminal`, which is how the port was planned.
 
 ### The app, and the gate
 
-`LustjinnApp` is airp's `Shell`: it owns the API client, the one theme, the dialect and the few
+`JinnverseApp` is airp's `Shell`: it owns the API client, the one theme, the dialect and the few
 bindings that hold on every screen (`Ctrl+C` quits at once, `Ctrl+P` or `:` opens the palette,
 `Ctrl+F` searches every story). Its default screen is the stories, but the first thing it does
 is push the lamp on top:
@@ -98,7 +98,7 @@ to tell apart.
 `async def call[T]` is a generic method, the PEP 695 syntax for `async Task<T?> Call<T>(...)`.
 Everything in Textual is `async` on one event loop, so there is no `Dispatcher.Invoke` and no
 `ConfigureAwait`; a screen that `await`s the API simply yields to the loop and the redraw
-continues around it. The `View.lustjinn` property exists because Textual types `self.app` as
+continues around it. The `View.jinnverse` property exists because Textual types `self.app` as
 `App[object]`, and pyright in strict mode wants to know it is ours.
 :::
 
@@ -110,7 +110,7 @@ hairline, the legend and the status row.
 
 ```python
 def compose(self) -> ComposeResult:
-    yield Masthead(badge=self.lustjinn.badge)
+    yield Masthead(badge=self.jinnverse.badge)
     with Vertical(id="body"):
         yield from self.body()
     yield Hairline(id="footer-rule")
@@ -134,13 +134,13 @@ mean before the bindings see them:
 def on_key(self, event: events.Key) -> None:
     if self.typing or event.character is None:
         return
-    meant = translate(self.lustjinn.dialect, event.key)
+    meant = translate(self.jinnverse.dialect, event.key)
     if meant is None:
         return
     event.stop()
     event.prevent_default()
     if meant != SWALLOW:
-        self.lustjinn.post_message(events.Key(meant, None))
+        self.jinnverse.post_message(events.Key(meant, None))
 ```
 
 Vim's `h j k l` become the arrows, `G` the end, `u` undo — only while navigating; inside any
@@ -351,7 +351,7 @@ together, with *Discard* and *Reload*.
 global ones, through one `Provider`:
 
 ```python
-class LustjinnCommands(Provider):
+class JinnverseCommands(Provider):
     async def search(self, query: str) -> Hits:
         matcher = self.matcher(query)
         for command in commands_of(self.screen):
@@ -370,7 +370,7 @@ for, so a button and its key can never drift apart.
 
 The client keeps its own things in the user's config directory: a commented `config.toml`
 written with the defaults the first time, and the token beside it in a file only the user can
-read. The server can be given on the command line or in `LUSTJINN_SERVER`, which beats the
+read. The server can be given on the command line or in `JINNVERSE_SERVER`, which beats the
 file. The keyring was the alternative for the token and would have meant a native backend per
 platform for a secret the API hands out again on the next sign-in.
 
@@ -426,8 +426,8 @@ builds the app for every test is `conftest.py`, the shared `IClassFixture` of py
 :::
 
 ::: try
-Run the API and the client side by side: `uv run uvicorn lustjinn.main:app` and
-`uv run lustjinn-tui`. Sign in, open the dummy story, press `i`, type `so :smi` and watch the
+Run the API and the client side by side: `uv run uvicorn jinnverse.main:app` and
+`uv run jinnverse-tui`. Sign in, open the dummy story, press `i`, type `so :smi` and watch the
 strip; `Tab`, then `Enter`. Press `?` for every key. Then set `keyboard = "vim"` in the
 config file the first run wrote, restart, and move the list with `j` and `k` — and type a `j`
 into the filter to see it stay a letter. Narrow the terminal under sixty columns and watch the

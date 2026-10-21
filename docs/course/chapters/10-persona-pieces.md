@@ -284,7 +284,7 @@ is the Python habit for a seam this small, and a lambda in a test is the whole f
 
 Neither client knows how a persona is joined; they choose, and they ask the server to show them.
 
-**The terminal** (`tui/src/lustjinn_tui/builder.py`) has the slots down the left and the pool of
+**The terminal** (`tui/src/jinnverse_tui/builder.py`) has the slots down the left and the pool of
 the selected slot on the right, the preview underneath. `Space` picks, `N` writes a new piece in
 the editor, `V` changes the voice, `R` picks at random, `Ctrl+S` names the persona and makes it. It
 opens from the library (`B`) and from the new-story form (`Ctrl+B`), and tells the screen that
@@ -363,7 +363,7 @@ your own database shows each persona's paragraphs with the slot suggested for ea
 the pieces would give the persona back exactly. Then run it without the flag and answer the
 review. Open the web app's library, the Personas shelf, **Build from pieces**; pick a name and a
 look, and watch the preview change as you add a home and a pet. In the terminal, `uv run
-lustjinn-tui`, the library, `b`. Change the voice and see the pieces written for the other one
+jinnverse-tui`, the library, `b`. Change the voice and see the pieces written for the other one
 appear.
 :::
 

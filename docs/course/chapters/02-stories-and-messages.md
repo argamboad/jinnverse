@@ -12,11 +12,11 @@ few places where the twin behaves differently.
 ## Settings: one typed object from the environment
 
 Before anything can connect to anything, the app needs to be told where the database is and who
-may sign in. `src/lustjinn/settings.py`:
+may sign in. `src/jinnverse/settings.py`:
 
 ```python
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="LUSTJINN_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="JINNVERSE_", env_file=".env", extra="ignore")
 
     database_url: str
     username: str
@@ -32,7 +32,7 @@ def get_settings() -> Settings:
 ```
 
 `BaseSettings` is a Pydantic model that fills itself in: each field is read from the environment
-variable of the same name with the prefix — `LUSTJINN_DATABASE_URL`, `LUSTJINN_USERNAME` — or
+variable of the same name with the prefix — `JINNVERSE_DATABASE_URL`, `JINNVERSE_USERNAME` — or
 from a `.env` file in the working directory, real variables winning. A field with no default is
 required. Types are enforced: `token_days` must parse as an integer between 1 and 365.
 
@@ -115,7 +115,7 @@ object's values at commit and reloads them on next access, which again would be 
 
 ### The models
 
-`src/lustjinn/models.py`, abridged:
+`src/jinnverse/models.py`, abridged:
 
 ```python
 class Story(Base):
@@ -204,7 +204,7 @@ CREATE FUNCTION messages_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        IF current_setting('lustjinn.purging', true) = 'on' THEN
+        IF current_setting('jinnverse.purging', true) = 'on' THEN
             RETURN OLD;
         END IF;
         RAISE EXCEPTION 'messages are append-only: a message is hidden with deleted_at, ...'
@@ -231,7 +231,7 @@ A trigger function runs for each affected row, before the change. `OLD` and `NEW
 before and after; `RAISE EXCEPTION` aborts the statement. Reading it:
 
 - **A delete is refused** — unless the transaction has announced a purge with
-  `SET LOCAL lustjinn.purging = 'on'`. That is the one door, for the day a story is erased for
+  `SET LOCAL jinnverse.purging = 'on'`. That is the one door, for the day a story is erased for
   good, and it closes by itself when the transaction ends.
 - **What a turn said, who said it and where it sits cannot change** — purge or no purge.
 - **Everything else may**: `deleted_at`, to hide a message; `request_hash`; columns later steps add.
@@ -252,11 +252,11 @@ constraint.
 Every endpoint that touches the database needs a session. It asks for one in its signature:
 
 ```python
-# src/lustjinn/deps.py
+# src/jinnverse/deps.py
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-# src/lustjinn/stories.py
+# src/jinnverse/stories.py
 @router.get("")
 async def list_stories(session: Session) -> list[StoryOut]:
     rows = await session.execute(_stories())
@@ -291,7 +291,7 @@ and a layer that scopes them all becomes worth its file.
 
 ## The stories API
 
-`src/lustjinn/stories.py` holds five endpoints under `/stories`: create, list, read one with its
+`src/jinnverse/stories.py` holds five endpoints under `/stories`: create, list, read one with its
 messages, rename, delete. Three things in it are new.
 
 **Pydantic models are the DTOs.** What comes in and what goes out are declared as classes, and
@@ -338,7 +338,7 @@ message 1, role `assistant`, with no model — a page a person wrote, not a repl
 ## Sign-in
 
 The API will one day sit on a public URL with one user's private stories behind it.
-`src/lustjinn/auth.py`:
+`src/jinnverse/auth.py`:
 
 1. `POST /auth/sign-in` takes the username and password and compares them with the settings.
 2. If they match, it returns a **token**: a small signed document saying who it is for and when
@@ -346,7 +346,7 @@ The API will one day sit on a public URL with one user's private stories behind 
 3. Every other request carries `Authorization: Bearer <token>`. A dependency, `require_user`,
    checks the signature and the expiry before the endpoint runs.
 
-The token is a **JWT** signed with HMAC-SHA256 using `LUSTJINN_TOKEN_SECRET`. Nothing is stored
+The token is a **JWT** signed with HMAC-SHA256 using `JINNVERSE_TOKEN_SECRET`. Nothing is stored
 on the server: the signature proves the token was issued here, and the expiry is inside it.
 Changing the secret invalidates every token at once — that is "sign out everywhere".
 
@@ -445,7 +445,7 @@ cp .env.example .env                    # fill in a username, a password, a toke
 docker compose up -d
 uv run alembic upgrade head
 uv run python scripts/seed_dummy.py     # prints the dummy character's id
-uv run uvicorn lustjinn.main:app --reload
+uv run uvicorn jinnverse.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000/docs`. Call `POST /auth/sign-in`, copy the `access_token`, press
@@ -455,8 +455,8 @@ script printed — the response's first message is the opening.
 Now try to break the rule. In another terminal:
 
 ```
-docker compose exec db psql -U lustjinn -c "UPDATE messages SET text = 'rewritten'"
-docker compose exec db psql -U lustjinn -c "DELETE FROM messages"
+docker compose exec db psql -U jinnverse -c "UPDATE messages SET text = 'rewritten'"
+docker compose exec db psql -U jinnverse -c "DELETE FROM messages"
 ```
 
 Both are refused, by the database, with no application running in between.

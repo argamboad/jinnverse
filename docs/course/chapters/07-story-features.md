@@ -16,7 +16,7 @@ that manage a story, with this chapter.
 
 ## One module per feature
 
-Every feature here is one file under `src/lustjinn/` with the same shape: pure functions at the
+Every feature here is one file under `src/jinnverse/` with the same shape: pure functions at the
 top, the few `async def` that touch the database under them, and a thin `APIRouter` at the
 bottom. `main.py` adds one line per module, behind the sign-in guard:
 
@@ -68,7 +68,7 @@ disk to put a reader's own file on — read once and validated **whole**:
 ```python
 @lru_cache
 def shipped() -> Pack:
-    return parse(resources.files("lustjinn").joinpath("dials.json").read_text(encoding="utf-8"))
+    return parse(resources.files("jinnverse").joinpath("dials.json").read_text(encoding="utf-8"))
 ```
 
 A scale has exactly five levels, read by index — a four-level scale would make the top of the
@@ -272,7 +272,7 @@ the most explicit wrote about like the default, and the larger ones cost several
 for no difference a reader could name. What changes a reply is the card, the dials and the host
 serving the model — all of which work on the default. Every rule the choice needed (a
 temperature map, window corrections, a fitted budget, a fallback, a cached model list) existed
-only to keep the choice from breaking a story. Every story now plays on `LUSTJINN_MODEL`;
+only to keep the choice from breaking a story. Every story now plays on `JINNVERSE_MODEL`;
 changing it is one variable.
 
 Taking a feature out is a migration like any other, read backwards:
@@ -386,7 +386,7 @@ are added beside them. A dry run only says what it would replace.
 transaction, on the one path where chapter 2's append-only trigger stands aside:
 
 ```python
-await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
+await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
 ```
 
 The third argument makes the setting local to the transaction; the trigger reads it and lets the

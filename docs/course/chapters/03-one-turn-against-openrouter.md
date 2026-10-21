@@ -15,7 +15,7 @@ provider's failure modes get names.
 
 Every model call goes to **OpenRouter**, which fronts many models behind one OpenAI-compatible
 endpoint and one key. Choosing a model is configuration; so is pointing at a different provider
-that speaks the same shape. The settings grow accordingly (`src/lustjinn/settings.py`):
+that speaks the same shape. The settings grow accordingly (`src/jinnverse/settings.py`):
 
 ```python
 openrouter_api_key: SecretStr | None = None
@@ -59,7 +59,7 @@ data: {"text": "She looks up"}
 data: [DONE]
 ```
 
-`src/lustjinn/sse.py` reads it and writes it, in about forty lines:
+`src/jinnverse/sse.py` reads it and writes it, in about forty lines:
 
 ```python
 async def events(lines: AsyncIterable[str]) -> AsyncIterator[Event]:
@@ -108,7 +108,7 @@ the exact shape of a fake `HttpMessageHandler`.
 
 ## The client
 
-`src/lustjinn/openrouter.py` holds one class with three methods: `stream`, which does the work;
+`src/jinnverse/openrouter.py` holds one class with three methods: `stream`, which does the work;
 `complete`, which gathers a stream into one reply for callers with nothing to show while it is
 written; and `models`, which lists what OpenRouter serves. The heart of it:
 
@@ -277,7 +277,7 @@ guarantees the second runs — the same `try/finally` a `using` expands to.
 Four kinds of call spend money: a reply, a question asked out of character, and (from step 6) a
 summary and a fact extraction. Two of those fire without the reader asking for anything, and
 were invisible in the donor for as long as spending was inferred from message rows. So every
-billed call writes one row to `spend`, in `src/lustjinn/ledger.py`, whatever becomes of what it
+billed call writes one row to `spend`, in `src/jinnverse/ledger.py`, whatever becomes of what it
 produced:
 
 ```python
@@ -331,7 +331,7 @@ exist) is still a plain JSON error.
 
 ### Persist first
 
-The order inside `turn()` in `src/lustjinn/turns.py` is the lesson the donor paid for:
+The order inside `turn()` in `src/jinnverse/turns.py` is the lesson the donor paid for:
 
 1. Compute the request's hash and look it up (next section).
 2. If the message is new, **insert it and commit** — before the model is called.
@@ -390,7 +390,7 @@ The endpoint returns a `StreamingResponse` wrapping an async generator; FastAPI 
 writes each string to the socket as it is produced. Two details:
 
 ```python
-# src/lustjinn/deps.py
+# src/jinnverse/deps.py
 StreamingSession = Annotated[AsyncSession, Depends(get_session, scope="request")]
 ```
 
@@ -408,7 +408,7 @@ to pass each event on as it comes instead of collecting the body first.
 ### The prompt, for now
 
 Step 5 builds the context builder: layers in order, a token budget, the audit. Until then
-`src/lustjinn/prompt.py` sends the first two layers and the last, in the order it will keep:
+`src/jinnverse/prompt.py` sends the first two layers and the last, in the order it will keep:
 the character's card as a system message, the persona behind its frame ("The user is playing
 the following person…"), the visible transcript as `user` and `assistant` turns, and, when there
 is one, an instruction for this call only. The instruction goes as `user` when the transcript
@@ -442,7 +442,7 @@ transcript alone. The rule that follows: **an unrecognised command is refused, n
 typo would otherwise cost what the message would have cost and land in the story as nonsense the
 character has to react to, and append-only means it could not be taken back.
 
-`src/lustjinn/commands.py` reads what was typed and says what it is:
+`src/jinnverse/commands.py` reads what was typed and says what it is:
 
 ```python
 @dataclass(frozen=True)
@@ -569,7 +569,7 @@ and replaces a function, which NSubstitute would need an interface for.
 
 ::: try
 Play a turn and watch it arrive. Put your OpenRouter key in `.env` as
-`LUSTJINN_OPENROUTER_API_KEY`, run the migrations and the seed script again, start the server,
+`JINNVERSE_OPENROUTER_API_KEY`, run the migrations and the seed script again, start the server,
 and create a story with the dummy character on `/docs` as in chapter 2. Then, with the token
 and the story's id, in a terminal (`-N` keeps curl from buffering):
 

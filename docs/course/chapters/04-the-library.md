@@ -15,7 +15,7 @@ first mixin, a generic dataclass, and what `UPDATE … WHERE version = …` buys
 A character, a persona and a snippet are the same shape of thing: a name, a page of text, a
 version, a time of last change. A character also has an opening. In the donor they were four
 folders of text files; here they are three tables that share four columns through a **mixin**
-(`src/lustjinn/models.py`):
+(`src/jinnverse/models.py`):
 
 ```python
 class LibraryEntry:
@@ -56,7 +56,7 @@ LibraryEntry, Base)`, is ordinary Python; the mixin goes first so its attributes
 :::
 
 The endpoints are written once, for a **shelf**, and the shelf is a value
-(`src/lustjinn/library.py`):
+(`src/jinnverse/library.py`):
 
 ```python
 @dataclass(frozen=True)
@@ -318,7 +318,7 @@ the repetition does not look like an oversight.
 
 Two small things were added to the library after step 9, both because the owner's library grew
 past what a list of names can carry: **a short description** on an entry, and **a count** on
-each shelf. They are in `src/lustjinn/library.py` and migration `0017`.
+each shelf. They are in `src/jinnverse/library.py` and migration `0017`.
 
 ### The description
 
@@ -409,7 +409,7 @@ and `test_counts_is_not_mistaken_for_a_shelf` pins both halves.
 ## Snippets expand at send time
 
 A snippet is authored prose deployed at the dramatically right moment: written once, typed as
-`:storm`, replaced by its text before the message is stored. `src/lustjinn/snippets.py` does the
+`:storm`, replaced by its text before the message is stored. `src/jinnverse/snippets.py` does the
 replacing, and the hard part is not finding a colon but knowing when a colon is *not* a trigger.
 Prose is full of them — `10:30`, `https://…`, `note: this` — and a message is permanent, so
 guessing is not allowed. The rules:
