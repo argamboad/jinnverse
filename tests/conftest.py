@@ -31,7 +31,8 @@ from tests.scripted_model import ScriptedModel
 
 # Any database on the server will do to connect to; the tests create their own beside it.
 SERVER = os.environ.get(
-    "JINNVERSE_TEST_DATABASE_URL", "postgresql+asyncpg://lustjinn:lustjinn@localhost:5440/postgres"
+    "JINNVERSE_TEST_DATABASE_URL",
+    "postgresql+asyncpg://jinnverse:jinnverse@localhost:5440/postgres",
 )
 
 

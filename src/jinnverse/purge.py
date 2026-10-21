@@ -110,7 +110,7 @@ async def _erase(session: AsyncSession, ids: list[uuid.UUID]) -> dict[str, int]:
     counts = await _counts(session, ids)
     # What SET LOCAL does, as a function call: on for this transaction only. The trigger
     # reads it and lets the DELETE through; it still refuses an UPDATE of a message's text.
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
     for _name, table in ERASED:
         await session.execute(delete(table).where(table.story_id.in_(ids)))
     await session.execute(delete(Story).where(Story.id.in_(ids)))

@@ -72,7 +72,7 @@ async def test_the_table_cannot_be_truncated(session: AsyncSession) -> None:
 async def test_not_even_a_purge_deletes_from_the_ledger(session: AsyncSession) -> None:
     """Erasing a story keeps what it cost: the one door through the messages trigger is shut."""
     row = await a_spend(session, await a_story(session))
-    await session.execute(text("SELECT set_config('lustjinn.purging', 'on', true)"))
+    await session.execute(text("SELECT set_config('jinnverse.purging', 'on', true)"))
 
     with pytest.raises(IntegrityError, match="never changed or deleted"):
         await session.execute(delete(Spend).where(Spend.id == row.id))

@@ -49,13 +49,13 @@ jobs:
       postgres:
         image: mirror.gcr.io/pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: lustjinn
-          POSTGRES_PASSWORD: lustjinn
-          POSTGRES_DB: lustjinn
+          POSTGRES_USER: jinnverse
+          POSTGRES_PASSWORD: jinnverse
+          POSTGRES_DB: jinnverse
         ports:
           - 5440:5432
         options: >-
-          --health-cmd "pg_isready -U lustjinn -d lustjinn"
+          --health-cmd "pg_isready -U jinnverse -d jinnverse"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
