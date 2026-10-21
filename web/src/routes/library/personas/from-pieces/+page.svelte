@@ -5,6 +5,7 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import LibraryRail from '#lib/LibraryRail.svelte';
 	import Sheet from '#lib/Sheet.svelte';
+	import { KEYS } from '#lib/storage.ts';
 	import {
 		api,
 		type PersonaPreview,
@@ -70,7 +71,7 @@
 	);
 
 	/** The pick survives a trip to the piece editor and back: kept for this tab only. */
-	const REMEMBERED = 'lustjinn-builder';
+	const REMEMBERED = KEYS.builder;
 
 	function remember(pick: Picks, as: Voice) {
 		try {

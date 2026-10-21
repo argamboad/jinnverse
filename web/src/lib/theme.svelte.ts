@@ -1,10 +1,11 @@
 /** The theme: follows the system by default; a choice overrides it and is remembered on the device. */
 
 import { browser } from '$app/env';
+import { KEYS } from './storage.ts';
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 
-const KEY = 'lustjinn-theme';
+const KEY = KEYS.theme;
 
 function remembered(): ThemeMode {
 	if (!browser) return 'system';

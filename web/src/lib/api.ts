@@ -7,13 +7,14 @@
 import { fileNameOf } from './download.ts';
 import type { Shortcode } from './emoji.ts';
 import { readEvents } from './sse';
+import { KEYS } from './storage.ts';
 
 export type ExportFormat = 'markdown' | 'json' | 'text';
 
 export const API_URL: string =
 	(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://127.0.0.1:8000';
 
-const TOKEN_KEY = 'lustjinn-token';
+const TOKEN_KEY = KEYS.token;
 
 export interface Token {
 	access_token: string;

@@ -6,7 +6,7 @@ import { version } from '$app/env';
 import { assets, immutable } from '$app/manifest';
 import { self } from '$app/service-worker';
 
-const CACHE = `lustjinn-${version}`;
+const CACHE = `jinnverse-${version}`;
 const ASSETS = [...immutable, ...assets].map((file) => file.path);
 
 self.addEventListener('install', (event) => {

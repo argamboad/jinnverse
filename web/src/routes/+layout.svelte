@@ -29,7 +29,7 @@
 </script>
 
 <svelte:head>
-	<title>LustJinn</title>
+	<title>JinnVerse</title>
 </svelte:head>
 
 {#if server.state !== 'up'}
