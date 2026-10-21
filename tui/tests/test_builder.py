@@ -70,8 +70,8 @@ async def test_b_opens_the_builder_on_the_slots_the_server_lists(
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
-        assert slot_keys(app)[:3] == ["name", "look", "style"]
-        assert len(slot_keys(app)) == 10  # twelve slots; home, vehicle and pets share a row
+        assert slot_keys(app)[:3] == ["name", "look", "family"]
+        assert len(slot_keys(app)) == 6  # eight slots; home, vehicle and pets share a row
         assert piece_names(app) == ["Allan"]  # the name slot is selected first
         assert built.legend.text.startswith(" ←→ Slots/pieces")
         assert "pick a piece to see the persona" in preview(app)
@@ -88,7 +88,7 @@ async def test_moving_down_the_slots_shows_the_pieces_written_for_each(
         await pilot.press("down")
         await pilot.pause(0.1)
         assert piece_names(app) == ["Athletic"]  # hers is written in another voice: not offered
-        await pilot.press("down", "down", "down", "down", "down")
+        await pilot.press("down", "down", "down")
         await pilot.pause(0.1)
         group = screen(app).group
         assert group is not None
@@ -106,7 +106,7 @@ async def test_the_slots_sharing_a_paragraph_are_one_row_as_on_the_web(
         rows = built.slot_rows.render().plain
         assert "Home · Vehicle · Pets" in rows
         assert "one paragraph, up to 3 pieces" in rows
-        await pilot.press(*(["down"] * 6), "right", "down", "space")  # Royal Enfield
+        await pilot.press(*(["down"] * 4), "right", "down", "space")  # Royal Enfield
         await pilot.pause(0.2)
         assert [built.name_of("vehicle", i) for i in built.picks["vehicle"]] == ["Royal Enfield"]
         assert "✓ Home · Vehicle · Pets" in built.slot_rows.render().plain
@@ -142,7 +142,7 @@ async def test_r_on_a_shared_row_picks_for_each_of_its_slots(
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
-        await pilot.press(*(["down"] * 6), "r")
+        await pilot.press(*(["down"] * 4), "r")
         await pilot.pause(0.2)
         assert sorted(built.picks) == ["home", "pets", "vehicle"]
 
@@ -154,7 +154,7 @@ async def test_n_on_a_shared_row_asks_for_the_slot_first(
     app.editor = lambda app_, text, suffix: "He drives a pickup."  # type: ignore[method-assign]
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
-        await pilot.press(*(["down"] * 6), "right", "down", "n")  # on Royal Enfield
+        await pilot.press(*(["down"] * 4), "right", "down", "n")  # on Royal Enfield
         await pilot.pause()
         field = built.query_one("#field")
         assert field.value == "vehicle "  # type: ignore[attr-defined]
@@ -179,13 +179,13 @@ async def test_space_picks_a_piece_and_the_preview_is_what_the_server_joins(
         built = await open_builder(app, pilot)
         await pick_in(pilot, 0)  # the name
         await pick_in(pilot, 1)  # the look
-        await pick_in(pilot, 5)  # the home: slots 0 → 6 means five downs from the look
+        await pick_in(pilot, 3)  # the home row: three downs from the look
         assert preview(app) == (
             "Allan Sanlúcar is an athletic young man.\nAllan lives in a penthouse."
         )
-        assert built.summary() == "3 of 12 slots picked"
+        assert built.summary() == "3 of 8 slots picked"
         rows = built.slot_rows.render().plain
-        assert "✓ Identity and look" in rows
+        assert "✓ Look, style and marks" in rows
         assert "✓ Home" in rows
         assert "POST /persona-pieces/preview" in " ".join(server.paths())
 
@@ -239,7 +239,7 @@ async def test_r_picks_one_piece_for_the_slot_at_random(
     monkeypatch.setattr(builder, "choose", lambda pieces: pieces[-1])  # type: ignore[attr-defined]
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
-        await pilot.press("down", "down", "down", "down", "down", "down")  # the home slot
+        await pilot.press("down", "down", "down", "down")  # the home row
         await pilot.pause(0.1)
         await pilot.press("r")
         await pilot.pause(0.2)
@@ -258,12 +258,12 @@ async def test_the_caption_counts_the_slots_picked_and_the_needed_ones_left(
     pool(server)
     async with app.run_test(size=(110, 40)) as pilot:
         built = await open_builder(app, pilot)
-        assert caption(app).startswith("0 of 12 slots picked · 2 needed   Voice  he")
+        assert caption(app).startswith("0 of 8 slots picked · 2 needed   Voice  he")
         await pick_in(pilot, 0)  # the name
-        assert caption(app).startswith("1 of 12 slots picked · 1 needed")
+        assert caption(app).startswith("1 of 8 slots picked · 1 needed")
         await pick_in(pilot, 1)  # the look
-        assert caption(app).startswith("2 of 12 slots picked   Voice")
-        assert built.summary() == "2 of 12 slots picked"
+        assert caption(app).startswith("2 of 8 slots picked   Voice")
+        assert built.summary() == "2 of 8 slots picked"
 
 
 async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
@@ -287,7 +287,7 @@ async def test_f_fills_every_empty_slot_at_random_and_keeps_what_was_picked(
             "pets": ["Lupo"],
         }  # the slots with no piece in this voice stay empty
         assert built.status_line.text == "Filled 4 empty slots at random."
-        assert caption(app).startswith("5 of 12 slots picked   Voice")
+        assert caption(app).startswith("5 of 8 slots picked   Voice")
         await pilot.press("f")
         await pilot.pause(0.2)
         assert built.status_line.text == (
@@ -313,7 +313,7 @@ async def test_n_writes_a_new_piece_in_the_editor_and_picks_it(
         assert built.legend.text.startswith(" Enter Go on")
         await pilot.press(*"Dark hair", "enter")
         await pilot.pause(0.4)
-        assert "identity and look paragraph" in handed[0]
+        assert "look, style and marks paragraph" in handed[0]
         assert "{name}" in handed[0]
         assert [p["name"] for p in server.pieces if p["slot"] == "look"] == [
             "Athletic",
@@ -437,7 +437,7 @@ async def test_a_persona_is_not_made_without_its_look_even_with_a_name(
         await pilot.pause()
         assert built.status_line.text == "A persona needs an identity and look: pick it first."
         rows = built.slot_rows.render().plain
-        assert "Identity and look" in rows
+        assert "Look, style and marks" in rows
         assert "needed" in rows
         assert "Home" in rows
         assert rows.count("needed") == 1  # only the look is still missing
@@ -506,7 +506,7 @@ async def test_the_builder_survives_a_pool_with_nothing_in_a_slot(
         assert "N writes the first one" in built.piece_rows.render().plain
         await pilot.press("r")
         await pilot.pause(0.1)
-        assert "no identity and look piece to pick yet" in built.status_line.text
+        assert "no look, style and marks piece to pick yet" in built.status_line.text
 
 
 def scripted(replies: list[str | None]) -> Callable[..., str | None]:

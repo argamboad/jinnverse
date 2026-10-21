@@ -76,7 +76,7 @@ async def test_the_fourth_shelf_lists_the_pool_by_slot_with_its_count(
         assert " Pieces 5 " in str(screen.query_one("#tabs").render())
         assert names(app) == [
             "Name · Allan (he)",
-            "Identity and look · Athletic (he)",
+            "Look, style and marks · Athletic (he)",
             "Home · Loft (she)",
             "Home · Penthouse (he)",
             "Pets · Lupo (he)",
@@ -281,7 +281,7 @@ async def test_a_slot_that_does_not_exist_is_refused_with_the_list(
         screen = await open_pieces(app, pilot)
         await pilot.press("n", *"garage Big", "enter")
         await pilot.pause(0.3)
-        assert screen.status_line.text.startswith("Start with a slot: name, look, style")
+        assert screen.status_line.text.startswith("Start with a slot: name, look, family")
         assert server.pieces == []
 
 
@@ -327,7 +327,7 @@ async def test_e_in_the_builder_opens_the_piece_in_the_library_and_esc_comes_bac
         await pilot.press("b")
         await pilot.pause(0.4)
         assert isinstance(app.screen, PersonaBuilderScreen)
-        await pilot.press("down", "down", "down", "down", "down", "down")  # the home slot
+        await pilot.press("down", "down", "down", "down")  # the home row
         await pilot.press("right", "e")
         await pilot.pause(0.5)
         assert isinstance(app.screen, LibraryScreen)
