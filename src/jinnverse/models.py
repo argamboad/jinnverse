@@ -66,16 +66,14 @@ class PieceSlot(StrEnum):
 
     NAME = "name"
     LOOK = "look"
-    STYLE = "style"
-    MARKS = "marks"
+    """Identity and look, with the style and the marks: three paragraphs in one piece (#254)."""
     FAMILY = "family"
     WORK = "work"
     HOME = "home"
     VEHICLE = "vehicle"
     PETS = "pets"
     PERSONALITY = "personality"
-    HUMOUR = "humour"
-    PASSIONS = "passions"
+    """Personality and values, with the humour and the passions, likewise."""
 
 
 class Voice(StrEnum):
@@ -210,8 +208,7 @@ class PersonaPiece(LibraryEntry, Base):
             unique=True,
         ),
         CheckConstraint(
-            "slot IN ('name', 'look', 'style', 'marks', 'family', 'work', 'home', 'vehicle', "
-            "'pets', 'personality', 'humour', 'passions')",
+            "slot IN ('name', 'look', 'family', 'work', 'home', 'vehicle', 'pets', 'personality')",
             name="slot",
         ),
         CheckConstraint("voice IN ('he', 'she', 'they', 'any')", name="voice"),

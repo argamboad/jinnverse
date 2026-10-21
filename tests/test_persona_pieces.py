@@ -37,22 +37,20 @@ def a_name(full: str = "Allan Sanlúcar El Kettani", short: str = "Allan") -> Pe
 
 def test_the_paragraphs_come_in_their_order_whatever_the_order_of_the_pick() -> None:
     picks = {
-        PieceSlot.PASSIONS: [a_piece(PieceSlot.PASSIONS, "His passions include music.")],
-        PieceSlot.LOOK: [a_piece(PieceSlot.LOOK, "He is tall.")],
-        PieceSlot.HUMOUR: [a_piece(PieceSlot.HUMOUR, "His humor is dry.")],
         PieceSlot.PERSONALITY: [a_piece(PieceSlot.PERSONALITY, "He is curious.")],
+        PieceSlot.WORK: [a_piece(PieceSlot.WORK, "He teaches.")],
+        PieceSlot.LOOK: [a_piece(PieceSlot.LOOK, "He is tall.")],
+        PieceSlot.FAMILY: [a_piece(PieceSlot.FAMILY, "His sister bakes.")],
     }
 
-    assert assemble(picks) == (
-        "He is tall.\nHe is curious.\nHis humor is dry.\nHis passions include music."
-    )
+    assert assemble(picks) == "He is tall.\nHis sister bakes.\nHe teaches.\nHe is curious."
 
 
 def test_an_empty_slot_is_skipped_and_leaves_no_blank_line() -> None:
     picks = {
         PieceSlot.LOOK: [a_piece(PieceSlot.LOOK, "He is tall.")],
         PieceSlot.HOME: [],
-        PieceSlot.PASSIONS: [a_piece(PieceSlot.PASSIONS, "He likes coffee.")],
+        PieceSlot.PERSONALITY: [a_piece(PieceSlot.PERSONALITY, "He likes coffee.")],
     }
 
     assert assemble(picks) == "He is tall.\nHe likes coffee."
@@ -91,7 +89,7 @@ def test_a_piece_may_hold_more_than_one_paragraph() -> None:
 def test_a_piece_is_trimmed_so_no_stray_space_reaches_the_persona() -> None:
     picks = {
         PieceSlot.LOOK: [a_piece(PieceSlot.LOOK, "  He is tall.\n")],
-        PieceSlot.HUMOUR: [a_piece(PieceSlot.HUMOUR, "His humor is dry. ")],
+        PieceSlot.PERSONALITY: [a_piece(PieceSlot.PERSONALITY, "His humor is dry. ")],
     }
 
     assert assemble(picks) == "He is tall.\nHis humor is dry."
@@ -151,7 +149,7 @@ def test_the_slots_are_the_names_then_the_paragraphs_in_order() -> None:
     home = {info.key: info.paragraph for info in found}
     assert home[PieceSlot.HOME] == home[PieceSlot.VEHICLE] == home[PieceSlot.PETS]
     assert home[PieceSlot.LOOK] == 0
-    assert home[PieceSlot.PASSIONS] == 8
+    assert home[PieceSlot.PERSONALITY] == 4
 
 
 def test_a_name_becomes_a_library_name() -> None:
@@ -184,7 +182,7 @@ async def test_the_slots_are_served_so_a_client_does_not_hard_code_them(
     found = (await client.get("/persona-pieces/slots")).json()
 
     assert [slot["key"] for slot in found] == [slot.value for slot in PieceSlot]
-    assert found[1] == {"key": "look", "label": "Identity and look", "paragraph": 0}
+    assert found[1] == {"key": "look", "label": "Look, style and marks", "paragraph": 0}
 
 
 async def test_a_piece_can_be_created_listed_by_slot_and_voice_and_deleted(
