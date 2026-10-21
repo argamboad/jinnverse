@@ -1,7 +1,7 @@
 # The donor: what to port from custom-airp, and from where
 
 **custom-airp** (`argamboad/custom-airp`, C#/.NET 10, ~52,000 lines, 70 test files) is the donor
-of **logic** for Lustjinn — not of code and not of data. This map says, for every step of the
+of **logic** for JinnVerse — not of code and not of data. This map says, for every step of the
 roadmap, which files carry the rules to port, what those rules are, which tests pin them, and where
 a port that only read a summary would go wrong. Read the donor file before building the feature;
 read the test names as the specification.
@@ -12,7 +12,7 @@ Surveyed 2026-10-05 at the donor's commit `71a1470`.
 
 ## Two things the donor does not have
 
-- **Streaming.** airp sends `stream: false` and waits for the whole reply. Lustjinn's decision to
+- **Streaming.** airp sends `stream: false` and waits for the whole reply. JinnVerse's decision to
   stream replies over SSE (KICKOFF, *Decided*) is new design: the SSE parsing of OpenRouter's
   stream, and reading `usage` from its final chunk, have no donor. Verify against OpenRouter's
   current docs when building #14.
@@ -245,7 +245,7 @@ arguments only.
   the fact extractor on the **same stretch**.
 
 **Pitfalls:** `AlwaysWhole = 6` only limits batch *widening* — `max(overflow, …)` can still take
-newer turns, the reader's newest message included; the real playtest reproduced it, and Lustjinn
+newer turns, the reader's newest message included; the real playtest reproduced it, and JinnVerse
 makes the six a hard cap instead (#96). The 40 cap with one summary per turn means a big backlog drops un-compressed turns from
 *that* prompt until later turns catch up (they stay stored).
 
@@ -282,7 +282,7 @@ Delete summaries and **unpinned** facts (embeddings kept); loop the compose up t
 the summary count stops growing; report removed / kept / written / extracted / covered.
 
 **Tests:** `tests/SummaryTests.cs`, `tests/CharacterInAFileTests.cs` (the character-file regression:
-a 30k-token card, 202 turns, 24 turns lost — build Lustjinn's equivalent with the dummy character
+a 30k-token card, 202 turns, 24 turns lost — build JinnVerse's equivalent with the dummy character
 #73), `tests/RetrievalTests.cs`, `tests/WorldStateTests.cs`, `tests/BackgroundRetryTests.cs`,
 `tests/RebuildMemoryTests.cs`.
 

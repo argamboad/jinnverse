@@ -3,7 +3,7 @@
 One file per decision that is easy to question and expensive to re-argue: the context, the
 decision, what would change it. Numbered in the order they are taken; a superseded record stays
 and says what replaced it. airp's records (`custom-airp/docs/adr/`) are the donor's, mapped in
-`../DONOR.md`; these are Lustjinn's own.
+`../DONOR.md`; these are JinnVerse's own.
 
 | # | Decision |
 |---|---|

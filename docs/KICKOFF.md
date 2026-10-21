@@ -310,9 +310,10 @@ and CI runs them on every pull request. (The original also required the deployed
    chapter is.
 2. **Where the repo lives:** GitHub, `argamboad/lustjinn`, private (since 2026-10-02; it began on a
    self-hosted Forgejo, now retired). `develop` is the default branch and every pull request merges
-   into it; `main` is for releases only. Render deploys from this repository.
+   into it; `main` is for releases only. Render deploys from this repository. *Renamed with the
+   app on 2026-10-21: item 11.*
 3. **The name:** **Lustjinn** — lust + djinn. `lustjinn` in code, repositories and file names. It
-   replaced the working name *lustee*.
+   replaced the working name *lustee*. *Replaced in turn by JinnVerse on 2026-10-21: item 11.*
 4. **Authentication: a username and a password** in environment variables (Render in production,
    `.env` locally). The PWA signs in once with them and receives a **bearer token** it keeps on the
    device — which keeps the bearer-token constraint above. The details (token format, lifetime,
@@ -338,3 +339,13 @@ and CI runs them on every pull request. (The original also required the deployed
    something to play with until then.
 10. **custom-airp is the donor of logic**, not of code or data. `docs/DONOR.md` is the map; every
     GitHub issue carries a *Donor* note naming its sources.
+
+## Settled on 2026-10-21
+
+11. **The name is JinnVerse** (the owner's decision; Step 21, milestone 23). `JinnVerse` is the
+    display name, as on the logo; `jinnverse` in code, packages, file names, settings prefixes
+    and the GitHub repository (`argamboad/jinnverse`, renamed after the step merged; the old URL
+    redirects). The logo keeps the mark and the palette, only the wordmark changed, so the design
+    of item 6 stands. The Render services were created under the old name and keep it, names and
+    URLs (`lustjinn-staging.onrender.com`), because Render cannot rename a URL. Items 2 and 3
+    above are left as the record of what came before.
