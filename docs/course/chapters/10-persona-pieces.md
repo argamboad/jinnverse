@@ -1,5 +1,14 @@
 # Persona pieces
 
+::: note
+**This feature was taken out in Step 23** (2026-10-27). The pool, the joiner, the extractor and
+the pickers in both clients are gone, and migration 0023 dropped the table with its rows. The
+chapter stays as it was written, because the course is the record of how the app was built and
+what it taught here — a closed vocabulary the database enforces, a pure function at the centre,
+a proof by round trip — stands on its own. Chapter 19 says why it went and how a feature is
+removed.
+:::
+
 The roadmap ended at step 9, and then the owner asked for something the first nine steps made
 easy: a persona built from parts. Every chat can have its own persona, but writing one by hand
 means copying three thousand characters of prose and editing them. This chapter is the feature
