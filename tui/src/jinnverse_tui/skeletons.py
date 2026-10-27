@@ -45,16 +45,6 @@ once, in their own voice, establishes them better than paragraphs describing the
 """
 
 
-def piece(slot: str, voice: str) -> str:
-    """What a new persona piece starts as: one slot's paragraph, in one voice."""
-    return (
-        f"[ The {slot} paragraph of a persona, written in the {voice} voice, the way the "
-        "persona's own paragraphs read: full sentences, no headings. Write {name} where the "
-        "full name goes and {short} where the short one does, and keep to this slot: a piece "
-        "that mentions another slot contradicts the pieces picked beside it. ]\n"
-    )
-
-
 BY_SHELF: Final[dict[str, str]] = {
     "characters": CHARACTER,
     "personas": PERSONA,

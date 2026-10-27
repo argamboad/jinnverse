@@ -20,7 +20,7 @@ import re
 import ssl
 import uuid
 from collections.abc import AsyncIterator, Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import quote
@@ -131,7 +131,7 @@ class StoryWithMessages(Story):
     messages: list[Message]
 
 
-Shelf = Literal["characters", "personas", "snippets", "pieces"]
+Shelf = Literal["characters", "personas", "snippets"]
 
 
 class Entry(BaseModel):
@@ -178,81 +178,12 @@ class Hidden(BaseModel):
 
 
 class Counts(BaseModel):
-    """How many entries each shelf holds, as its list shows them; the pieces are counted too."""
+    """How many entries each shelf holds, as its list shows them."""
 
     characters: int = 0
     personas: int = 0
     snippets: int = 0
-    pieces: int = 0
     hidden: Hidden = Field(default_factory=Hidden)
-
-
-Voice = Literal["he", "she", "they", "any"]
-
-
-class Slot(BaseModel):
-    """One of the fixed places a persona is built from, in the order a builder shows them."""
-
-    key: str
-    label: str
-    paragraph: int | None = None
-    """Which paragraph it writes; None for the name, which is written into the others."""
-
-
-class Piece(BaseModel):
-    """One piece of a persona: a slot, a voice, a name for the picker and the text."""
-
-    id: uuid.UUID
-    slot: str
-    voice: Voice
-    name: str
-    text: str
-    short: str | None = None
-    description: str | None = None
-    version: int = 1
-    updated_at: datetime | None = None
-
-
-class Preview(BaseModel):
-    """The persona a pick would make, and the library name it would get (None: nothing says)."""
-
-    name: str | None = None
-    text: str
-
-
-class Built(BaseModel):
-    id: uuid.UUID
-    name: str
-    text: str
-
-
-class PieceEntry(EntryFull):
-    """A persona piece as the library screen shows it: an entry whose name says its slot and its
-    voice, so the shelf reads grouped by slot and two pieces of one name stay apart."""
-
-    slot: str = ""
-    slot_label: str = ""
-    voice: Voice = "he"
-    short: str | None = None
-    piece_name: str = ""
-    """The piece's own name, which is what a rename changes."""
-
-
-def piece_entry(piece: Piece, label: str) -> PieceEntry:
-    return PieceEntry(
-        id=piece.id,
-        name=f"{label} · {piece.name} ({piece.voice})",
-        version=piece.version,
-        updated_at=piece.updated_at or datetime.now(UTC),
-        preview=piece.text[:200],
-        description=piece.description,
-        text=piece.text,
-        slot=piece.slot,
-        slot_label=label,
-        voice=piece.voice,
-        short=piece.short,
-        piece_name=piece.name,
-    )
 
 
 class PurgedAll(BaseModel):
@@ -580,8 +511,6 @@ Event = Delta | TurnDone | AsideDone | Said | Failed
 _stories = TypeAdapter(list[Story])
 _entries = TypeAdapter(list[Entry])
 _versions = TypeAdapter(list[Version])
-_slots = TypeAdapter(list[Slot])
-_pieces = TypeAdapter(list[Piece])
 _facts = TypeAdapter(list[Fact])
 _dials = TypeAdapter(list[Dial])
 _story_dials = TypeAdapter(list[StoryDial])
@@ -910,19 +839,12 @@ class Api:
 
     async def entries(self, shelf: Shelf, *, hidden: bool = False) -> list[Entry]:
         """The shelf as its list shows it; with ``hidden``, the ``_name`` entries too."""
-        if shelf == "pieces":
-            return list(await self._piece_entries())
         params = {"hidden": "true"} if hidden else None
         return _entries.validate_python(
             await self._request("GET", f"/library/{shelf}", params=params)
         )
 
     async def entry(self, shelf: Shelf, entry_id: uuid.UUID) -> EntryFull:
-        if shelf == "pieces":
-            found = next((e for e in await self._piece_entries() if e.id == entry_id), None)
-            if found is None:
-                raise ApiError(404, "There is no piece with that id.")
-            return found
         return EntryFull.model_validate(await self._request("GET", f"/library/{shelf}/{entry_id}"))
 
     async def history(self, shelf: Shelf, entry_id: uuid.UUID) -> list[Version]:
@@ -930,40 +852,6 @@ class Api:
         return _versions.validate_python(
             await self._request("GET", f"/library/{shelf}/{entry_id}/history")
         )
-
-    async def _piece_entries(self) -> list[PieceEntry]:
-        """The pool as library entries, in the persona's slot order and then by name."""
-        slots = await self.piece_slots()
-        labels = {slot.key: slot.label for slot in slots}
-        order = {slot.key: i for i, slot in enumerate(slots)}
-        pieces = sorted(
-            await self.pieces(), key=lambda p: (order.get(p.slot, len(order)), p.name.lower())
-        )
-        return [piece_entry(p, labels.get(p.slot, p.slot)) for p in pieces]
-
-    async def _piece_saved(self, piece: Piece) -> PieceEntry:
-        labels = {slot.key: slot.label for slot in await self.piece_slots()}
-        return piece_entry(piece, labels.get(piece.slot, piece.slot))
-
-    async def save_piece(
-        self,
-        piece_id: uuid.UUID,
-        version: int,
-        *,
-        voice: Voice | None = None,
-        short: str | None = None,
-    ) -> PieceEntry:
-        """Changes a piece's voice or short form over ``version``; a stale save raises
-        ``ConflictError`` with the piece as it is now."""
-        body: dict[str, object] = {"version": version}
-        if voice is not None:
-            body["voice"] = voice
-        if short is not None:
-            body["short"] = short
-        piece = Piece.model_validate(
-            await self._request("PATCH", f"/persona-pieces/{piece_id}", json=body)
-        )
-        return await self._piece_saved(piece)
 
     async def defaults(self) -> Defaults:
         return Defaults.model_validate(await self._request("GET", "/library/settings"))
@@ -1014,76 +902,12 @@ class Api:
             body["opening"] = opening
         if description is not None or clear_description:
             body["description"] = description
-        if shelf == "pieces":
-            piece = Piece.model_validate(
-                await self._request("PATCH", f"/persona-pieces/{entry_id}", json=body)
-            )
-            return await self._piece_saved(piece)
         return EntryFull.model_validate(
             await self._request("PATCH", f"/library/{shelf}/{entry_id}", json=body)
         )
 
     async def delete_entry(self, shelf: Shelf, entry_id: uuid.UUID) -> None:
-        if shelf == "pieces":
-            await self._request("DELETE", f"/persona-pieces/{entry_id}")
-            return
         await self._request("DELETE", f"/library/{shelf}/{entry_id}")
-
-    # -- persona pieces -------------------------------------------------------------------------
-
-    async def piece_slots(self) -> list[Slot]:
-        return _slots.validate_python(await self._request("GET", "/persona-pieces/slots"))
-
-    async def pieces(self, *, voice: Voice | None = None) -> list[Piece]:
-        """The pool; with a ``voice``, the pieces a persona of that voice may use."""
-        params = {"voice": voice} if voice is not None else None
-        return _pieces.validate_python(await self._request("GET", "/persona-pieces", params=params))
-
-    async def create_piece(
-        self,
-        slot: str,
-        voice: Voice,
-        name: str,
-        text: str,
-        short: str | None = None,
-        description: str | None = None,
-    ) -> Piece:
-        body: dict[str, object] = {"slot": slot, "voice": voice, "name": name, "text": text}
-        if short is not None:
-            body["short"] = short
-        if description is not None:
-            body["description"] = description
-        return Piece.model_validate(await self._request("POST", "/persona-pieces", json=body))
-
-    @staticmethod
-    def _pick(voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "voice": voice,
-            "pieces": {slot: [str(i) for i in ids] for slot, ids in picks.items() if ids},
-        }
-        if name:
-            body["name"] = name
-        return body
-
-    async def preview_persona(
-        self, voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None = None
-    ) -> Preview:
-        """The persona a pick would make; saves nothing."""
-        return Preview.model_validate(
-            await self._request(
-                "POST", "/persona-pieces/preview", json=self._pick(voice, picks, name)
-            )
-        )
-
-    async def build_persona(
-        self, voice: Voice, picks: dict[str, list[uuid.UUID]], name: str | None = None
-    ) -> Built:
-        """Makes an ordinary persona in the library from a pick."""
-        return Built.model_validate(
-            await self._request(
-                "POST", "/persona-pieces/build", json=self._pick(voice, picks, name)
-            )
-        )
 
     # -- dials ----------------------------------------------------------------------------------
 
@@ -1137,7 +961,7 @@ def _current(response: httpx2.Response) -> EntryFull | None:
     if not isinstance(current, dict):
         return None
     try:
-        # A piece's conflict carries no preview, which a list entry needs: it is the text's start.
+        # A conflict may carry no preview, which a list entry needs: it is the text's start.
         text = str(cast(dict[str, object], current).get("text", ""))
         return EntryFull.model_validate({"preview": text[:200], **current})
     except ValueError:

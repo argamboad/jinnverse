@@ -265,16 +265,3 @@ async def test_an_entry_renamed_to_underscore_can_be_reached_again(
         await pilot.press("underscore")
         await pilot.pause(0.3)
         assert [e.name for e in screen.rows.items] == ["Draft"]
-
-
-async def test_the_pieces_shelf_has_nothing_hidden(
-    app: JinnverseApp, server: fake.FakeServer
-) -> None:
-    async with app.run_test(size=(140, 30)) as pilot:
-        screen = await open_library(app, pilot)
-        await pilot.press("left")  # round to the last shelf: the pieces
-        await pilot.pause(0.3)
-        assert screen.shelf == "pieces"
-        await pilot.press("underscore")
-        await pilot.pause()
-        assert screen.status_line.text == "A piece is never hidden: this shelf shows every one."

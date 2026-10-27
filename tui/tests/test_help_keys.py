@@ -5,7 +5,6 @@ import re
 
 import pytest
 
-from jinnverse_tui.builder import PersonaBuilderScreen
 from jinnverse_tui.help import SECTIONS
 from jinnverse_tui.history import HistoryScreen
 from jinnverse_tui.legend import Hint
@@ -29,9 +28,7 @@ def in_help(section: str) -> set[str]:
     ("hints", "section"),
     [
         (LibraryScreen.HINTS, "Library"),
-        (LibraryScreen.PIECE_HINTS, "Library"),
         (HistoryScreen.HINTS, "An entry's history"),
-        (PersonaBuilderScreen.HINTS, "Persona builder"),
         (NewStoryScreen.HINTS, "New story"),
         (ReviewScreen.HINTS, "Review facts (/review)"),
     ],
