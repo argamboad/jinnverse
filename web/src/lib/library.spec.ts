@@ -4,8 +4,6 @@ import {
 	blurb,
 	entryMeta,
 	hiddenCount,
-	pieceBlurb,
-	piecesSummary,
 	remaining,
 	saveNote,
 	sentDescription
@@ -37,22 +35,6 @@ describe('the save bar', () => {
 	});
 });
 
-describe('the pool of pieces in one line', () => {
-	it('counts pieces, the slots they fill, and each voice there is', () => {
-		const pool = [
-			{ slot: 'look', voice: 'he' },
-			{ slot: 'look', voice: 'she' },
-			{ slot: 'home', voice: 'he' },
-			{ slot: 'pets', voice: 'any' }
-		] as const;
-		expect(piecesSummary([...pool])).toBe('4 pieces across 3 slots · he 2 · she 1 · any 1');
-	});
-	it('says so when there are none, and counts one in the singular', () => {
-		expect(piecesSummary([])).toBe('No pieces yet');
-		expect(piecesSummary([{ slot: 'look', voice: 'they' }])).toBe('1 piece across 1 slot · they 1');
-	});
-});
-
 describe('what a list shows under a name', () => {
 	it('is the description when there is one', () => {
 		expect(blurb({ description: 'The innkeeper.', preview: 'You are Elena…' })).toEqual({
@@ -67,23 +49,6 @@ describe('what a list shows under a name', () => {
 			note: false
 		});
 		expect(blurb({ description: '   ', preview: 'You are Elena…' }).note).toBe(false);
-	});
-});
-
-describe('what a list shows under a piece', () => {
-	it('is its description, or the start of its text', () => {
-		expect(pieceBlurb({ description: 'The corgi', text: 'He has a corgi.' })).toEqual({
-			text: 'The corgi',
-			note: true
-		});
-		expect(pieceBlurb({ description: null, text: 'He has a corgi.' })).toEqual({
-			text: 'He has a corgi.',
-			note: false
-		});
-	});
-
-	it('cuts a long text to what a description may hold', () => {
-		expect(pieceBlurb({ description: null, text: 'x'.repeat(500) }).text).toHaveLength(200);
 	});
 });
 

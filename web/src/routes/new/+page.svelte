@@ -171,11 +171,6 @@
 					{#each others as persona (persona.id)}
 						{@render row(persona, persona.id, false)}
 					{/each}
-					<a class="row build" href="/library/personas/from-pieces?then=new">
-						<span class="tile small plus" aria-hidden="true">+</span>
-						<span>Build a new persona from pieces</span>
-						<span class="muted" aria-hidden="true">›</span>
-					</a>
 				</div>
 			</section>
 			<section>
@@ -409,19 +404,6 @@
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
-	}
-	.row.build {
-		background: transparent;
-		border-style: dashed;
-		border-color: var(--line-strong);
-		color: var(--gold-text);
-		font-weight: 600;
-		font-size: 0.9rem;
-	}
-	.row.build .plus {
-		background: transparent;
-		font-size: 1.2rem;
-		font-family: var(--font-ui);
 	}
 	small.muted {
 		font-size: 0.74rem;
