@@ -1,5 +1,5 @@
-"""The short description on characters, personas, snippets and persona pieces, and the counts of
-the shelves (#160). A note for the owner: shown in lists, versioned with the entry, never read by
+"""The short description on characters, personas and snippets, and the counts of the shelves
+(#160). A note for the owner: shown in lists, versioned with the entry, never read by
 anything that builds a prompt."""
 
 from typing import Any
@@ -178,9 +178,6 @@ async def test_the_counts_say_how_many_entries_each_shelf_holds(
     await create(client, "characters", name="Marta", text="x")
     await create(client, "personas", name="Me", text="x")
     await create(client, "snippets", name="storm", text="x")
-    await client.post(
-        "/persona-pieces", json={"slot": "look", "voice": "he", "name": "Tall", "text": "x"}
-    )
 
     counts = (await client.get("/library/counts")).json()
 
@@ -188,7 +185,6 @@ async def test_the_counts_say_how_many_entries_each_shelf_holds(
         "characters": 2,
         "personas": 1,
         "snippets": 1,
-        "pieces": 1,
         "hidden": {"characters": 0, "personas": 0, "snippets": 0},
     }
 
@@ -197,7 +193,6 @@ async def test_an_empty_library_counts_zero_everywhere(client: httpx2.AsyncClien
     counts = (await client.get("/library/counts")).json()
 
     assert counts["characters"] == counts["personas"] == counts["snippets"] == 0
-    assert counts["pieces"] == 0
 
 
 async def test_the_counts_are_what_a_list_shows_and_the_underscore_ones_are_counted_apart(
@@ -220,61 +215,3 @@ async def test_the_counts_are_what_a_list_shows_and_the_underscore_ones_are_coun
 async def test_counts_is_not_mistaken_for_a_shelf(client: httpx2.AsyncClient) -> None:
     assert (await client.get("/library/counts")).status_code == 200
     assert (await client.get("/library/nonsense")).status_code == 422
-
-
-# --- persona pieces ------------------------------------------------------------------------------
-
-
-async def piece(client: httpx2.AsyncClient, **more: object) -> Json:
-    body = {"slot": "home", "voice": "he", "name": "Penthouse", "text": "x", **more}
-    response = await client.post("/persona-pieces", json=body)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-async def test_a_piece_can_carry_a_description_that_is_served_set_and_cleared(
-    client: httpx2.AsyncClient,
-) -> None:
-    made = await piece(client, description="Across from the university")
-
-    assert made["description"] == "Across from the university"
-    listed = (await client.get("/persona-pieces")).json()
-    assert listed[0]["description"] == "Across from the university"
-    changed = await client.patch(
-        f"/persona-pieces/{made['id']}", json={"version": 1, "description": "A loft"}
-    )
-    cleared = await client.patch(
-        f"/persona-pieces/{made['id']}", json={"version": 2, "description": None}
-    )
-    assert (changed.json()["version"], changed.json()["description"]) == (2, "A loft")
-    assert cleared.json()["description"] is None
-
-
-async def test_a_piece_description_is_limited_like_the_others(client: httpx2.AsyncClient) -> None:
-    response = await client.post(
-        "/persona-pieces",
-        json={
-            "slot": "home",
-            "voice": "he",
-            "name": "x",
-            "text": "x",
-            "description": "x" * 201,
-        },
-    )
-
-    assert response.status_code == 422
-
-
-async def test_a_persona_built_from_a_piece_does_not_carry_its_description(
-    client: httpx2.AsyncClient,
-) -> None:
-    look = await piece(client, slot="look", name="Tall", text="He is tall.", description="NOTE")
-
-    built = await client.post(
-        "/persona-pieces/build",
-        json={"voice": "he", "pieces": {"look": [look["id"]]}, "name": "tall-man"},
-    )
-
-    persona = (await client.get(f"/library/personas/{built.json()['id']}")).json()
-    assert persona["text"] == "He is tall."
-    assert persona["description"] is None

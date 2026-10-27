@@ -23,7 +23,6 @@ from jinnverse import (
     export,
     facts,
     library,
-    persona_pieces,
     purge,
     rebuild,
     review,
@@ -146,7 +145,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(asides.router, dependencies=[Depends(auth.require_user)])
     app.include_router(audit.router, dependencies=[Depends(auth.require_user)])
     app.include_router(library.router, dependencies=[Depends(auth.require_user)])
-    app.include_router(persona_pieces.router, dependencies=[Depends(auth.require_user)])
     app.include_router(dials.router, dependencies=[Depends(auth.require_user)])
     app.include_router(trackers.router, dependencies=[Depends(auth.require_user)])
     app.include_router(status_api.router, dependencies=[Depends(auth.require_user)])
