@@ -353,4 +353,17 @@ and CI runs them on every pull request. (The original also required the deployed
     found the style, the marks, the humour and the passions never picked apart from the look and
     the personality: a look piece now holds its three paragraphs, a personality piece up to
     three. The measure of the pool is that every persona the owner wrote rebuilds from it
-    exactly, which the extractor proves on each run.
+    exactly, which the extractor proves on each run. *The pieces were taken out altogether on
+    2026-10-27: item 13. This item is left as the record of what came before.*
+
+## Settled on 2026-10-27
+
+13. **Persona pieces removed** (Step 23, milestone 25). The pool of pieces a persona was built
+    from — built in Step 10, shrunk to eight slots in Step 22 — did not work as expected and
+    confused the user, while the description on each library entry (#160) did the job of
+    telling personas apart. Personas stay plain text with a name and a description; a persona
+    built from pieces keeps its text, which was always a copy. The router, the joiner, the
+    extractor and both clients' builders and shelves are gone, and
+    migration 0023 drops the `persona_pieces` table with its rows (56 on Neon) by the owner's
+    decision, without an export; the downgrade recreates the table empty. Item 12 above is the
+    record of the feature's last shape.

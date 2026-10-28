@@ -1,7 +1,7 @@
 /** The library's small rules that need no screen: the note a list shows, the count beside "show
  * hidden", and how much of a description is left. */
 
-import type { Entry, Piece, Shelf, Voice } from './api.ts';
+import type { Entry, Shelf } from './api.ts';
 
 /** The most a description may hold; the API refuses more. */
 export const DESCRIPTION_LENGTH = 200;
@@ -14,17 +14,6 @@ export function blurb(entry: Pick<Entry, 'description' | 'preview'>): {
 } {
 	const note = entry.description?.trim();
 	return note ? { text: note, note: true } : { text: entry.preview, note: false };
-}
-
-/** The same for a piece of a persona: its description, or the start of its text. */
-export function pieceBlurb(piece: Pick<Piece, 'description' | 'text'>): {
-	text: string;
-	note: boolean;
-} {
-	return blurb({
-		description: piece.description,
-		preview: piece.text.slice(0, DESCRIPTION_LENGTH)
-	});
 }
 
 /** The count of hidden `_name` entries, as it reads beside the toggle; nothing when there are none. */
@@ -58,18 +47,4 @@ export function saveNote(one: string, used: number, next: number, wide: boolean)
 	return used === 1
 		? `Unsaved changes · the story using this ${one} reads v${next} from its next turn`
 		: `Unsaved changes · the ${used} stories using this ${one} read v${next} from their next turn`;
-}
-
-const VOICES: Voice[] = ['he', 'she', 'they', 'any'];
-
-/** What the pool of pieces holds, in one line: how many, across how many slots, and by voice
- * (a voice with none is left out). */
-export function piecesSummary(pieces: Pick<Piece, 'slot' | 'voice'>[]): string {
-	if (pieces.length === 0) return 'No pieces yet';
-	const slots = new Set(pieces.map((p) => p.slot)).size;
-	const voices = VOICES.map((v) => [v, pieces.filter((p) => p.voice === v).length] as const)
-		.filter(([, n]) => n > 0)
-		.map(([v, n]) => `${v} ${n}`);
-	const head = `${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'} across ${slots} ${slots === 1 ? 'slot' : 'slots'}`;
-	return [head, ...voices].join(' · ');
 }

@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx2
 
@@ -99,7 +98,6 @@ class FakeServer:
         self.default_persona: dict[str, Any] | None = None
         self.history: dict[str, list[dict[str, Any]]] = {}
         """Every saved version of an entry, by its id, oldest first, as `library_history`."""
-        self.pieces: list[dict[str, Any]] = []
         self.pack: list[dict[str, Any]] = [
             {
                 "key": "lust",
@@ -325,30 +323,6 @@ class FakeServer:
             }
         )
 
-    def piece(
-        self,
-        slot: str,
-        name: str,
-        text: str,
-        voice: str = "he",
-        short: str | None = None,
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """A persona piece in the pool, as the API serves it."""
-        added = {
-            "id": str(uuid.uuid4()),
-            "slot": slot,
-            "voice": voice,
-            "name": name,
-            "text": text,
-            "short": short,
-            "description": description,
-            "version": 1,
-            "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
-        }
-        self.pieces.append(added)
-        return added
-
     def revoke(self) -> None:
         self.valid_tokens.clear()
 
@@ -396,8 +370,6 @@ class FakeServer:
             return self._stories(parts, request)
         if parts[0] == "library":
             return self._library(parts, request)
-        if parts[0] == "persona-pieces":
-            return self._persona_pieces(parts, request)
         if path == "/emoji":
             return httpx2.Response(200, json=emoji_table.served())
         if path == "/commands":
@@ -746,154 +718,9 @@ class FakeServer:
             200,
             json={
                 **{k: len(v) for k, v in shown.items()},
-                "pieces": len(self.pieces),
                 "hidden": {k: len(self.library[k]) - len(v) for k, v in shown.items()},
             },
         )
-
-    # The slots and the paragraphs they write, as the API's own list has them.
-    _SLOTS: ClassVar[list[tuple[str, str, int | None]]] = [
-        ("name", "Name", None),
-        ("look", "Look, style and marks", 0),
-        ("family", "Family", 1),
-        ("work", "Occupation and public profile", 2),
-        ("home", "Home", 3),
-        ("vehicle", "Vehicle", 3),
-        ("pets", "Pets", 3),
-        ("personality", "Personality, humour, passions", 4),
-    ]
-
-    def _persona_pieces(self, parts: list[str], request: httpx2.Request) -> httpx2.Response:
-        """The pool, a preview and a build: the API's rules in the small."""
-        if parts[1:] == ["slots"]:
-            slots = [{"key": k, "label": label, "paragraph": n} for k, label, n in self._SLOTS]
-            return httpx2.Response(200, json=slots)
-        if len(parts) == 1 and request.method == "GET":
-            voice = request.url.params.get("voice")
-            found = [p for p in self.pieces if voice is None or p["voice"] in (voice, "any")]
-            return httpx2.Response(200, json=sorted(found, key=lambda p: p["name"].lower()))
-        if len(parts) == 1 and request.method == "POST":
-            body = json.loads(request.content)
-            if any(
-                (p["slot"], p["voice"], p["name"].lower())
-                == (body["slot"], body["voice"], body["name"].lower())
-                for p in self.pieces
-            ):
-                return httpx2.Response(
-                    409,
-                    json={
-                        "detail": f"A {body['slot']} piece called '{body['name']}' already "
-                        f"exists in the {body['voice']} voice. Edit it, or pick another name."
-                    },
-                )
-            made = self.piece(
-                body["slot"],
-                body["name"],
-                body["text"],
-                body["voice"],
-                body.get("short"),
-                body.get("description"),
-            )
-            return httpx2.Response(201, json=made)
-        if parts[1:] in (["preview"], ["build"]) and request.method == "POST":
-            return self._join_a_pick(json.loads(request.content), build=parts[1] == "build")
-        found = (
-            next((p for p in self.pieces if p["id"] == parts[1]), None) if len(parts) == 2 else None
-        )
-        if found is not None and request.method == "DELETE":
-            self.pieces.remove(found)
-            return httpx2.Response(204)
-        if found is not None and request.method == "PATCH":
-            return self._save_piece(found, json.loads(request.content))
-        return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
-
-    def _save_piece(self, found: dict[str, Any], body: dict[str, Any]) -> httpx2.Response:
-        if body["version"] != found["version"]:
-            return httpx2.Response(
-                409,
-                json={
-                    "detail": {
-                        "message": "This piece changed somewhere else since you opened it. "
-                        "Nothing was saved. Here is what it says now; save again to replace it.",
-                        "current": found,
-                    }
-                },
-            )
-        voice = body.get("voice", found["voice"])
-        name = body.get("name", found["name"])
-        if (voice, name.lower()) != (found["voice"], found["name"].lower()) and any(
-            (p["slot"], p["voice"], p["name"].lower()) == (found["slot"], voice, name.lower())
-            for p in self.pieces
-            if p is not found
-        ):
-            return httpx2.Response(
-                409, json={"detail": f"A {found['slot']} piece called '{name}' already exists."}
-            )
-        changed = False
-        for field in ("name", "voice", "text", "short", "description"):
-            if field in body and body[field] != found.get(field):
-                found[field] = body[field]
-                changed = True
-        if changed:
-            found["version"] += 1
-        return httpx2.Response(200, json=found)
-
-    def _join_a_pick(self, body: dict[str, Any], *, build: bool) -> httpx2.Response:
-        def refuse(detail: str) -> httpx2.Response:
-            return httpx2.Response(422, json={"detail": detail})
-
-        chosen: dict[str, list[dict[str, Any]]] = {}
-        for slot, ids in body["pieces"].items():
-            for piece_id in ids:
-                piece = next((p for p in self.pieces if p["id"] == piece_id), None)
-                if piece is None:
-                    return refuse("A piece you picked is gone. Pick again.")
-                if piece["voice"] not in (body["voice"], "any"):
-                    return refuse(
-                        f"'{piece['name']}' is written in the {piece['voice']} voice; this "
-                        f"persona is {body['voice']}."
-                    )
-                chosen.setdefault(slot, []).append(piece)
-        paragraphs: list[str] = []
-        for group in (
-            ["look"],
-            ["family"],
-            ["work"],
-            ["home", "vehicle", "pets"],
-            ["personality"],
-        ):
-            texts = [p["text"].strip() for slot in group for p in chosen.get(slot, [])]
-            if len(group) == 1:
-                paragraphs += texts
-            elif texts:
-                paragraphs.append(" ".join(texts))
-        if not paragraphs:
-            return refuse("Pick at least one piece.")
-        text = "\n".join(paragraphs)
-        wanted = body.get("name")
-        if chosen.get("name"):
-            first = chosen["name"][0]
-            text = text.replace("{name}", first["text"]).replace("{short}", first["short"])
-            folded = unicodedata.normalize("NFKD", first["text"]).encode("ascii", "ignore").decode()
-            wanted = wanted or re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")
-        taken = {p["name"].lower() for p in self.library["personas"]}
-        name = wanted
-        if name is not None and body.get("name") is None:
-            number, candidate = 1, name
-            while candidate.lower() in taken:
-                number += 1
-                candidate = f"{name}-{number}"
-            name = candidate
-        if not build:
-            return httpx2.Response(200, json={"name": name, "text": text})
-        if name is None:
-            return refuse("Name the persona, or pick a name piece.")
-        if name.lower() in taken:
-            return httpx2.Response(
-                409, json={"detail": f"A persona called '{name}' already exists."}
-            )
-        made = self.shelve("personas", name, text)
-        return httpx2.Response(201, json={"id": made["id"], "name": name, "text": text})
 
     def _dial_out(self, dial: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
         stored = values.get(dial["key"])

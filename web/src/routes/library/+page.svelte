@@ -3,14 +3,13 @@
 	import AppBar from '#lib/AppBar.svelte';
 	import LibraryRail from '#lib/LibraryRail.svelte';
 	import Tabs from '#lib/Tabs.svelte';
-	import { api, type Counts, type Defaults, type Entry, type Piece, type Shelf } from '#lib/api.ts';
-	import { blurb, entryMeta, piecesSummary } from '#lib/library.ts';
+	import { api, type Counts, type Defaults, type Entry, type Shelf } from '#lib/api.ts';
+	import { blurb, entryMeta } from '#lib/library.ts';
 	import { Media } from '#lib/media.svelte.ts';
 	import { KEYS } from '#lib/storage.ts';
 	import { toasts } from '#lib/toasts.svelte.ts';
 
-	/** The three shelves. The persona pieces live under Personas, as a card that builds a persona
-	 * and a link to their own list. */
+	/** The three shelves. */
 	const shelves: { id: Shelf; label: string; one: string }[] = [
 		{ id: 'characters', label: 'Characters', one: 'character' },
 		{ id: 'personas', label: 'Personas', one: 'persona' },
@@ -20,7 +19,6 @@
 	let shelf = $state<Shelf>('characters');
 	let hidden = $state(false);
 	let entries = $state<Entry[] | null>(null);
-	let pieces = $state<Piece[] | null>(null);
 	let defaults = $state<Defaults | null>(null);
 	let counts = $state<Counts | null>(null);
 
@@ -65,12 +63,6 @@
 				error instanceof Error ? error.message : undefined
 			);
 			entries = [];
-		}
-		if (shelf === 'personas' && pieces === null) {
-			api
-				.pieces()
-				.then((found) => (pieces = found))
-				.catch(() => (pieces = []));
 		}
 	}
 
@@ -155,21 +147,6 @@
 						<span class="chev" aria-hidden="true">›</span>
 					</a>
 				{/each}
-			{/if}
-
-			{#if shelf === 'personas' && entries !== null}
-				<div class="pieces">
-					<h2>Pieces</h2>
-					<a class="entry" href="/library/personas/from-pieces">
-						<span class="who">P</span>
-						<span class="text">
-							<span class="name">Build a persona from pieces</span>
-							<span class="summary">{pieces ? piecesSummary(pieces) : 'Reading the pieces…'}</span>
-						</span>
-						<span class="chev" aria-hidden="true">›</span>
-					</a>
-					<a class="browse" href="/library/pieces">Browse and edit the pieces ›</a>
-				</div>
 			{/if}
 
 			{#if entries !== null && (hidden || hiddenHere > 0)}
@@ -320,31 +297,6 @@
 	}
 	.chev {
 		color: var(--muted);
-	}
-	.pieces {
-		margin-top: 10px;
-		display: grid;
-		gap: 8px;
-	}
-	.pieces h2 {
-		font-size: 0.72rem;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: var(--muted);
-		font-weight: 600;
-		padding: 0 4px;
-	}
-	.summary {
-		color: var(--fg-2);
-		font-size: 0.85rem;
-	}
-	.browse {
-		justify-self: start;
-		font-size: 0.85rem;
-		font-weight: 600;
-		text-decoration: none;
-		color: var(--gold-text);
-		padding: 4px 6px;
 	}
 	.hidden-toggle {
 		appearance: none;

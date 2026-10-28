@@ -119,10 +119,6 @@
 				</a>
 			{/each}
 		{/if}
-		{#if shown === 'personas'}
-			<a class="pieces" href="/library/personas/from-pieces">Build a persona from pieces ›</a>
-			<a class="pieces" href="/library/pieces">The pieces ›</a>
-		{/if}
 		{#if entries !== null && (hidden || hiddenHere > 0)}
 			<button type="button" class="hidden-toggle" onclick={() => (hidden = !hidden)}>
 				{#if hidden}
@@ -245,14 +241,6 @@
 	.meta {
 		font-size: 0.7rem;
 		color: var(--muted);
-	}
-	.pieces {
-		justify-self: start;
-		font-size: 0.8rem;
-		font-weight: 600;
-		text-decoration: none;
-		color: var(--gold-text);
-		padding: 6px 10px;
 	}
 	.hidden-toggle {
 		appearance: none;

@@ -5,8 +5,7 @@ Three shelves across the top, the names down the left, the text on the right. Un
 a line as the web's list has it: the version, how many stories use the entry, and its note or
 the start of its text. ``N`` names a
 new entry, asks for its note (Enter skips it) and opens it in the editor with a skeleton to fill
-in, a new character's opening straight after its card; a new piece asks the same, and a name
-piece its short form; ``Enter`` edits the text,
+in, a new character's opening straight after its card; ``Enter`` edits the text,
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
 while a live story uses it, and says which); ``D`` makes a persona the default. A name
 starting with ``_`` is kept but not listed; ``_`` shows those too, and puts them away again.
@@ -36,18 +35,14 @@ from textual.widgets import Input, Static
 from jinnverse_tui import skeletons
 from jinnverse_tui.api import (
     ApiError,
-    Built,
     ConflictError,
     Counts,
     Entry,
     EntryFull,
-    PieceEntry,
     Shelf,
     UnreachableError,
     Version,
-    Voice,
 )
-from jinnverse_tui.builder import PersonaBuilderScreen
 from jinnverse_tui.confirm import ConfirmScreen
 from jinnverse_tui.editor import editor_name
 from jinnverse_tui.hairline import Hairline
@@ -56,21 +51,17 @@ from jinnverse_tui.legend import Hint
 from jinnverse_tui.listing import Rows
 from jinnverse_tui.palette import PaletteCommand
 from jinnverse_tui.status import Kind
-from jinnverse_tui.textfmt import count, fit, pad
+from jinnverse_tui.textfmt import count, pad
 from jinnverse_tui.theme import HEADING, SELECTION
 from jinnverse_tui.view import View
 
-SHELVES: tuple[Shelf, ...] = ("characters", "personas", "snippets", "pieces")
+SHELVES: tuple[Shelf, ...] = ("characters", "personas", "snippets")
 KINDS: dict[Shelf, str] = {
     "characters": "character",
     "personas": "persona",
     "snippets": "snippet",
-    "pieces": "piece",
 }
-VOICES: tuple[Voice, ...] = ("he", "she", "they", "any")
-Mode = Literal[
-    "list", "naming", "renaming", "describing", "shorting", "short-new", "describing-new"
-]
+Mode = Literal["list", "naming", "renaming", "describing", "describing-new"]
 
 
 @dataclass(slots=True)
@@ -78,12 +69,6 @@ class Pending:
     """What ``N`` has gathered so far, one question at a time, before anything is saved."""
 
     name: str
-    slot: str | None = None
-    """A piece's slot; None for a character, persona or snippet."""
-    label: str = ""
-    """The slot's label, for the skeleton a piece's editor opens on."""
-    voice: Voice = "he"
-    short: str | None = None
 
 
 def about(entry: Entry, shelf: Shelf) -> str:
@@ -175,7 +160,6 @@ class LibraryScreen(View):
         Hint("E", "Describe"),
         Hint("F2", "Rename"),
         Hint("D", "Default persona"),
-        Hint("B", "Build persona"),
         Hint("Del", "Remove"),
         Hint("H", "History"),
         Hint("_", "Hidden"),
@@ -191,23 +175,7 @@ class LibraryScreen(View):
         Hint("Enter", "Save the description"),
         Hint("Esc", "Cancel"),
     )
-    SHORTING_HINTS: ClassVar[tuple[Hint, ...]] = (
-        Hint("Enter", "Save the short name"),
-        Hint("Esc", "Cancel"),
-    )
     ASKING_HINTS: ClassVar[tuple[Hint, ...]] = (Hint("Enter", "Go on"), Hint("Esc", "Cancel"))
-    PIECE_HINTS: ClassVar[tuple[Hint, ...]] = (
-        Hint("←→", "Shelf"),
-        Hint("Enter", "Edit the text"),
-        Hint("N", "New piece"),
-        Hint("E", "Describe"),
-        Hint("F2", "Rename"),
-        Hint("V", "Voice"),
-        Hint("S", "Short name"),
-        Hint("Del", "Remove"),
-        Hint("PgUp/PgDn", "Read"),
-        Hint("Esc", "Back"),
-    )
     AUTO_FOCUS: ClassVar[str | None] = ""
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("left", "shelf(-1)", "Previous shelf", show=False),
@@ -224,9 +192,6 @@ class LibraryScreen(View):
         Binding("e,E", "describe", "Describe", show=False),
         Binding("f2", "rename", "Rename", show=False),
         Binding("d,D", "default", "Default persona", show=False),
-        Binding("b,B", "build", "Build a persona", show=False),
-        Binding("v,V", "voice", "Voice of the piece", show=False),
-        Binding("s,S", "short", "Short name", show=False),
         Binding("delete", "remove", "Remove", show=False),
         Binding("underscore", "hidden", "Hidden entries", show=False),
         Binding("h,H", "history", "History", show=False),
@@ -266,12 +231,8 @@ class LibraryScreen(View):
             return self.RENAMING_HINTS
         if self._mode == "describing":
             return self.DESCRIBING_HINTS
-        if self._mode == "shorting":
-            return self.SHORTING_HINTS
-        if self._mode in ("short-new", "describing-new"):
+        if self._mode == "describing-new":
             return self.ASKING_HINTS
-        if self.shelf == "pieces":
-            return self.PIECE_HINTS
         return tuple(self._hidden_hint() if hint.key == "_" else hint for hint in self.HINTS)
 
     def _hidden_hint(self) -> Hint:
@@ -309,9 +270,6 @@ class LibraryScreen(View):
             PaletteCommand(
                 "Default persona", "make the selected persona the default", self.action_default
             ),
-            PaletteCommand("Build a persona", "from pieces", self.action_build),
-            PaletteCommand("Change the voice", "of the selected piece", self.action_voice),
-            PaletteCommand("Short name", "of the selected name piece", self.action_short),
             PaletteCommand("Remove the entry", "asks first", self.action_remove),
             PaletteCommand(
                 "Hidden entries", "show or put away names starting with _", self.action_hidden
@@ -366,7 +324,7 @@ class LibraryScreen(View):
         counted = await self.jinnverse.call("Counting the shelves", api.counts())
         if counted is not None:
             self._counts = counted
-        self.rows.rows_per_item = 1 if self.shelf == "pieces" else 2
+        self.rows.rows_per_item = 2
         self.rows.set_items(listed, empty=f"No {self.kind}s yet — N starts one.")
         if select is not None:
             index = next((i for i, e in enumerate(listed) if e.id == select), -1)
@@ -387,33 +345,13 @@ class LibraryScreen(View):
         self.query_one("#tabs", Static).update(Content.from_markup("  ".join(parts)))
 
     def _row(self, entry: Entry, selected: bool, width: int) -> Content:
-        """Two rows: the name, then ``about`` under it, muted. A piece takes one: its name
-        already says its slot and its voice, and its note follows it."""
-        if isinstance(entry, PieceEntry):
-            return self._piece_row(entry, selected, width)
+        """Two rows: the name, then ``about`` under it, muted."""
         marker = "★ " if self.shelf == "personas" and entry.id == self._default_persona else "  "
         name = Content(pad(f"{marker}{entry.name}", width)).markup
         line = Content(pad(f"  {about(entry, self.shelf)}", width)).markup
         if selected:
             return Content.from_markup(f"{SELECTION}{name}[/]\n{SELECTION}{line}[/]")
         return Content.from_markup(f"{name}\n[$muted]{line}[/]")
-
-    @staticmethod
-    def _piece_row(entry: PieceEntry, selected: bool, width: int) -> Content:
-        head = f"  {entry.name}"
-        if not entry.description:
-            line = Content(pad(head, width)).markup
-            return Content.from_markup(f"{SELECTION}{line}[/]" if selected else line)
-        # The note after the name, muted, as much of it as the width leaves room for.
-        room = width - len(head) - 2
-        note = fit(entry.description, room) if room > 2 else ""
-        used = len(head) + (2 + len(note) if note else 0)
-        gap = " " * max(0, width - used)
-        name = Content(head).markup
-        tail = f"  {Content(note).markup}" if note else ""
-        if selected:
-            return Content.from_markup(f"{SELECTION}{name}{tail}{gap}[/]")
-        return Content.from_markup(f"{name}[$muted]{tail}[/]{gap}")
 
     async def _show_text(self) -> None:
         entry = self.selected
@@ -426,29 +364,18 @@ class LibraryScreen(View):
             note.display = False
             prose.update("")
             return
-        if isinstance(entry, PieceEntry):
-            full: EntryFull = entry  # a piece's list already carries its whole text
-        else:
-            try:
-                full = await self.jinnverse.api.entry(self.shelf, entry.id)
-            except ApiError, UnreachableError:
-                return
+        try:
+            full = await self.jinnverse.api.entry(self.shelf, entry.id)
+        except ApiError, UnreachableError:
+            return
         self._shown = full
         used = f"used by {', '.join(full.used_by)}" if full.used_by else "used by no live story"
         if self.shelf == "snippets":
             used = "copied into a message when :name is typed"
-        if isinstance(full, PieceEntry):
-            caption.update(
-                f"{full.piece_name}   ·   {full.slot_label}   ·   {full.voice} voice   ·   "
-                f"version {full.version}"
-            )
-        else:
-            caption.update(f"{full.name}   ·   version {full.version}   ·   {used}")
+        caption.update(f"{full.name}   ·   version {full.version}   ·   {used}")
         note.display = bool(full.description)
         note.update(full.description or "")
         text = full.text
-        if isinstance(full, PieceEntry) and full.short:
-            text += f"\n\n(short form: {full.short})"
         if self.shelf == "characters":
             opening = full.opening.strip() if full.opening else "(none — O writes one)"
             text += f"\n\n=== THE OPENING ===\n\n{opening}"
@@ -496,9 +423,6 @@ class LibraryScreen(View):
         """Shows the entries whose name starts with ``_`` — kept, but not listed — or puts them
         away again. Without it, an entry renamed to ``_x`` here could not be reached here."""
         if self._mode != "list":
-            return
-        if self.shelf == "pieces":
-            self.status("A piece is never hidden: this shelf shows every one.", Kind.WARNING)
             return
         self.run_worker(self._toggle_hidden, exclusive=True)
 
@@ -550,136 +474,15 @@ class LibraryScreen(View):
     def action_new(self) -> None:
         if self._mode != "list":
             return
-        if self.shelf == "pieces":
-            self._open_field(
-                "naming",
-                "",
-                "new piece: its slot, then its name (home Penthouse); V changes the voice",
-            )
-        else:
-            self._open_field("naming", "", f"new {self.kind}: its name")
-
-    def action_voice(self) -> None:
-        shown = self._shown
-        if self._mode != "list" or not isinstance(shown, PieceEntry):
-            if self._mode == "list":
-                self.status("Only a piece has a voice.", Kind.WARNING)
-            return
-        wanted = VOICES[(VOICES.index(shown.voice) + 1) % len(VOICES)]
-        self.run_worker(partial(self._set_voice, shown, wanted), exclusive=True)
-
-    async def _set_voice(self, shown: PieceEntry, voice: Voice) -> None:
-        try:
-            saved = await self.jinnverse.api.save_piece(shown.id, shown.version, voice=voice)
-        except ConflictError as conflict:
-            self.status(conflict.detail, Kind.WARNING)
-            await self._load(False, select=shown.id)
-            return
-        except ApiError as refused:
-            self.status(refused.detail, Kind.ERROR)
-            return
-        except UnreachableError:
-            self.jinnverse.lost("The server stopped answering while saving.")
-            return
-        await self._load(False, select=saved.id)
-        self.status(f"Now written in the {saved.voice} voice.", Kind.SUCCESS)
-
-    def action_short(self) -> None:
-        shown = self._shown
-        if self._mode != "list":
-            return
-        if not isinstance(shown, PieceEntry) or shown.slot != "name":
-            self.status("Only a name piece has a short form.", Kind.WARNING)
-            return
-        self._open_field(
-            "shorting", shown.short or "", "the short name, used after the first mention"
-        )
-
-    async def _set_short(self, shown: PieceEntry, short: str) -> None:
-        if not short:
-            self.status("A name piece needs a short form.", Kind.WARNING)
-            return
-        if short == (shown.short or ""):
-            self.status("Nothing changed.")
-            return
-        try:
-            saved = await self.jinnverse.api.save_piece(shown.id, shown.version, short=short)
-        except ConflictError as conflict:
-            self.status(conflict.detail, Kind.WARNING)
-            await self._load(False, select=shown.id)
-            return
-        except ApiError as refused:
-            self.status(refused.detail, Kind.ERROR)
-            return
-        except UnreachableError:
-            self.jinnverse.lost("The server stopped answering while saving.")
-            return
-        await self._load(False, select=saved.id)
-        self.status(f"Short name: {short}.", Kind.SUCCESS)
-
-    async def _start_piece(self, answer: str) -> None:
-        """``slot [voice] name``, then the questions the web's form asks too: a name piece's
-        short form (its first word offered), and a description, which may be left empty."""
-        slots = await self.jinnverse.call("Reading the slots", self.jinnverse.api.piece_slots())
-        if slots is None:
-            return
-        words = answer.split()
-        keys = {slot.key: slot.label for slot in slots}
-        if not words or words[0].lower() not in keys:
-            self.status(f"Start with a slot: {', '.join(keys)}.", Kind.WARNING)
-            return
-        slot = words[0].lower()
-        voice: Voice = "he"
-        rest = words[1:]
-        if rest and rest[0].lower() in VOICES:
-            voice = rest[0].lower()  # type: ignore[assignment]
-            rest = rest[1:]
-        name = " ".join(rest)
-        if not name:
-            self.status("A piece needs a name.", Kind.WARNING)
-            return
-        self._pending = Pending(name, slot=slot, label=keys[slot], voice=voice)
-        if slot == "name":
-            self._open_field(
-                "short-new", name.split()[0], "the short name, used after the first mention"
-            )
-        else:
-            self._ask_description()
+        self._open_field("naming", "", f"new {self.kind}: its name")
 
     def _ask_description(self) -> None:
         self._open_field("describing-new", "", "a short note for lists — optional, Enter skips")
 
-    async def _finish_piece(self, pending: Pending, description: str | None) -> None:
-        """A name piece is its name: its text is the full name. Any other piece's text is
-        written in the editor, from the slot's skeleton."""
-        if pending.slot is None:
-            return
-        if pending.slot == "name":
-            text = pending.name
-        else:
-            before = skeletons.piece(pending.label.lower(), pending.voice)
-            self.status(f"Waiting for {editor_name()} — save and close to come back.")
-            after = self.jinnverse.editor(self.jinnverse, before, "-piece.txt")
-            if after is None or not after.strip() or after.strip() == before.strip():
-                self.status("Nothing was written.")
-                return
-            text = after.strip()
-        created = await self.jinnverse.call(
-            "Saving the piece",
-            self.jinnverse.api.create_piece(
-                pending.slot, pending.voice, pending.name, text, pending.short, description
-            ),
-        )
-        if created is None:
-            return
-        await self._load(False, select=created.id)
-        self.status(f"'{created.name}' is in the pool.", Kind.SUCCESS)
-
     def action_rename(self) -> None:
         entry = self.selected
         if self._mode == "list" and entry is not None:
-            bare = entry.piece_name if isinstance(entry, PieceEntry) else entry.name
-            self._open_field("renaming", bare, "new name")
+            self._open_field("renaming", entry.name, "new name")
 
     @on(Input.Submitted, "#name")
     def _named(self, event: Input.Submitted) -> None:
@@ -692,35 +495,19 @@ class LibraryScreen(View):
             if shown is not None:
                 self.run_worker(partial(self._describe, shown, name), exclusive=True)
             return
-        if mode == "shorting":
-            shown = self._shown
-            if isinstance(shown, PieceEntry):
-                self.run_worker(partial(self._set_short, shown, name), exclusive=True)
-            return
         pending = self._pending
-        if mode == "short-new" and pending is not None:
-            if not name:
-                self._pending = None
-                self.status("A name piece needs a short form.", Kind.WARNING)
-                return
-            pending.short = name
-            self._ask_description()
-            return
         if mode == "describing-new" and pending is not None:
             self._pending = None
-            finish = self._finish_piece if pending.slot is not None else self._create
-            self.run_worker(partial(finish, pending, name or None), exclusive=True)
+            self.run_worker(partial(self._create, pending, name or None), exclusive=True)
             return
         if not name:
             self.status(f"A {self.kind} needs a name.", Kind.WARNING)
             return
-        if mode == "naming" and self.shelf == "pieces":
-            self.run_worker(partial(self._start_piece, name), exclusive=True)
-        elif mode == "naming":
+        if mode == "naming":
             self._pending = Pending(name)
             self._ask_description()
         elif entry is not None:
-            if name == (entry.piece_name if isinstance(entry, PieceEntry) else entry.name):
+            if name == entry.name:
                 self.status("That is already its name.")
                 return
             self.run_worker(partial(self._rename, entry, name), exclusive=True)
@@ -768,9 +555,6 @@ class LibraryScreen(View):
         renamed = await self._save(entry.id, entry.version, name=name)
         if renamed is not None:
             await self._load(False, select=renamed.id)
-            if isinstance(renamed, PieceEntry):
-                self.status(f'Renamed to "{renamed.piece_name}".', Kind.SUCCESS)
-                return
             if renamed.hidden and not self._show_hidden:
                 self.status(
                     f'Renamed to "{renamed.name}": a name starting with _ is hidden. _ shows it.',
@@ -816,12 +600,6 @@ class LibraryScreen(View):
             )
         if saved is not None:
             await self._load(False, select=saved.id)
-            if self.shelf == "pieces":
-                self.status(
-                    "Saved. Personas already built from it keep the text they were made with.",
-                    Kind.SUCCESS,
-                )
-                return saved
             self.status(
                 f"Saved. Every story using '{saved.name}' sees the change from its next turn.",
                 Kind.SUCCESS,
@@ -912,31 +690,12 @@ class LibraryScreen(View):
                 Kind.SUCCESS,
             )
 
-    def action_build(self) -> None:
-        """A persona made from pieces, opened on top of this screen; the new one is selected."""
-        if self._mode != "list":
-            return
-
-        async def built(persona: Built) -> None:
-            self.shelf = "personas"
-            await self._load(False, select=persona.id)
-            self.status(
-                f"Built '{persona.name}' from pieces. It is an ordinary persona now: edit it "
-                "here like any other.",
-                Kind.SUCCESS,
-            )
-
-        self.jinnverse.push_screen(PersonaBuilderScreen(built))
-
     # -- history ---------------------------------------------------------------------------------
 
     def action_history(self) -> None:
         """Every saved version of the entry, on its own screen, where one can be put back."""
         entry = self._shown
         if self._mode != "list" or entry is None:
-            return
-        if isinstance(entry, PieceEntry):
-            self.status("A piece has no history to show.", Kind.WARNING)
             return
         self.jinnverse.push_screen(HistoryScreen(self.shelf, entry, partial(self._put_back, entry)))
 
@@ -975,12 +734,7 @@ class LibraryScreen(View):
         if self._mode != "list" or entry is None:
             return
         consequences: Sequence[str]
-        if isinstance(entry, PieceEntry):
-            consequences = (
-                "Nothing depends on a piece: personas built from it keep their own copy.",
-                "This cannot be undone.",
-            )
-        elif entry.used_by:
+        if entry.used_by:
             consequences = (
                 "The server will refuse while a live story uses it:",
                 *(f"  {name}" for name in entry.used_by),

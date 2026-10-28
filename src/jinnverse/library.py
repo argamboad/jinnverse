@@ -29,7 +29,6 @@ from jinnverse.models import (
     LibraryHistory,
     LibraryKind,
     Persona,
-    PersonaPiece,
     Snippet,
     Story,
 )
@@ -390,15 +389,13 @@ class Counts(BaseModel):
     characters: int
     personas: int
     snippets: int
-    pieces: int
     hidden: Hidden
     """Entries whose name starts with `_` are kept but not listed, and so not counted above."""
 
 
 @router.get("/counts")
 async def read_counts(session: Session) -> Counts:
-    """One call for every shelf, so a screen showing one can badge all of them. The persona
-    pieces are counted too; they have no hidden names, a list of them shows every one."""
+    """One call for every shelf, so a screen showing one can badge all of them."""
     shown: dict[str, int] = {}
     hidden: dict[str, int] = {}
     for slug, model in (
@@ -415,8 +412,7 @@ async def read_counts(session: Session) -> Counts:
         )
         shown[slug] = total - underscored
         hidden[slug] = underscored
-    pieces = await session.scalar(select(func.count()).select_from(PersonaPiece)) or 0
-    return Counts(**shown, pieces=pieces, hidden=Hidden(**hidden))
+    return Counts(**shown, hidden=Hidden(**hidden))
 
 
 @router.get("/{shelf}")

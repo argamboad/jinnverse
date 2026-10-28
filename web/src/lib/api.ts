@@ -95,47 +95,6 @@ export interface EntryFull extends Entry {
 
 export type Shelf = 'characters' | 'personas' | 'snippets';
 
-/** The pronouns a persona piece is written in; `any` is a piece with none in it. */
-export type Voice = 'he' | 'she' | 'they' | 'any';
-
-/** One of the fixed places a persona is built from, in the order a builder shows them. */
-export interface Slot {
-	key: string;
-	label: string;
-	/** Which paragraph it writes; null for the name, which is written into the others. */
-	paragraph: number | null;
-}
-
-/** One piece of a persona: a slot, a voice, a name for the picker and the text. */
-export interface Piece {
-	id: string;
-	slot: string;
-	voice: Voice;
-	name: string;
-	text: string;
-	/** A name piece only: the short form the text uses after the first mention. */
-	short: string | null;
-	/** The owner's short note; the pool shows it in place of the start of the text. */
-	description: string | null;
-	version: number;
-	updated_at: string;
-}
-
-/** The persona a pick would make, and the library name it would get (null: nothing says). */
-export interface PersonaPreview {
-	name: string | null;
-	text: string;
-}
-
-export interface BuiltPersona {
-	id: string;
-	name: string;
-	text: string;
-}
-
-/** A pick: the pieces chosen for each slot, in the order they should read. */
-export type Picks = Record<string, string[]>;
-
 export interface HistoryEntry {
 	version: number;
 	name: string;
@@ -145,12 +104,11 @@ export interface HistoryEntry {
 	saved_at: string;
 }
 
-/** How many entries each shelf holds, as its list shows them (the pieces too). */
+/** How many entries each shelf holds, as its list shows them. */
 export interface Counts {
 	characters: number;
 	personas: number;
 	snippets: number;
-	pieces: number;
 	/** `_name` entries are kept but not listed, so they are not counted above. */
 	hidden: { characters: number; personas: number; snippets: number };
 }
@@ -620,35 +578,6 @@ export const api = {
 		call('DELETE', `/library/${shelf}/${id}`).then(() => undefined),
 	history: (shelf: Shelf, id: string) =>
 		json<HistoryEntry[]>('GET', `/library/${shelf}/${id}/history`),
-	pieceSlots: () => json<Slot[]>('GET', '/persona-pieces/slots'),
-	/** The pool; with a voice, the pieces a persona of that voice may use. */
-	pieces: (voice?: Voice) =>
-		json<Piece[]>('GET', voice ? `/persona-pieces?voice=${voice}` : '/persona-pieces'),
-	createPiece: (body: {
-		slot: string;
-		voice: Voice;
-		name: string;
-		text: string;
-		short?: string | null;
-		description?: string | null;
-	}) => json<Piece>('POST', '/persona-pieces', body),
-	/** A save over `version`; a stale one is refused with 409 and the piece as it is now. */
-	savePiece: (
-		id: string,
-		body: {
-			version: number;
-			name?: string;
-			voice?: Voice;
-			text?: string;
-			short?: string | null;
-			description?: string | null;
-		}
-	) => json<Piece>('PATCH', `/persona-pieces/${id}`, body),
-	deletePiece: (id: string) => call('DELETE', `/persona-pieces/${id}`).then(() => undefined),
-	previewPersona: (voice: Voice, pieces: Picks, name?: string | null) =>
-		json<PersonaPreview>('POST', '/persona-pieces/preview', { voice, pieces, name: name || null }),
-	buildPersona: (voice: Voice, pieces: Picks, name?: string | null) =>
-		json<BuiltPersona>('POST', '/persona-pieces/build', { voice, pieces, name: name || null }),
 	spend: (from?: string) =>
 		json<SpendReport>('GET', from ? `/spend?from_at=${encodeURIComponent(from)}` : '/spend'),
 	storySpend: (storyId: string) => json<StorySpend>('GET', `/stories/${storyId}/spend`),

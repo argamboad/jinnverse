@@ -132,18 +132,3 @@ async def test_a_put_back_over_a_save_made_elsewhere_meets_the_conflict_screen(
         await pilot.pause(0.4)
         assert isinstance(app.screen, ConflictScreen)
         assert elena["text"] == "Changed on the phone."  # nothing overwritten by accident
-
-
-async def test_a_piece_has_no_history_to_show(app: JinnverseApp, server: fake.FakeServer) -> None:
-    server.piece("look", "Athletic", "{short} is athletic.")
-    async with app.run_test(size=(120, 30)) as pilot:
-        await pilot.pause(0.1)
-        await pilot.press("m")
-        await pilot.pause(0.3)
-        await pilot.press("left")  # round to the pieces
-        await pilot.pause(0.3)
-        await pilot.press("h")
-        await pilot.pause()
-        screen = app.screen
-        assert isinstance(screen, LibraryScreen)
-        assert screen.status_line.text == "A piece has no history to show."

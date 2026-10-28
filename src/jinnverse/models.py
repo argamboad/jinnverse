@@ -59,32 +59,6 @@ class Role(StrEnum):
     SYSTEM = "system"
 
 
-class PieceSlot(StrEnum):
-    """The fixed places a persona is built from. Their order here is the order of the persona's
-    paragraphs, and the list is closed on purpose: a persona has to come out in the card's
-    format, and free text dropped into one may be ignored or overused by the model."""
-
-    NAME = "name"
-    LOOK = "look"
-    """Identity and look, with the style and the marks: three paragraphs in one piece (#254)."""
-    FAMILY = "family"
-    WORK = "work"
-    HOME = "home"
-    VEHICLE = "vehicle"
-    PETS = "pets"
-    PERSONALITY = "personality"
-    """Personality and values, with the humour and the passions, likewise."""
-
-
-class Voice(StrEnum):
-    """The pronouns a piece is written in. `any` is for a piece with no pronouns in it."""
-
-    HE = "he"
-    SHE = "she"
-    THEY = "they"
-    ANY = "any"
-
-
 class SpendKind(StrEnum):
     """What a billed call was doing."""
 
@@ -192,36 +166,6 @@ class Snippet(LibraryEntry, Base):
     __table_args__ = (Index("uq_snippets_name_lower", text("lower(name)"), unique=True),)
 
     text: Mapped[str] = mapped_column(Text)
-
-
-class PersonaPiece(LibraryEntry, Base):
-    """One piece of a persona, for one slot, written in one voice. A persona is built from a
-    pick of these and the text is copied into it: editing a piece later changes no persona."""
-
-    __tablename__ = "persona_pieces"
-    __table_args__ = (
-        Index(
-            "uq_persona_pieces_slot_voice_name_lower",
-            "slot",
-            "voice",
-            text("lower(name)"),
-            unique=True,
-        ),
-        CheckConstraint(
-            "slot IN ('name', 'look', 'family', 'work', 'home', 'vehicle', 'pets', 'personality')",
-            name="slot",
-        ),
-        CheckConstraint("voice IN ('he', 'she', 'they', 'any')", name="voice"),
-        CheckConstraint("(slot = 'name') = (short IS NOT NULL)", name="short_only_for_names"),
-    )
-
-    slot: Mapped[PieceSlot] = mapped_column(_stored_as_text(PieceSlot))
-    voice: Mapped[Voice] = mapped_column(_stored_as_text(Voice))
-    text: Mapped[str] = mapped_column(Text)
-    """The piece as it will read, with `{name}` and `{short}` where the persona's name goes. For a
-    name piece, the full name."""
-    short: Mapped[str | None] = mapped_column(String(100))
-    """A name piece only: the short form the text uses after the first mention ("Allan")."""
 
 
 class AppSettings(Base):
