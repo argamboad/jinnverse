@@ -24,9 +24,9 @@ on Render's `$PORT`, health check `/health`, automatic deploys off.
 1. Render's GitHub app must be allowed to read the private repository `argamboad/jinnverse`
    (GitHub → Settings → Applications → Render → Repository access).
 2. Render → **New → Blueprint** → `argamboad/jinnverse`. It reads `render.yaml` and creates
-   `lustjinn-staging` on the free plan. (The services were created when the app was Lustjinn and
-   keep that name, and the `onrender.com` URLs it gave them: Render cannot rename a URL, and the
-   blueprint matches a service by name — Step 21, #252.)
+   `jinnverse-staging` on the free plan. (The services were created when the app was Lustjinn,
+   renamed in the dashboard on 2026-10-21, and keep the `onrender.com` URLs they were given:
+   Render cannot rename a URL. The blueprint matches a service by name — Step 21, #252.)
 3. Note the service URL (`https://….onrender.com`).
 4. Service → **Settings → Deploy Hook**: copy the URL. It contains a key — treat it as a password.
 
@@ -59,7 +59,7 @@ table Neon does not have yet fails on the first request that touches it.
 
 ### 3. Render: the API's environment
 
-Render → `lustjinn-staging` → **Environment**. Every variable is read by `src/jinnverse/settings.py`
+Render → `jinnverse-staging` → **Environment**. Every variable is read by `src/jinnverse/settings.py`
 and documented in `.env.example`; the names are the same, there is just no `.env` in the cloud.
 
 | Variable | Value |
@@ -98,7 +98,7 @@ Without the hook secret, a deploy run ends green with a notice and deploys nothi
 
 ## The web app: a static site
 
-The PWA is a second service in `render.yaml`, `lustjinn-web-staging`: a **static site**, so it never
+The PWA is a second service in `render.yaml`, `jinnverse-web-staging`: a **static site**, so it never
 sleeps and opens instantly, and shows the lamp while the API wakes. Render builds it from `web/`
 (`npm ci && npm run build`), serves `build/`, rewrites every path to `index.html` (a single-page
 app), and the build writes the commit to `/version.txt` for the deploy run to check.
@@ -108,7 +108,7 @@ The site and the API have to know each other, which makes the first deploy a two
 1. **The API's URL goes into the site's build.** Render → the static site → **Environment** →
    `VITE_API_URL` = the API service's URL (`https://lustjinn-staging.onrender.com`, no trailing
    slash). It is baked in at build time, so a change needs a new build.
-2. **The site's URL goes into the API's CORS list.** Render → `lustjinn-staging` → **Environment** →
+2. **The site's URL goes into the API's CORS list.** Render → `jinnverse-staging` → **Environment** →
    `JINNVERSE_CORS_ORIGINS` = `["https://lustjinn-web-staging.onrender.com"]`. Without it the
    browser is refused on every call; the API itself never is.
 
