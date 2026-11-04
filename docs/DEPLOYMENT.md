@@ -71,7 +71,9 @@ and documented in `.env.example`; the names are the same, there is just no `.env
 | `JINNVERSE_CORS_ORIGINS` | `["https://lustjinn-web-staging.onrender.com"]` — the static site, as a JSON list (see below) |
 
 The optional ones (`JINNVERSE_MODEL`, `JINNVERSE_CONTEXT_BUDGET`, the provider lists…) keep their
-defaults unless set; `.env.example` lists them all with their defaults. Two of them are about
+defaults unless set; `.env.example` lists them all with their defaults — and, beside
+`JINNVERSE_MODEL`, the candidate models with their context, price and the caveat each carries.
+A different model is that one variable, for every story at once. Two of them are about
 exposure, and their defaults are the deployed ones, so leave them unset on Render:
 
 - `JINNVERSE_DOCS` — off: `/docs`, `/redoc` and `/openapi.json` answer 404. Only `.env` turns them
