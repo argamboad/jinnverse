@@ -8,10 +8,13 @@ piece of such a card moved out of it: a cast member's sheet, a building, a timet
 the keys that bring it in — a name, a nickname, a role, a place — and comes into the prompt only
 while one of them is in the scene.
 
-What is here: the entries' API under a character. The matcher that picks the entries for a turn
-is the next issue (#267).
+What is here: the entries' API under a character, and the matcher that picks the entries for a
+turn. The matcher is pure; the builder (`context.py`) fits what it picks under a share of the
+budget and places it after the history, beside the memories, where a change of scene does not
+break the cached prefix.
 """
 
+import re
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
@@ -23,9 +26,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
 
+from jinnverse.blocks import RECENT_TURNS
+from jinnverse.context import Lore
 from jinnverse.deps import Session
 from jinnverse.library import check_description, check_name
-from jinnverse.models import Character, LibraryHistory, LibraryKind, LoreEntry
+from jinnverse.models import Character, LibraryHistory, LibraryKind, LoreEntry, Message, StatusValue
 
 router = APIRouter(prefix="/library/characters/{character_id}/lore", tags=["library"])
 
@@ -280,3 +285,70 @@ async def delete_lore(character_id: uuid.UUID, entry_id: uuid.UUID, session: Ses
     entry = await _one(session, character_id, entry_id)
     await session.delete(entry)
     await session.commit()
+
+
+# -- the matcher ----------------------------------------------------------------------------------
+
+LOOKBACK = 6
+"""How many of the newest turns an entry's keys are looked for in: the scene in progress, the same
+six the summariser never compresses. One turn would drop a character from the prompt the moment
+nobody named her; six keeps her through a short exchange about something else."""
+
+
+def _pattern(keys: Sequence[str]) -> re.Pattern[str]:
+    """One pattern for all the keys: each as whole words, so `jax` is not in `jaxon` but is in
+    `Jax's`. Case does not matter; accents do, since the text spells them."""
+    alternatives = "|".join(re.escape(key) for key in keys)
+    return re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)", re.IGNORECASE)
+
+
+def matched(
+    entries: Sequence[LoreEntry], recent: Sequence[str], status_lines: Sequence[str] = ()
+) -> list[Lore]:
+    """The entries called for by the last `LOOKBACK` of `recent` (oldest first) or by the status
+    block's lines, freshest first; ties in creation order. An entry's own text is never looked
+    in, so one entry cannot bring in another."""
+    scene = list(recent[-LOOKBACK:])
+    status_text = "\n".join(status_lines)
+    found: list[Lore] = []
+    for position, entry in enumerate(entries):
+        if not entry.keys:
+            continue
+        pattern = _pattern(entry.keys)
+        if status_text and pattern.search(status_text):
+            found.append(Lore(position, entry.text, len(scene)))
+            continue
+        newest = next((i for i in range(len(scene) - 1, -1, -1) if pattern.search(scene[i])), None)
+        if newest is not None:
+            found.append(Lore(position, entry.text, newest))
+    found.sort(key=lambda hit: (-hit.freshness, hit.position))
+    return found
+
+
+async def status_lines(session: AsyncSession, story_id: uuid.UUID, newest: int) -> list[str]:
+    """What the status block says the scene is: the scene's values (the place, the time), and
+    the names of the characters whose lines were written within `RECENT_TURNS` of `newest` —
+    the same rule by which the block itself shows them. A place named there keeps its entry in
+    the prompt for as long as the scene stays there, whether or not anyone says its name."""
+    rows = await session.scalars(select(StatusValue).where(StatusValue.story_id == story_id))
+    lines: list[str] = []
+    for value in rows:
+        if not value.subject_key:
+            lines.append(value.value)
+        elif (value.updated_at_sequence or 0) >= newest - RECENT_TURNS:
+            lines.append(value.subject)
+    return lines
+
+
+async def for_turn(
+    session: AsyncSession, character_id: uuid.UUID, story_id: uuid.UUID, history: Sequence[Message]
+) -> list[Lore]:
+    """The entries the next prompt of a story gets: the character's, matched against the end
+    of the visible transcript and the status block. A character without entries costs one
+    query and nothing else."""
+    entries = await entries_of(session, character_id)
+    if not entries:
+        return []
+    newest = history[-1].sequence if history else 0
+    lines = await status_lines(session, story_id, newest)
+    return matched(entries, [turn.text for turn in history], lines)

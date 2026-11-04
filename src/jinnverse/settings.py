@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     """The share of the budget recalled memories may take, whatever their count: four long
     recalled turns once filled a 60,000-token prompt."""
 
+    lore_percent: int = Field(default=20, ge=0, le=50)
+    """The share of the budget the lorebook's entries may take in one prompt, whatever their
+    count (#267). A scene at a crowded bar could call for eight sheets of five hundred tokens;
+    the freshest mentions are kept first."""
+
     prefer_providers: list[str] = []
     """OpenRouter hosts to try first, by slug, as a JSON list. Others follow unless fallbacks
     are off."""

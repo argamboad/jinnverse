@@ -1,8 +1,8 @@
 """The context builder: what the model is sent, assembled from layers in a fixed order.
 
 The order is least volatile first — character, persona, directives, world, summaries, history,
-recalled memories, trackers, status, reminders, instruction — because a provider's prefix cache
-keeps everything up to the first byte that changed. The card never changes; the instruction
+recalled memories, lore, trackers, status, reminders, instruction — because a provider's prefix
+cache keeps everything up to the first byte that changed. The card never changes; the instruction
 changes every turn. Put retrieval in the middle and the cache would break on every turn.
 
 Pure functions over dataclasses: nothing here touches the database or the network, so every rule
@@ -34,6 +34,13 @@ inner thoughts stopped within fifty replies while the dial stayed on (#167). The
 for it say it again here, after the history, where a model weighs it most."""
 WORLD_FRAME = "What is true in this story right now:\n"
 MEMORIES_FRAME = "Earlier in this conversation:\n"
+LORE_FRAME = (
+    "About the people and places of this scene, as the author of this world wrote them:\n\n"
+)
+"""The lorebook's layer (#267): the entries the scene called for, in the order of the card they
+came from. After the history, beside the memories, for the same reason the memories are there:
+it changes with the scene, and a layer that changes before the history breaks the cached prefix
+every turn."""
 
 
 def ask_directive(question: str) -> str:
@@ -70,6 +77,19 @@ class Recalled:
     text: str
 
 
+@dataclass(frozen=True)
+class Lore:
+    """An entry of the character's lorebook the scene called for (#267)."""
+
+    position: int
+    """Where the entry stands among the character's entries: the order the layer is sent in."""
+    text: str
+    freshness: int
+    """How recently it was called for: the index of the newest turn that holds one of its keys,
+    or past every turn when the status block holds one. The freshest are kept first when the
+    cap binds."""
+
+
 def reader_name(persona: Persona | None) -> str:
     """How the reader is named in anything a model reads. Never "User": a model told about
     "User" writes a story with a user in it."""
@@ -80,6 +100,14 @@ def world_layer(facts: Sequence[Fact]) -> str | None:
     if not facts:
         return None
     return WORLD_FRAME + "\n".join(f"{fact.subject}: {fact.text}" for fact in facts)
+
+
+def lore_layer(entries: Sequence[Lore]) -> str | None:
+    """The entries as the model reads them: the texts whole, in the order of the card. The name
+    of an entry is the editor's handle, as a snippet's is, and is not sent."""
+    if not entries:
+        return None
+    return LORE_FRAME + "\n\n".join(entry.text.strip() for entry in entries)
 
 
 def memories_layer(
@@ -109,6 +137,8 @@ class Layers:
     """The visible transcript, in order."""
     memories: Sequence[Recalled] = ()
     """Recalled turns, most relevant first (step 6)."""
+    lore: Sequence[Lore] = ()
+    """The lorebook's entries the scene called for, freshest first (#267)."""
     trackers: str | None = None
     """The meters, rendered (step 7)."""
     status: str | None = None
@@ -170,6 +200,19 @@ def _fit_memories(
     return memories_layer(kept, character, persona), len(recalled) - len(kept)
 
 
+def _fit_lore(entries: Sequence[Lore], cap: int | None) -> tuple[str | None, int]:
+    """The lore layer under its cap: freshest first, each kept if it still fits, then put back
+    in the order of the card. Returns the layer and how many entries were left out."""
+    kept: list[Lore] = []
+    for entry in entries:
+        attempt = lore_layer([*kept, entry])
+        if cap is not None and attempt is not None and tokens.for_message(attempt) > cap:
+            continue
+        kept.append(entry)
+    kept.sort(key=lambda entry: entry.position)
+    return lore_layer(kept), len(entries) - len(kept)
+
+
 def _fit_history(history: Sequence[Message], room: int | None) -> tuple[list[Message], int]:
     """The newest turns that fit in `room`, newest first, stopping at the first that does not.
 
@@ -198,6 +241,7 @@ ORDER = (
     "summaries",
     "history",
     "memories",
+    "lore",
     "trackers",
     "status",
     "reminders",
@@ -205,13 +249,16 @@ ORDER = (
 )
 
 
-def build(layers: Layers, *, budget: int | None = None, recall_percent: int = 10) -> Built:
+def build(
+    layers: Layers, *, budget: int | None = None, recall_percent: int = 10, lore_percent: int = 20
+) -> Built:
     """Assembles the prompt, least volatile first; a layer with nothing in it is left out.
 
     Every layer but the history is fixed: it goes in whole. The history gets what is left of the
     budget, newest turns first, and gives way oldest first when the budget binds. Recalled
     memories are capped at `recall_percent` of the budget, whatever their count: four long
-    recalled turns once filled a 60,000-token prompt.
+    recalled turns once filled a 60,000-token prompt. The lore is capped at `lore_percent` the
+    same way: a scene at a crowded bar could call for eight sheets of five hundred tokens.
 
     The instruction goes as `user` when the transcript ends on a reply and as `system` when it
     ends on the reader's own turn — a model given two user turns in a row tends to answer the
@@ -229,6 +276,9 @@ def build(layers: Layers, *, budget: int | None = None, recall_percent: int = 10
     memories, memories_dropped = _fit_memories(
         layers.memories, layers.character, layers.persona, cap
     )
+    lore, lore_dropped = _fit_lore(
+        layers.lore, None if budget is None else budget * lore_percent // 100
+    )
     before = [
         fixed("character", layers.character.card),
         fixed("persona", None if layers.persona is None else PERSONA_FRAME + layers.persona.text),
@@ -238,6 +288,7 @@ def build(layers: Layers, *, budget: int | None = None, recall_percent: int = 10
     ]
     after = [
         fixed("memories", memories, memories_dropped),
+        fixed("lore", lore, lore_dropped),
         fixed("trackers", layers.trackers),
         fixed("status", layers.status),
         fixed("reminders", layers.reminders and REMINDERS_FRAME + layers.reminders),

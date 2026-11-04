@@ -6,12 +6,14 @@ Pure tests — no database, no network — on the dummy character, which is the 
 from jinnverse import tokens
 from jinnverse.context import (
     DIRECTIVES_FRAME,
+    LORE_FRAME,
     MEMORIES_FRAME,
     PERSONA_FRAME,
     REMINDERS_FRAME,
     WORLD_FRAME,
     Fact,
     Layers,
+    Lore,
     Recalled,
     build,
     reader_name,
@@ -44,6 +46,7 @@ def test_the_layers_are_sent_least_volatile_first(dummy: Dummy) -> None:
             summaries=["Rowan arrived in the fog and took room seven."],
             history=turns("I take the stairs.", "*The stair creaks.*"),
             memories=[Recalled(2, Role.ASSISTANT, "Room seven. Back stairs or front.")],
+            lore=[Lore(1, "PELL — the night porter.", 1)],
             trackers="[TRUST] ##........ 20/100",
             reminders="End on the inner thoughts line.",
             instruction="Keep this one short.",
@@ -58,10 +61,11 @@ def test_the_layers_are_sent_least_volatile_first(dummy: Dummy) -> None:
     assert contents[4] == "Rowan arrived in the fog and took room seven."
     assert contents[5:7] == ["I take the stairs.", "*The stair creaks.*"]
     assert contents[7] == MEMORIES_FRAME + "[2] The Gilded Heron: Room seven. Back stairs or front."
-    assert contents[8] == "[TRUST] ##........ 20/100"
-    assert contents[9] == REMINDERS_FRAME + "End on the inner thoughts line."
-    assert contents[10] == "Keep this one short."
-    assert len(contents) == 11
+    assert contents[8] == LORE_FRAME + "PELL — the night porter."
+    assert contents[9] == "[TRUST] ##........ 20/100"
+    assert contents[10] == REMINDERS_FRAME + "End on the inner thoughts line."
+    assert contents[11] == "Keep this one short."
+    assert len(contents) == 12
     assert list(built.spent) == [
         "character",
         "persona",
@@ -70,6 +74,7 @@ def test_the_layers_are_sent_least_volatile_first(dummy: Dummy) -> None:
         "summaries",
         "history",
         "memories",
+        "lore",
         "trackers",
         "reminders",
         "instruction",
