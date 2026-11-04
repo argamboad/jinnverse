@@ -4,6 +4,9 @@ import {
 	blurb,
 	entryMeta,
 	hiddenCount,
+	keysLine,
+	keysNote,
+	parseKeys,
 	remaining,
 	saveNote,
 	sentDescription
@@ -72,5 +75,24 @@ describe('a description as typed and as sent', () => {
 		expect(sentDescription('  A cook.  ')).toBe('A cook.');
 		expect(sentDescription('   ')).toBeNull();
 		expect(sentDescription('')).toBeNull();
+	});
+});
+
+describe('the keys of a lore entry', () => {
+	it('are read from one line, split on commas or line breaks, trimmed and lowercased', () => {
+		expect(parseKeys(' Jax, BARTENDER\nthe  Brewery ,')).toEqual([
+			'jax',
+			'bartender',
+			'the brewery'
+		]);
+	});
+	it('drop blanks and repeats and keep the order typed', () => {
+		expect(parseKeys('jax, , Jax, mags')).toEqual(['jax', 'mags']);
+		expect(parseKeys('   ')).toEqual([]);
+	});
+	it('go back on one line, and read as a note under the name', () => {
+		expect(keysLine(['jax', 'the brewery'])).toBe('jax, the brewery');
+		expect(keysNote(['jax', 'the brewery'])).toBe('jax · the brewery');
+		expect(keysNote([])).toBe('no keys — never sent');
 	});
 });

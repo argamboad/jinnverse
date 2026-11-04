@@ -28,7 +28,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column, relationship
 
 
@@ -116,6 +116,8 @@ class LibraryKind(StrEnum):
     CHARACTER = "character"
     PERSONA = "persona"
     SNIPPET = "snippet"
+    LORE = "lore"
+    """One entry of a character's lorebook (#266)."""
 
 
 class LibraryHistory(Base):
@@ -123,7 +125,7 @@ class LibraryHistory(Base):
 
     __tablename__ = "library_history"
     __table_args__ = (
-        CheckConstraint("kind IN ('character', 'persona', 'snippet')", name="kind"),
+        CheckConstraint("kind IN ('character', 'persona', 'snippet', 'lore')", name="kind"),
         Index("ix_library_history_entry", "entry_id", "version"),
     )
 
@@ -148,6 +150,35 @@ class Character(LibraryEntry, Base):
     card: Mapped[str] = mapped_column(Text)
     opening: Mapped[str | None] = mapped_column(Text)
     """The scene a story with this character starts on, written by a person."""
+
+
+class LoreEntry(LibraryEntry, Base):
+    """One entry of a character's lorebook (#266): authored text sent only when one of its keys
+    is in the scene. A card of forty-three characters sent whole leaves the story no room; as
+    entries, the three in the room come in and the forty stay out.
+
+    Belongs to its character: deleting the character takes the entries with it (CASCADE), and
+    the character cannot go while a live story uses it, so nothing in play loses them. Listed
+    in creation order — the ids are UUIDv7 — which is the order of the card they came from.
+    """
+
+    __tablename__ = "lore_entries"
+    __table_args__ = (
+        Index(
+            "uq_lore_entries_character_name_lower",
+            "character_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+    )
+
+    character_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), index=True
+    )
+    keys: Mapped[list[str]] = mapped_column(ARRAY(String(60)))
+    """The words that bring the entry in, lowercased and trimmed: a name, a nickname, a role,
+    a place. A key may hold spaces (`preston centre`); it matches as whole words, case aside."""
+    text: Mapped[str] = mapped_column(Text)
 
 
 class Persona(LibraryEntry, Base):

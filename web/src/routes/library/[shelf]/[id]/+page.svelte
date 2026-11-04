@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import AppBar from '#lib/AppBar.svelte';
 	import LibraryRail from '#lib/LibraryRail.svelte';
+	import LorePanel from '#lib/LorePanel.svelte';
 	import SaveBar from '#lib/SaveBar.svelte';
 	import Sheet from '#lib/Sheet.svelte';
 	import {
@@ -53,6 +54,8 @@
 	let history = $state<HistoryEntry[] | null>(null);
 	let historyOpen = $state(false);
 	let deleting = $state(false);
+	/** Whether an entry of the character's lore has unsaved changes in its own editor. */
+	let loreDirty = $state(false);
 	/** For a persona: which one plays in every story that names none. */
 	let defaults = $state<Defaults | null>(null);
 	const isDefault = $derived(entry !== null && defaults?.default_persona_id === entry.id);
@@ -76,7 +79,7 @@
 			: ''
 	);
 
-	const guard = guardLeaving(() => dirty);
+	const guard = guardLeaving(() => dirty || loreDirty);
 
 	// The wide rail opens another entry without leaving this page: read it whenever the id changes.
 	let shownKey = '';
@@ -433,6 +436,9 @@
 							<textarea class="input prose doc" id="entry-opening" bind:value={opening} rows="4"
 							></textarea>
 						</label>
+					{/if}
+					{#if shelf === 'characters' && entry}
+						<LorePanel characterId={entry.id} characterName={entry.name} bind:dirty={loreDirty} />
 					{/if}
 					{#if !creating}
 						{#if deleting}

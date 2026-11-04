@@ -48,3 +48,25 @@ export function saveNote(one: string, used: number, next: number, wide: boolean)
 		? `Unsaved changes · the story using this ${one} reads v${next} from its next turn`
 		: `Unsaved changes · the ${used} stories using this ${one} read v${next} from their next turn`;
 }
+
+/** The keys of a lore entry as typed on one line — `Jax, bartender, the Brewery` — read into the
+ * list the API keeps: split on commas and line breaks, trimmed, lowercased, blanks and repeats
+ * dropped. Inner spaces stay: `preston centre` is one key. */
+export function parseKeys(line: string): string[] {
+	const seen = new Set<string>();
+	for (const piece of line.split(/[,\n]/)) {
+		const key = piece.trim().toLowerCase().replace(/\s+/g, ' ');
+		if (key) seen.add(key);
+	}
+	return [...seen];
+}
+
+/** The keys back on one line, for the field. */
+export function keysLine(keys: readonly string[]): string {
+	return keys.join(', ');
+}
+
+/** What a list says under an entry's name: its keys, or that it has none. */
+export function keysNote(keys: readonly string[]): string {
+	return keys.length ? keys.join(' · ') : 'no keys — never sent';
+}

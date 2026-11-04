@@ -14,8 +14,8 @@ from dataclasses import dataclass, replace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jinnverse import background, ledger, tokens
-from jinnverse.context import Built, Layers, Recalled, build, reader_name
+from jinnverse import background, ledger, lore, tokens
+from jinnverse.context import Built, Layers, Lore, Recalled, build, reader_name
 from jinnverse.context import Fact as WorldFact
 from jinnverse.models import (
     EMBEDDING_DIMENSIONS,
@@ -395,6 +395,9 @@ async def compose(
     summaries = await summaries_of(session, story.id)
     covered = summaries[-1].to_sequence if summaries else 0
     recent = [turn for turn in history if turn.sequence > covered]
+    # The lorebook's entries the scene calls for: matched once, on the end of the transcript and
+    # the status block, which no summary made along the way changes.
+    called: Sequence[Lore] = await lore.for_turn(session, story.character_id, story.id, history)
 
     def layers(
         turns: Sequence[Message],
@@ -409,6 +412,7 @@ async def compose(
             summaries=[s.text for s in summaries],
             history=turns,
             memories=memories,
+            lore=called,
             trackers=trackers,
             status=status,
             reminders=reminders,
@@ -446,6 +450,7 @@ async def compose(
             layers(recent, recalled, facts.world(live)),
             budget=None if failed else settings.context_budget,
             recall_percent=settings.recall_percent,
+            lore_percent=settings.lore_percent,
         )
         # The reserve is an estimate made before the facts and the recalled turns are known.
         # When the real prompt is larger, the builder drops the oldest turns no summary covers:

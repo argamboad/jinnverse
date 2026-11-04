@@ -9,6 +9,7 @@ its stories go first.
 """
 
 import asyncio
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,12 +25,24 @@ PERSONA_NAME = "Rowan Hale"
 
 
 @dataclass(frozen=True)
+class DummyLore:
+    """One lore entry of realistic size: a cast sheet of the dummy card, with the keys that
+    bring it in. For the tests of the lorebook (#267); the seed does not add them, since the
+    card carries its cast whole and would then say everything twice."""
+
+    name: str
+    keys: tuple[str, ...]
+    text: str
+
+
+@dataclass(frozen=True)
 class Dummy:
     character_name: str
     card: str
     opening: str
     persona_name: str
     persona: str
+    lore: tuple[DummyLore, ...] = ()
 
 
 def load() -> Dummy:
@@ -38,12 +51,16 @@ def load() -> Dummy:
     def read(name: str) -> str:
         return (FIXTURES / name).read_text(encoding="utf-8").strip() + "\n"
 
+    entries = json.loads((FIXTURES / "lore.json").read_text(encoding="utf-8"))
     return Dummy(
         character_name=CHARACTER_NAME,
         card=read("character.txt"),
         opening=read("opening.txt"),
         persona_name=PERSONA_NAME,
         persona=read("persona.txt"),
+        lore=tuple(
+            DummyLore(e["name"], tuple(e["keys"]), e["text"].strip() + "\n") for e in entries
+        ),
     )
 
 

@@ -104,6 +104,20 @@ export interface HistoryEntry {
 	saved_at: string;
 }
 
+/** One entry of a character's lorebook: authored text sent only while one of its keys is in
+ * the scene. Listed in the order they were made, the order of the card they came from. */
+export interface LoreEntry {
+	id: string;
+	character_id: string;
+	name: string;
+	/** Lowercased and trimmed, as the API keeps them; matched as whole words, case aside. */
+	keys: string[];
+	text: string;
+	description: string | null;
+	version: number;
+	updated_at: string;
+}
+
 /** How many entries each shelf holds, as its list shows them. */
 export interface Counts {
 	characters: number;
@@ -578,6 +592,18 @@ export const api = {
 		call('DELETE', `/library/${shelf}/${id}`).then(() => undefined),
 	history: (shelf: Shelf, id: string) =>
 		json<HistoryEntry[]>('GET', `/library/${shelf}/${id}/history`),
+	/** A character's lorebook, whole: the texts come with the list. */
+	lore: (characterId: string) =>
+		json<LoreEntry[]>('GET', `/library/characters/${characterId}/lore`),
+	createLore: (characterId: string, body: { name: string; keys: string[]; text: string }) =>
+		json<LoreEntry>('POST', `/library/characters/${characterId}/lore`, body),
+	saveLore: (
+		characterId: string,
+		id: string,
+		body: { version: number; name?: string; keys?: string[]; text?: string }
+	) => json<LoreEntry>('PATCH', `/library/characters/${characterId}/lore/${id}`, body),
+	deleteLore: (characterId: string, id: string) =>
+		call('DELETE', `/library/characters/${characterId}/lore/${id}`).then(() => undefined),
 	spend: (from?: string) =>
 		json<SpendReport>('GET', from ? `/spend?from_at=${encodeURIComponent(from)}` : '/spend'),
 	storySpend: (storyId: string) => json<StorySpend>('GET', `/stories/${storyId}/spend`),

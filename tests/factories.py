@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from jinnverse.models import (
     Character,
+    LoreEntry,
     Message,
     Persona,
     Role,
@@ -27,6 +28,19 @@ async def a_character(
     session.add(character)
     await session.flush()
     return character
+
+
+async def a_lore_entry(
+    session: AsyncSession,
+    character: Character,
+    name: str = "Jax",
+    keys: tuple[str, ...] = ("jax", "bartender"),
+    text: str = "Jax tends the bar and hears everything.",
+) -> LoreEntry:
+    entry = LoreEntry(character_id=character.id, name=name, keys=list(keys), text=text)
+    session.add(entry)
+    await session.flush()
+    return entry
 
 
 async def a_persona(session: AsyncSession, name: str | None = None) -> Persona:

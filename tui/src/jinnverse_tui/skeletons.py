@@ -45,6 +45,13 @@ once, in their own voice, establishes them better than paragraphs describing the
 """
 
 
+LORE: Final = """\
+[ A piece of the card moved out of it — a character's sheet, a place, a timetable — sent
+only while one of its keys is in the scene: said in the last six turns, or standing in
+the status block. Write it as the card would: who or what this is, what they want, what
+they will not do. The name of the entry is a handle and is never sent; this text is. ]
+"""
+
 BY_SHELF: Final[dict[str, str]] = {
     "characters": CHARACTER,
     "personas": PERSONA,
