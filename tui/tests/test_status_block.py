@@ -21,6 +21,7 @@ from jinnverse_tui.statusblock import (
 )
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 def field(key: str, label: str, scope: str, position: int, *, on: bool = True) -> StatusField:
@@ -124,13 +125,13 @@ def block_screen(app: JinnverseApp) -> StatusBlockScreen:
 
 
 async def open_block(app: JinnverseApp, pilot: Pilot[None]) -> StatusBlockScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     assert isinstance(app.screen, ConversationScreen)
     await pilot.press("t")
-    await pilot.pause(0.3)
+    await settle(pilot)
     return block_screen(app)
 
 
@@ -158,7 +159,7 @@ async def test_a_story_with_no_lines_offers_the_starters_and_adding_one_switches
             ("starter", "Mood"),
         ]
         await pilot.press("down", "space")  # Place
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [f["key"] for f in server.status_blocks[told["id"]]["fields"]] == ["place"]
         first = screen.rows.items[0]
         assert (first.kind, first.label, first.on) == ("field", "Place", True)
@@ -177,13 +178,13 @@ async def test_space_switches_a_line_on_and_off_and_the_server_is_told(
         assert "▌ [x] 📅 Day and time  scene" in drawn
         assert "[x] 👗 Outfit  each character" in drawn
         await pilot.press("space")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert "▌ [ ] 📅 Day and time  scene" in screen.rows.render().plain
         assert server.status_blocks[told["id"]]["fields"][0]["enabled"] is False
         assert screen.status_line.text == "Day and time off: from the next reply."
         assert screen.rows.items[0].on is False
         await pilot.press("enter")  # Enter does the same
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.status_blocks[told["id"]]["fields"][0]["enabled"] is True
 
 
@@ -196,7 +197,7 @@ async def test_a_new_field_is_typed_with_its_scope_and_words(
         await pilot.press("a")
         assert screen.legend.text.startswith(" Enter Keep   Esc Cancel")
         await pilot.press(*"Heat = Low, High", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         [heat] = server.status_blocks[told["id"]]["fields"]
         assert (heat["label"], heat["scope"], heat["kind"], heat["words"]) == (
             "Heat",
@@ -220,11 +221,11 @@ async def test_a_character_is_pinned_and_unpinned(
     async with app.run_test(size=(110, 36)) as pilot:
         screen = await open_block(app, pilot)
         await pilot.press("n", *"Peach", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.status_blocks[told["id"]]["pins"] == ["Peach"]
         pin_index = next(i for i, item in enumerate(screen.rows.items) if item.kind == "pin")
         await pilot.press(*["down"] * pin_index, "delete")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.status_blocks[told["id"]]["pins"] == []
         assert screen.status_line.text == "Unpinned."
 
@@ -241,13 +242,13 @@ async def test_a_value_is_corrected_and_cleared(app: JinnverseApp, server: fake.
         values = [i for i, item in enumerate(screen.rows.items) if item.kind == "value"]
         await pilot.press(*["down"] * values[1], "space")  # Peach · Outfit
         await pilot.press(*"nothing but heels", "enter")  # the field selects the old value
-        await pilot.pause(0.3)
+        await settle(pilot)
         row = {v["field"]: v for v in server.status_blocks[told["id"]]["values"]}
         assert row["outfit"]["value"] == "nothing but heels"
         assert row["outfit"]["by_hand"] is True
         assert [i.note for i in screen.rows.items if i.label == "Peach · Outfit"] == ["by hand"]
         await pilot.press("delete")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [v["field"] for v in server.status_blocks[told["id"]]["values"]] == ["time"]
         assert screen.status_line.text == "Cleared."
 
@@ -263,13 +264,13 @@ async def test_deleting_a_field_asks_first_and_takes_what_it_holds(
     async with app.run_test(size=(110, 36)) as pilot:
         screen = await open_block(app, pilot)
         await pilot.press("delete")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConfirmScreen)
         await pilot.press("escape")  # anything but Enter leaves everything as it is
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert len(server.status_blocks[told["id"]]["fields"]) == 2
         await pilot.press("delete", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert block_screen(app) is screen
         assert [f["key"] for f in server.status_blocks[told["id"]]["fields"]] == ["outfit"]
         assert server.status_blocks[told["id"]]["values"] == []
@@ -285,7 +286,7 @@ async def test_a_refusal_is_the_status_row_and_the_list_stays(
         before = [i.label for i in screen.rows.items]
         server.status_blocks[told["id"]]["fields"].clear()  # gone elsewhere meanwhile
         await pilot.press("space")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.kind == Kind.ERROR
         assert "no such field" in screen.status_line.text
         assert [i.label for i in screen.rows.items] == before  # not redrawn from nothing
@@ -304,9 +305,9 @@ async def test_the_header_carries_the_scene_line(
         {"field": "outfit", "who": "Peach", "value": "a robe", "by_hand": False, "seen": 3},
     ]
     async with app.run_test(size=(110, 36)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, ConversationScreen)
         assert "📅 Day 1, 11:52 PM  ·  with Peach" in "\n".join(screen._header_lines())  # pyright: ignore[reportPrivateUsage]
@@ -317,15 +318,15 @@ async def test_the_conversation_has_a_key_for_the_status_block(
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(110, 36)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert ("T", "Status block") in [(h.key, h.label) for h in ConversationScreen.HINTS]
         await pilot.press("t")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, StatusBlockScreen)
         await pilot.press("escape")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
 
 
@@ -342,9 +343,9 @@ async def test_the_new_story_form_offers_the_starters_unticked(
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, NewStoryScreen)
         ticks = screen.query_one("#status-lines", Ticks)
@@ -360,9 +361,9 @@ async def test_ticked_lines_are_adopted_when_the_story_is_created(
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press(*"Tale", "tab", "tab", "tab")  # name, character, persona, then the lines
         screen = app.screen
         assert isinstance(screen, NewStoryScreen)
@@ -375,7 +376,7 @@ async def test_ticked_lines_are_adopted_when_the_story_is_created(
         assert "[x] Place" in drawn
         assert "[x] Mood" in drawn
         await pilot.press("enter")  # the last field creates
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         [created] = server.stories
         assert [f["key"] for f in server.status_blocks[created["id"]]["fields"]] == [
@@ -389,12 +390,12 @@ async def test_creating_without_ticking_adds_no_lines_and_makes_no_extra_call(
 ) -> None:
     starting_form(server)
     async with app.run_test(size=(110, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.3)
+        await settle(pilot)
         # The name, the character, the persona, and Enter on the persona creates.
         await pilot.press(*"Tale", "enter", "enter", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert not any("/status/adopt" in r.url.path for r in server.requests)
 
@@ -405,9 +406,9 @@ async def test_the_form_is_as_it_was_when_the_starters_cannot_be_read(
     starting_form(server)
     server.status_starters = []
     async with app.run_test(size=(110, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, NewStoryScreen)
         assert not screen.query_one("#status-lines", Ticks).display

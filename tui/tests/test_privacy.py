@@ -14,6 +14,7 @@ from jinnverse_tui.api import Api, InterceptedError, UnreachableError, public_tr
 from jinnverse_tui.app import JinnverseApp
 from jinnverse_tui.config import Config, TokenStore, load
 from jinnverse_tui.waking import WakingScreen
+from tui_support.waits import until
 
 
 def refusing(error: BaseException) -> httpx2.MockTransport:
@@ -68,9 +69,10 @@ async def test_the_lamp_says_intercepted_instead_of_asleep(tmp_path: Path) -> No
     api = Api("https://api.test", TokenStore(tmp_path / "t"), transport=refusing(verify))
     app = JinnverseApp(Config(server="https://api.test"), api, wake_waits=(0.02,))
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.2)
         screen = app.screen
         assert isinstance(screen, WakingScreen)
         shown: Callable[[str], str] = lambda wid: str(screen.query_one(wid).render())  # noqa: E731
+        # The knock loop never ends here: the first refusal names the interception.
+        await until(pilot, lambda: shown("#lamp") != "Waking the server…", what="the first knock")
         assert shown("#lamp") == "The connection was intercepted."
         assert "no public authority issued" in shown("#why")

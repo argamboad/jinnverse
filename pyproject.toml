@@ -38,12 +38,17 @@ dev = [
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.10",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "tui/tests"]
 pythonpath = [".", "tui/tests"]  # tests share helpers as `tests.factories` / `tui_support`
+# pytest-xdist: one worker per core (≈ `dotnet test` running assemblies in parallel). Each worker
+# is its own session with its own throwaway database (tests/conftest.py); `-n 0` runs everything
+# in one process, which a debugger needs.
+addopts = ["-n", "auto"]
 # pytest-asyncio: `async def` tests and fixtures run without a marker, all on one event loop —
 # the session-wide database engine belongs to that loop.
 asyncio_mode = "auto"

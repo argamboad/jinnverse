@@ -10,6 +10,7 @@ from jinnverse_tui.masthead import Masthead
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import Preview, StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 def stories(app: JinnverseApp) -> StoriesScreen:
@@ -32,7 +33,7 @@ async def test_the_list_loads_newest_first_with_the_selected_storys_preview(
     server.add("Older", "A dusty opening.", "Hello", '*She looks up.* "A week," she says.')
     server.add("Empty one")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = stories(app)
         assert names(app) == ["Older", "Empty one"]  # the one with a message moved last
         assert screen.status_line.text == "2 stories loaded."
@@ -56,7 +57,7 @@ async def test_the_keys_move_the_cursor_and_the_ends(
     for n in range(40):
         server.add(f"Story {n:02}")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         rows = stories(app).rows
         await pilot.press("down", "down", "down")
         assert rows.state.selected == 3
@@ -80,7 +81,7 @@ async def test_the_filter_narrows_as_you_type_and_esc_clears_it(
     server.add("Captain")
     server.add("Story Ideas")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = stories(app)
         await pilot.press("slash", *"st")
         await pilot.pause()
@@ -112,14 +113,14 @@ async def test_f2_renames_in_place_and_the_list_is_re_read(
 ) -> None:
     server.add("Draft")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = stories(app)
         await pilot.press("f2")
         await pilot.pause()
         assert screen.legend.text.startswith(" Enter Rename")
         assert screen.query_one("#rename").display  # seeded with the name
         await pilot.press("end", *" two", "enter")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert names(app) == ["Draft two"]
         assert screen.status_line.text == 'Renamed to "Draft two".'
         assert "PATCH /stories/" in " ".join(server.paths())
@@ -132,7 +133,7 @@ async def test_a_rename_to_nothing_or_to_the_same_name_changes_nothing(
 ) -> None:
     server.add("Draft")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = stories(app)
         await pilot.press("f2", "enter")
         await pilot.pause()
@@ -153,7 +154,7 @@ async def test_delete_asks_first_and_enter_is_the_only_yes(
     server.add("Keep")
     server.add("Gone")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("delete")
         await pilot.pause()
         assert isinstance(app.screen, ConfirmScreen)
@@ -167,7 +168,7 @@ async def test_delete_asks_first_and_enter_is_the_only_yes(
         await pilot.pause()
         assert 'Delete the story "Gone"?' in str(app.screen.query_one(".question").render())
         await pilot.press("enter")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert names(app) == ["Keep"]
         assert stories(app).status_line.text == 'Deleted "Gone".'
@@ -176,11 +177,11 @@ async def test_delete_asks_first_and_enter_is_the_only_yes(
 
 async def test_r_re_reads_the_list(app: JinnverseApp, server: fake.FakeServer) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert "No stories yet" in drawn(app)
         server.add("Arrived")
         await pilot.press("r")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert names(app) == ["Arrived"]
         assert stories(app).status_line.text == "1 story loaded."
 
@@ -190,7 +191,7 @@ async def test_enter_opens_the_story_and_coming_back_re_reads_quietly(
 ) -> None:
     told = server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
         await pilot.pause()
         assert isinstance(app.screen, ConversationScreen)
@@ -199,7 +200,7 @@ async def test_enter_opens_the_story_and_coming_back_re_reads_quietly(
         told["name"] = "Tale, renamed elsewhere"
         reads = server.paths("GET").count("/stories")
         await pilot.press("escape")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert names(app) == ["Tale, renamed elsewhere"]
         assert server.paths("GET").count("/stories") == reads + 1
@@ -212,7 +213,7 @@ async def test_a_click_selects_and_a_second_click_opens(
     server.add("First")
     server.add("Second")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         rows = stories(app).rows
         await pilot.click(Rows, offset=(2, 1))
         await pilot.pause()
@@ -229,18 +230,18 @@ async def test_shift_delete_counts_first_then_erases_every_deleted_story_after_a
     server.add("Keep", "a line")
     server.add("Gone", "one", "two")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("shift+delete")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert stories(app).status_line.text == "No deleted stories to erase."
 
         await pilot.press("delete", "enter")  # delete hides "Gone", the newest
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert server.deleted
         assert names(app) == ["Keep"]
         await pilot.press("shift+delete")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, ConfirmScreen)
         assert app.screen.query_one(Masthead).crumbs == ("Stories", "Erase")
         question = str(app.screen.query_one(".question").render())
@@ -253,9 +254,9 @@ async def test_shift_delete_counts_first_then_erases_every_deleted_story_after_a
         assert stories(app).status_line.text == "Cancelled."
 
         await pilot.press("shift+delete")
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert server.deleted == []
         assert names(app) == ["Keep"]
@@ -268,7 +269,7 @@ async def test_delete_says_the_story_is_hidden_not_erased(
 ) -> None:
     server.add("Only")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("delete")
         await pilot.pause()
         said = " ".join(str(line.render()) for line in app.screen.query(".consequence"))

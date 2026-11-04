@@ -13,6 +13,7 @@ from jinnverse_tui.dialect import SWALLOW, dialect_of, translate
 from jinnverse_tui.regenerate import RegenerateScreen
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 def test_the_tables_say_what_a_letter_means() -> None:
@@ -34,7 +35,7 @@ async def test_vim_letters_move_the_list_and_still_type_in_a_field(
         server.add(name)
     app = make_app(config=Config(server="http://api.test", keyboard="vim"))
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, StoriesScreen)
         await pilot.press("j", "j")
@@ -50,7 +51,7 @@ async def test_vim_letters_move_the_list_and_still_type_in_a_field(
         await pilot.pause()
         assert len(screen.rows.items) == 3
         await pilot.press("l")  # right opens, as the arrow does
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         await pilot.press("h")  # left means nothing here; nothing happens
         await pilot.pause()
@@ -63,9 +64,9 @@ async def test_in_vim_g_is_the_end_and_regenerate_is_ctrl_g(
     server.add("Tale", "An opening.", "Hi", "Hello.", "More.", "Yes.")
     app = make_app(config=Config(server="http://api.test", keyboard="vim"))
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, ConversationScreen)
         await pilot.press("k", "k", "k")
@@ -88,9 +89,9 @@ async def test_in_standard_n_and_shift_n_both_find_the_next_match_and_g_regenera
 ) -> None:
     server.add("Tale", "fog one", "fog two", "clear", "fog four", "a reply")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, ConversationScreen)
         await pilot.press("slash", *"fog", "enter")
@@ -115,9 +116,9 @@ async def test_in_vim_shift_n_goes_back(
     server.add("Tale", "fog one", "fog two", "clear", "fog four")
     app = make_app(config=Config(server="http://api.test", keyboard="vim"))
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, ConversationScreen)
         await pilot.press("slash", *"fog", "enter")

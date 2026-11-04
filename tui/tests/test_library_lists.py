@@ -9,6 +9,7 @@ from jinnverse_tui.library import LibraryScreen
 from jinnverse_tui.newstory import NewStoryScreen, Panel
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 def library(app: JinnverseApp) -> LibraryScreen:
@@ -18,10 +19,10 @@ def library(app: JinnverseApp) -> LibraryScreen:
 
 
 async def open_library(app: JinnverseApp, pilot: Pilot[None]) -> LibraryScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
-    await pilot.pause(0.3)
+    await settle(pilot)
     return library(app)
 
 
@@ -63,7 +64,7 @@ async def test_a_refresh_counts_again(app: JinnverseApp, server: fake.FakeServer
         server.shelve("snippets", "storm", "Rain.")
         server.shelve("snippets", "fog", "Fog.")
         await pilot.press("r")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert " Snippets 2 " in tabs(app)
 
 
@@ -77,7 +78,7 @@ async def test_the_description_of_the_selected_entry_sits_over_its_text(
         assert description(app) == "The innkeeper."
         assert library(app).query_one("#description").display
         await pilot.press("down")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert not library(app).query_one("#description").display  # none: nothing shown
 
 
@@ -94,7 +95,7 @@ async def test_under_each_name_the_version_the_use_and_the_description(
     async with app.run_test(size=(140, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.rows.rows_per_item == 2
         assert row_lines(app) == [
             "  Elena",
@@ -126,7 +127,7 @@ async def test_a_snippet_says_its_version_and_no_stories(
     async with app.run_test(size=(140, 30)) as pilot:
         await open_library(app, pilot)
         await pilot.press("right", "right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert row_lines(app) == ["  storm", "  v1 · Rain on the glass."]  # its first line only
 
 
@@ -152,7 +153,7 @@ async def test_e_edits_the_description_on_one_line_and_saves_it_as_a_version(
         await pilot.pause()
         assert screen.legend.text.startswith(" Enter Save the description")
         await pilot.press(*"The innkeeper.", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         [made] = server.library["characters"]
         assert (made["description"], made["version"]) == ("The innkeeper.", 2)
         assert description(app) == "The innkeeper."
@@ -168,7 +169,7 @@ async def test_a_description_can_be_cleared_by_saving_it_empty(
         await pilot.press("e")
         await pilot.pause()
         await pilot.press("ctrl+u", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         [made] = server.library["characters"]
         assert made["description"] is None
         assert screen.status_line.text == "Description cleared."
@@ -182,7 +183,7 @@ async def test_an_unchanged_description_saves_nothing(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("e", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.library["characters"][0]["version"] == 1
         assert screen.status_line.text == "Nothing changed."
 
@@ -194,7 +195,7 @@ async def test_escape_leaves_the_description_as_it_was(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("e", *"more", "escape")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.status_line.text == "Cancelled."
         assert server.library["characters"][0]["description"] == "The innkeeper."
 
@@ -207,9 +208,9 @@ async def test_the_new_story_form_shows_the_description_of_the_character_and_the
         "personas", "Me", "A tall man.", description="The pianist."
     )
     async with app.run_test(size=(110, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, NewStoryScreen)
         world = app.screen.query_one("#world", Panel).query_one(".caption")
         persona = app.screen.query_one("#persona-text", Panel).query_one(".caption")
@@ -232,13 +233,13 @@ async def test_underscore_shows_the_hidden_entries_marked_and_puts_them_away(
         assert [e.name for e in screen.rows.items] == ["Elena"]
         assert hidden_hint(app) == "Hidden (1)"
         await pilot.press("underscore")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [e.name for e in screen.rows.items] == ["Elena", "_template"]
         assert "  hidden · v1 · unused · A template." in row_lines(app)
         assert screen.status_line.text == "Showing 1 hidden character too."
         assert hidden_hint(app) == "Put hidden away"
         await pilot.press("underscore")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [e.name for e in screen.rows.items] == ["Elena"]
         assert screen.status_line.text == "Hidden entries put away."
 
@@ -250,18 +251,18 @@ async def test_an_entry_renamed_to_underscore_can_be_reached_again(
     async with app.run_test(size=(140, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("f2", "home", "underscore", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [e.name for e in screen.rows.items] == []
         assert screen.status_line.text == (
             'Renamed to "_Draft": a name starting with _ is hidden. _ shows it.'
         )
         await pilot.press("underscore")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [e.name for e in screen.rows.items] == ["_Draft"]
         await pilot.press("f2", "home", "delete", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("underscore")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [e.name for e in screen.rows.items] == ["Draft"]

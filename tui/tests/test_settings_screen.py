@@ -10,6 +10,7 @@ from jinnverse_tui.settings import ChatSettingsScreen, describe, level_index
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 def settings_screen(app: JinnverseApp) -> ChatSettingsScreen:
@@ -19,13 +20,13 @@ def settings_screen(app: JinnverseApp) -> ChatSettingsScreen:
 
 
 async def open_settings(app: JinnverseApp, pilot: Pilot[None]) -> ChatSettingsScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     assert isinstance(app.screen, ConversationScreen)
     await pilot.press("s")
-    await pilot.pause(0.3)
+    await settle(pilot)
     return settings_screen(app)
 
 
@@ -87,7 +88,7 @@ async def test_stepping_stages_and_enter_applies_everything_at_once(
         assert "Press Enter to apply" in str(screen.query_one("#foot").render())
         assert server.dial_values.get(told["id"], {}) == {}  # nothing sent yet
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.dial_values[told["id"]] == {
             "lust": "3",
             "inner-thoughts": "true",
@@ -117,7 +118,7 @@ async def test_esc_discards_staged_changes_before_it_leaves_and_del_clears(
         assert screen.settings.staged["lust"] == "1"
         assert screen.status_line.text == "Changes discarded."
         await pilot.press("delete", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert "lust" not in server.dial_values[told["id"]]
         assert "Lust → Not set" in screen.status_line.text
         await pilot.press("enter")
@@ -146,7 +147,7 @@ async def test_a_text_dial_is_typed_and_a_refusal_puts_the_row_back(
         pov = next(d for d in server.pack if d["key"] == "pov")
         pov["options"] = [o for o in pov["options"] if o["key"] != "third-past"]  # gone meanwhile
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.dial_values[told["id"]] == {"language": "Spanish"}
         assert "pov" not in screen.settings.staged  # back to what it has: not set
         assert screen.status_line.kind == Kind.WARNING
