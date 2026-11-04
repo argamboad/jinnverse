@@ -95,6 +95,43 @@ comma-separated.
 So make the entries in the card's order, and keep each to what one scene needs: a sheet of three
 to six hundred tokens, a timetable of up to eight hundred.
 
+## The quick way: the script
+
+Splitting a card of fifty sheets by hand is fifty copy-pastes. `scripts/split_card.py` does it in
+one run for a card in the house shape: `=== THE WORLD ===` with upper-case sub-sections, and
+`=== THE CAST ===` (or `=== THE CHARACTERS ===`) with one block per person headed `Name — age,
+role`. It makes a **second** character and leaves the first alone.
+
+```
+uv run python scripts/split_card.py "Blake Jameson University" "BJU · Lorebook" \
+    --keep "THE CAMPUS" --keep "THE CLUBS" --keep "THE VARSITY STALLIONS" \
+    --keep "THE ACADEMIC CALENDAR" --keep "OFF THE MAP" \
+    --keys bju-keys.json --dry-run
+```
+
+- Every world sub-section becomes an entry unless `--keep` names it; the text before the first
+  sub-section always stays.
+- Every sheet becomes an entry, keyed on the full name, the first and last names and any
+  nickname; the header lines become the roster.
+- A sub-section is keyed on its heading's words and on the names its lines open with: each
+  restaurant of a dining list, each sport of a timetable, each hall of the dorms.
+- `--keys` is a small JSON file for the words only you can choose, and the ones to drop:
+
+```json
+{
+  "extra": {
+    "Dining": ["lunch", "dinner", "hungry", "coffee"],
+    "Jacqueline Kai": ["counsellor"]
+  },
+  "drop": ["rose", "grant"]
+}
+```
+
+`--dry-run` prints the plan — the card's tokens before and after, every entry with its size and
+its keys — and writes nothing. Read it, adjust the keys file, run it again; then run without
+`--dry-run`. Run with `uv run --env-file .env.staging` to do it on Neon. Whatever the script got
+wrong is a minute in the editor afterwards.
+
 ## The steps
 
 **Keep the original.** Make a second character for the split and leave the first as it is, so

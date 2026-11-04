@@ -35,3 +35,6 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.*.example
+
+# A lorebook split's keys file (scripts/split_card.py --keys) belongs to the card, not the repository.
+/*-keys.json
