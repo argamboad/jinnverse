@@ -17,13 +17,14 @@ from jinnverse_tui.search import SearchScreen
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 
 async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     screen = app.screen
     assert isinstance(screen, ConversationScreen)
     return screen
@@ -34,7 +35,7 @@ async def test_the_palette_lists_the_screens_commands_then_the_global_ones(
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         names = [c.name for c in commands_of(app.screen)]
         assert names[:2] == ["Open the story", "New story"]
         assert names[-5:] == ["Search every story", "Library", "Help", "Back", "Quit"]
@@ -50,20 +51,20 @@ async def test_ctrl_p_opens_the_palette_and_a_command_runs_as_its_key_would(
 ) -> None:
     server.add("Tale", "An opening.")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("ctrl+p")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, CommandPalette)
         await pilot.press(*"librar")
-        await pilot.pause(0.5)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.5)
+        await settle(pilot)
         assert isinstance(app.screen, LibraryScreen)
         assert [type(s).__name__ for s in app.screen_stack] == ["StoriesScreen", "LibraryScreen"]
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("colon")  # the donor's other key for it
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, CommandPalette)
         await pilot.press("escape")
         await pilot.pause()
@@ -88,14 +89,14 @@ async def test_ctrl_f_searches_every_story_and_enter_opens_a_hit(
     server.add("Fog Tale", "The fog came in.", "No fog here.")
     server.add("Other", "Clear skies.")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("ctrl+f")
         await pilot.pause()
         assert isinstance(app.screen, SearchScreen)
         search = app.screen
         assert search.focused is search.query_one("#query")
         await pilot.press(*"fog", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert len(search.rows.items) == 3  # the name and two messages
         assert search.status_line.text == "3 result(s) in 2 story(ies)."
         drawn = search.rows.render().plain
@@ -108,18 +109,18 @@ async def test_ctrl_f_searches_every_story_and_enter_opens_a_hit(
         await pilot.press("tab")
         await pilot.pause()
         await pilot.press("enter")  # the query is the same, the scope changed: a new search
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [h.scope for h in search.rows.items] == ["message", "message"]
         assert "scope: messages   ·   2 result(s)" in str(search.query_one("#where").render())
         await pilot.press("down", "enter")  # the same query again: open the selected hit
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert app.screen.story.name == "Fog Tale"
         await pilot.press("escape")
         await pilot.pause()
         assert isinstance(app.screen, SearchScreen)
         await pilot.press("ctrl+u", *"dragon", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert search.status_line.text == 'Nothing matches "dragon".'
         assert search.status_line.kind == Kind.WARNING
 
@@ -132,7 +133,7 @@ async def test_e_exports_with_a_preview_per_format_and_writes_the_file(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("e")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ExportScreen)
         export = app.screen
         assert export.fmt == "markdown"
@@ -140,21 +141,21 @@ async def test_e_exports_with_a_preview_per_format_and_writes_the_file(
         assert export.export.filename == "transcript-tale-20261007-120000.md"
         assert str(export.query_one("#preview").render()).startswith("# Tale")
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert export.fmt == "json"
         assert str(export.query_one("#preview").render()).startswith("{")
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert export.fmt == "text"
         assert str(export.query_one("#preview").render()).startswith("[001]")
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         written = tmp_path / "out" / "transcript-tale-20261007-120000.txt"
         assert written.read_text(encoding="utf-8").startswith("[001]")
         assert screen.status_line.text == f"Written to {written}"
         await pilot.press("e")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("c")
         await pilot.pause()
         assert isinstance(app.screen, ConversationScreen)

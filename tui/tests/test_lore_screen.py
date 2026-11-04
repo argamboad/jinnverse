@@ -16,6 +16,7 @@ from jinnverse_tui.lore import LoreScreen, keys_note, parse_keys
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 CARD = "You are the narrator of the Gilded Heron.\n\n=== THE WORLD ===\n\nA gaming house."
 ISAURE = "ISAURE VANTONGEREN — proprietor of the Gilded Heron. Thirty-six."
@@ -44,12 +45,12 @@ def prose(app: JinnverseApp) -> str:
 
 
 async def open_lore(app: JinnverseApp, pilot: Pilot[None]) -> LoreScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
-    await pilot.pause(0.3)
+    await settle(pilot)
     await pilot.press("l")
-    await pilot.pause(0.3)
+    await settle(pilot)
     return lore(app)
 
 
@@ -76,14 +77,14 @@ async def test_l_opens_a_characters_lore_with_the_keys_under_each_name(
 ) -> None:
     heron_with_lore(server)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("m")
-        await pilot.pause(0.3)
+        await settle(pilot)
         library = app.screen
         assert isinstance(library, LibraryScreen)
         assert "2 lore entries" in str(library.query_one("#caption").render())
         await pilot.press("l")
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = lore(app)
         assert names(app) == ["Isaure Vantongeren", "Teodor Blake"]
         assert screen.summary() == "The Gilded Heron · 2 entries"
@@ -94,23 +95,23 @@ async def test_l_opens_a_characters_lore_with_the_keys_under_each_name(
         assert prose(app).startswith("ISAURE VANTONGEREN")
         assert "keys: isaure, proprietor" in str(screen.query_one("#keys").render())
         await pilot.press("down")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert prose(app).startswith("TEODOR BLAKE")
         await pilot.press("escape")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, LibraryScreen)
 
 
 async def test_only_a_character_has_lore(app: JinnverseApp, server: fake.FakeServer) -> None:
     server.shelve("personas", "Me", "A tall man.")
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("m")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("l")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, LibraryScreen)
         assert screen.status_line.text == "Only a character has lore; a persona is sent whole."
@@ -133,7 +134,7 @@ async def test_n_asks_the_name_then_the_keys_and_opens_the_editor_on_the_skeleto
         await pilot.pause()
         assert "keys" in screen.query_one("#field").placeholder  # type: ignore[attr-defined]
         await pilot.press(*"Pell, porter", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert names(app) == ["Pell"]
         assert editor.handed[0].startswith("[ A piece of the card")  # type: ignore[attr-defined]
         [pell] = server.lore[heron["id"]]
@@ -151,7 +152,7 @@ async def test_an_entry_needs_at_least_one_key(app: JinnverseApp, server: fake.F
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_lore(app, pilot)
         await pilot.press("n", *"Pell", "enter", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.lore.get(heron["id"], []) == []
         assert screen.status_line.text.startswith("An entry needs at least one key")
 
@@ -164,7 +165,7 @@ async def test_enter_edits_the_text_k_the_keys_and_f2_the_name(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_lore(app, pilot)
         await pilot.press("enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         isaure = server.lore[heron["id"]][0]
         assert isaure["text"].endswith("She touches the comb.\n")
         assert isaure["version"] == 2
@@ -173,13 +174,13 @@ async def test_enter_edits_the_text_k_the_keys_and_f2_the_name(
         field = screen.query_one("#field")
         assert field.value == "isaure, proprietor"  # type: ignore[attr-defined]
         await pilot.press("end", *", Innkeeper", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert isaure["keys"] == ["isaure", "proprietor", "innkeeper"]
         assert screen.status_line.text == "Keys saved: isaure, proprietor, innkeeper."
         await pilot.press("f2")
         await pilot.pause()
         await pilot.press("ctrl+u", *"Isaure", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert isaure["name"] == "Isaure"
         assert names(app) == ["Isaure", "Teodor Blake"]
         assert isaure["version"] == 4
@@ -191,7 +192,7 @@ async def test_an_unchanged_text_saves_nothing(app: JinnverseApp, server: fake.F
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_lore(app, pilot)
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.lore[heron["id"]][0]["version"] == 1
         assert screen.status_line.text == "Nothing changed."
 
@@ -207,14 +208,14 @@ async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
         isaure["text"] = "Theirs, from the phone."
         isaure["version"] = 2
         await pilot.press("enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         conflict = app.screen
         assert isinstance(conflict, ConflictScreen)
         theirs = conflict.theirs
         assert isinstance(theirs, LoreEntry)
         assert theirs.text == "Theirs, from the phone."
         await pilot.press("enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         screen = lore(app)
         assert (isaure["text"], isaure["version"]) == ("Mine.\n", 3)
         assert screen.status_line.text == "Saved over version 2."
@@ -225,10 +226,10 @@ async def test_del_asks_and_removes(app: JinnverseApp, server: fake.FakeServer) 
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_lore(app, pilot)
         await pilot.press("down", "delete")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConfirmScreen)
         await pilot.press("enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert names(app) == ["Isaure Vantongeren"]
         assert [e["name"] for e in server.lore[heron["id"]]] == ["Isaure Vantongeren"]
         assert screen.status_line.text == "Removed 'Teodor Blake'."

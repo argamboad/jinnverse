@@ -13,6 +13,7 @@ from jinnverse_tui.library import LibraryScreen
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 CARD = "You are Elena.\n\n=== THE WORLD ===\n\nA resort on a cliff."
 
@@ -32,10 +33,10 @@ def prose(app: JinnverseApp) -> str:
 
 
 async def open_library(app: JinnverseApp, pilot: Pilot[None]) -> LibraryScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("m")
-    await pilot.pause(0.2)
+    await settle(pilot)
     return library(app)
 
 
@@ -70,20 +71,20 @@ async def test_the_shelves_list_their_entries_with_the_text_beside(
         assert "used by Tale" in str(screen.query_one("#caption").render())
         assert "Characters" in str(screen.query_one("#tabs").render())
         await pilot.press("down")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert prose(app).startswith("You are Marta.")
         await pilot.press("right")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.shelf == "personas"
         assert names(app) == ["Me"]
         assert "A tall man." in prose(app)
         await pilot.press("right")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.shelf == "snippets"
         assert names(app) == []
         assert "No snippets yet" in screen.rows.render().plain
         await pilot.press("left", "left")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.shelf == "characters"
 
 
@@ -101,7 +102,7 @@ async def test_n_names_a_new_entry_asks_its_note_and_opens_the_editor_on_its_ske
         await pilot.pause()
         assert "optional" in screen.query_one("#name").placeholder  # type: ignore[attr-defined]
         await pilot.press(*"The dancer", "enter")  # the description, as the web's form asks
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert names(app) == ["Sofia"]
         assert editor.handed[0].startswith("You are the narrator")  # type: ignore[attr-defined]
         assert editor.handed[1].startswith("[ The first message")  # type: ignore[attr-defined]
@@ -123,7 +124,7 @@ async def test_a_new_character_writes_its_opening_in_the_same_pass(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("n", *"Sofia", "enter", "enter")  # no description
-        await pilot.pause(0.4)
+        await settle(pilot)
         sofia = server.library["characters"][0]
         assert (sofia["description"], sofia["opening"]) == (
             None,
@@ -141,9 +142,9 @@ async def test_a_new_persona_has_no_opening_to_write(
     async with app.run_test(size=(100, 30)) as pilot:
         await open_library(app, pilot)
         await pilot.press("right")
-        await pilot.pause(0.3)
+        await settle(pilot)
         await pilot.press("n", *"Me", "enter", "enter")
-        await pilot.pause(0.4)
+        await settle(pilot)
         assert len(editor.handed) == 1  # type: ignore[attr-defined]
         assert server.library["personas"][0]["text"] == "A tall man.\n"
 
@@ -156,11 +157,11 @@ async def test_enter_edits_and_an_unchanged_text_saves_nothing(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.status_line.text == "Nothing changed."
         assert server.library["characters"][0]["version"] == 1
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.library["characters"][0]["text"].endswith("More.\n")
         assert server.library["characters"][0]["version"] == 2
         assert "PATCH" in " ".join(server.paths())
@@ -175,11 +176,11 @@ async def test_o_edits_the_opening_and_only_a_character_has_one(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("o")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert server.library["characters"][0]["opening"] == '"You came," she says.'
         assert "You came" in prose(app)
         await pilot.press("right")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("o")
         await pilot.pause()
         assert screen.status_line.text == "A persona has no opening."
@@ -194,7 +195,7 @@ async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
         screen = await open_library(app, pilot)
         elena["text"], elena["version"] = "Theirs, from the phone.", 2  # changed in between
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConflictScreen)
         theirs = app.screen.theirs
         assert isinstance(theirs, EntryFull)
@@ -206,13 +207,13 @@ async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
         assert screen.status_line.text == "Kept the server's text. Yours was not saved."
         assert elena["text"] == "Theirs, from the phone."
         await pilot.press("r")
-        await pilot.pause(0.2)
+        await settle(pilot)
         elena["text"], elena["version"] = "Theirs once more.", 3
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConflictScreen)
         await pilot.press("enter")  # save mine over it
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, LibraryScreen)
         assert elena["text"] == "Mine again.\n"
         assert elena["version"] == 4
@@ -227,22 +228,22 @@ async def test_f2_renames_and_d_makes_a_persona_the_default(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_library(app, pilot)
         await pilot.press("right")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("f2", "end", *" too", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert names(app) == ["Me too", "Someone"]
         assert screen.status_line.text.startswith('Renamed to "Me too".')
         await pilot.press("d")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert server.default_persona is not None
         assert server.default_persona["name"] == "Me too"
         assert screen.rows.render().plain.startswith("★ Me too")
         assert screen.status_line.kind == Kind.SUCCESS
         await pilot.press("d")  # again clears it
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert server.default_persona is None
         await pilot.press("left")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("d")
         await pilot.pause()
         assert screen.status_line.text == "Only a persona can be the default."
@@ -263,7 +264,7 @@ async def test_del_asks_and_the_server_refuses_while_a_story_uses_it(
         assert consequences[0].startswith("The server will refuse")
         assert consequences[1].strip() == "Tale"
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, LibraryScreen)
         assert (
             screen.status_line.text == "This character is used by Tale. It stays until they do not."
@@ -272,6 +273,6 @@ async def test_del_asks_and_the_server_refuses_while_a_story_uses_it(
         await pilot.press("down", "delete")
         await pilot.pause()
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert names(app) == ["Elena"]
         assert screen.status_line.text == "Removed 'Spare'."

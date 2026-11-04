@@ -11,6 +11,7 @@ from jinnverse_tui.newstory import NewStoryScreen, Panel, Picker, default_name
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 WORLD = "You are Elena. " + "The resort sits on a cliff. " * 40
 PERSONA = "A tall man in his forties, quiet."
@@ -34,9 +35,9 @@ async def test_the_pickers_read_the_library_and_the_panels_show_what_will_be_sen
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 40)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = form(app)
         assert screen.picker("character").choices == ["Elena", "Marta"]
         assert screen.picker("persona").choices == ["(default: Me)", "Me", "Someone else"]
@@ -53,19 +54,19 @@ async def test_picking_changes_the_panels_and_the_page_keys_follow_the_focus(
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = form(app)
         await pilot.press("tab")  # from the name to the character
         assert screen.focused is screen.picker("character")
         await pilot.press("right")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert screen.character is not None
         assert screen.character.name == "Marta"
         assert screen.query_one("#world", Panel).text == "You are Marta."
         await pilot.press("right")  # wraps round
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert screen.query_one("#world", Panel).text == WORLD
         world_scroll = screen.query_one("#world", Panel).query_one("VerticalScroll")
         await pilot.press("pagedown")
@@ -75,12 +76,12 @@ async def test_picking_changes_the_panels_and_the_page_keys_follow_the_focus(
         await pilot.pause()
         assert world_scroll.scroll_y == 0
         await pilot.press("tab", "right", "right")  # the persona
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert screen.persona is not None
         assert screen.persona.name == "Someone else"
         assert screen.query_one("#persona-text", Panel).text == "A stranger."
         await pilot.press("left", "left")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert screen.persona is None
         assert screen.query_one("#persona-text", Panel).text == PERSONA
 
@@ -90,14 +91,14 @@ async def test_the_whole_flow_creates_a_story_and_opens_it(
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press(*"Cliffs", "enter")  # Enter walks the fields
         screen = form(app)
         assert screen.focused is screen.picker("character")
         await pilot.press("enter", "right", "right", "enter")  # the last creates
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         story = app.screen.story
         assert story.name == "Cliffs"
@@ -107,7 +108,7 @@ async def test_the_whole_flow_creates_a_story_and_opens_it(
         assert app.screen.status_line.kind == Kind.SUCCESS
         assert [s.__class__ for s in app.screen_stack] == [StoriesScreen, ConversationScreen]
         await pilot.press("escape")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert [s.name for s in app.screen.rows.items] == ["Cliffs"]
 
@@ -117,11 +118,11 @@ async def test_ctrl_s_creates_from_anywhere_and_a_nameless_story_is_named_after_
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("ctrl+s")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert app.screen.story.name.startswith("Elena, ")
         assert app.screen.story.persona_id is None  # the default, left to the server
@@ -135,13 +136,13 @@ async def test_an_empty_library_is_a_warning_not_a_crash(
     app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = form(app)
         assert screen.status_line.kind == Kind.WARNING
         await pilot.press("ctrl+s")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, NewStoryScreen)
         assert "POST /stories" not in server.paths()
 
@@ -151,14 +152,14 @@ async def test_escape_with_nothing_typed_closes_and_with_something_typed_asks_fi
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("escape")
         await pilot.pause()
         assert isinstance(app.screen, StoriesScreen)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press(*"Dra", "escape")
         await pilot.pause()
         assert isinstance(app.screen, ConfirmScreen)
@@ -175,14 +176,14 @@ async def test_a_refused_creation_keeps_the_form_with_the_servers_sentence(
 ) -> None:
     library(server)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("n")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = form(app)
         screen.picker("persona").index = 2
         server.library["personas"].pop()  # deleted elsewhere between the read and the create
         await pilot.press("ctrl+s")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, NewStoryScreen)
         assert screen.status_line.kind == Kind.ERROR
         assert screen.status_line.text.startswith("There is no persona with that id")

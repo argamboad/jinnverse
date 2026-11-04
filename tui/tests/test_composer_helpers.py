@@ -11,6 +11,7 @@ from jinnverse_tui.completion import Strip
 from jinnverse_tui.conversation import ConversationScreen
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 OPENING = "An opening."
 SMILE = "\U0001f604"
@@ -18,10 +19,10 @@ FAMILY = "\U0001f468‍\U0001f469‍\U0001f467"
 
 
 async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     screen = app.screen
     assert isinstance(screen, ConversationScreen)
     return screen
@@ -39,7 +40,7 @@ async def test_the_first_story_opened_reads_the_emoji_table_from_the_api(
     server.add("Tale", OPENING)
     async with app.run_test(size=(100, 30)) as pilot:
         await open_story(app, pilot)
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert emoji.loaded()
         assert emoji.find("tada") == "🎉"
         assert server.paths("GET").count("/emoji") == 1
@@ -90,17 +91,17 @@ async def test_a_snippet_completion_inserts_its_page_still_editable(
     server.shelve("snippets", "storm", "The storm breaks over the bay.\nRain, then hail.\n")
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("i", *"then :st")
         await pilot.pause()
         assert offered(screen)[0] == "» storm"  # the snippet before any emoji
         await pilot.press("tab")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.composer.text == "then The storm breaks over the bay.\nRain, then hail."
         assert screen.status_line.text == "Expanded :storm — still editable before sending."
         server.library["snippets"].clear()  # gone from the server since the shelf was read
         await pilot.press(*" :sto", "tab")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.text == "The snippet 'storm' is empty or gone."
 
 
@@ -113,7 +114,7 @@ async def test_a_bare_trigger_is_sent_as_typed_and_emoji_names_as_real_text(
         await pilot.press("i")
         screen.composer.insert("a :heart: and :storm")  # as a paste would land it
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.text for m in screen.messages][1] == "a ❤️ and :storm"
 
 
@@ -153,7 +154,7 @@ async def test_enter_sends_even_with_words_on_offer(
         await pilot.pause()
         assert screen.query_one(Strip).display
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.text for m in screen.messages][1] == "abso"
 
 

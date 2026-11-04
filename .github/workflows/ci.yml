@@ -84,8 +84,10 @@ jobs:
       - name: pyright (strict)
         run: uv run pyright
 
+      # On every core of the runner: pytest-xdist, a worker per core, each with its own throwaway
+      # database on the service container (`-n auto` is pyproject.toml's default; said here too).
       - name: pytest
-        run: uv run pytest
+        run: uv run pytest -n auto
 
   # The web app's gates: format, types, unit tests, and a build that the static site would ship.
   # About a billed minute; it runs beside the Python gates, not after them.

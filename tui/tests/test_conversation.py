@@ -2,6 +2,7 @@
 cut, against the fake server."""
 
 from textual import events
+from textual.pilot import Pilot
 
 from jinnverse_tui.app import JinnverseApp
 from jinnverse_tui.composer import Composer
@@ -12,6 +13,7 @@ from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from jinnverse_tui.transcript import Transcript
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 OPENING = '*The door opens.* "You came," she says.'
 
@@ -30,14 +32,11 @@ def texts(app: JinnverseApp) -> list[str]:
     return [m.text for m in conversation(app).messages]
 
 
-async def open_story(app: JinnverseApp, pilot: object) -> ConversationScreen:
-    from textual.pilot import Pilot
-
-    assert isinstance(pilot, Pilot)
-    await pilot.pause(0.1)
+async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     return conversation(app)
 
 
@@ -76,7 +75,7 @@ async def test_the_header_names_the_version_of_the_card_the_story_reads(
         assert header(app).splitlines()[1] == "Elena  ·  card v2  ·  as Me"
         server.revise(elena, text="Edited on the phone.")
         await pilot.press("r")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert header(app).splitlines()[1] == "Elena  ·  card v3  ·  as Me"
 
 
@@ -115,7 +114,7 @@ async def test_writing_sends_on_enter_and_the_reply_streams_in(
         assert screen.composer.text == "Hello\nthere"
         assert "11 characters · 2 words" in str(screen.query_one("Caption").render())
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert texts(app)[-2:] == ["Hello\nthere", server.reply]
         assert screen.composer.text == ""  # the draft went with the send
         assert screen.status_line.text == "Reply received."
@@ -170,7 +169,7 @@ async def test_esc_keeps_the_draft_and_a_failed_turn_keeps_or_stores_it(
         assert screen.composer.text == "Draft"
         server.model_fails = "The model did not answer: timed out. Your message was kept."
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.kind == Kind.ERROR
         assert screen.status_line.text.startswith("The model did not answer")
         assert texts(app)[-1] == "Draft"  # stored by the server, so it is in the transcript
@@ -187,7 +186,7 @@ async def test_a_refusal_before_the_stream_keeps_the_draft(
         await pilot.press("i", *"Keep me")
         server.stories.clear()  # the story is gone: a 404 before anything streams
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.text == "There is no such story."
         assert screen.composer.text == "Keep me"
 
@@ -203,9 +202,9 @@ async def test_carry_on_needs_a_reply_and_then_streams_one(
         assert screen.status_line.text == "There is no reply to carry on from yet."
         server.stories[0]["messages"].append(fake.message(1, "assistant", OPENING))
         await pilot.press("r")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("greater_than_sign")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert texts(app) == [OPENING, server.reply]
         assert server.paths("POST")[-1].endswith("/continue")
 
@@ -233,7 +232,7 @@ async def test_regenerate_asks_for_a_reason_and_replaces_the_reply(
         assert regen.instructions == "less\nplease"
         assert regen.legend.text.startswith(" ↑ ↓ Choose a reason")
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert texts(app) == [OPENING, "Hi", "New reply."]
         assert server.reroll_bodies == [{"reason": "looping", "instructions": "less\nplease"}]
@@ -293,7 +292,7 @@ async def test_branch_names_a_copy_and_delete_from_asks_first(
         assert screen.query_one("#branch").display
         assert screen.legend.text.startswith(" Enter Create the branch")
         await pilot.press("enter")  # the seeded name
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.status_line.text == 'Branched as "Tale (2)": it is in the list of stories.'
         assert [s["name"] for s in server.stories] == ["Tale", "Tale (2)"]
         assert [m["text"] for m in server.stories[1]["messages"]] == [OPENING, "One."]
@@ -303,7 +302,7 @@ async def test_branch_names_a_copy_and_delete_from_asks_first(
         question = str(app.screen.query_one(".question").render())
         assert question == "Delete this message and the 2 after it?"
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert texts(app) == [OPENING]
         assert screen.status_line.text == "Deleted 3 message(s). 1 remain."
 

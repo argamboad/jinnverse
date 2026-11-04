@@ -8,6 +8,7 @@ from jinnverse_tui.status import Kind, StatusLine
 from jinnverse_tui.stories import StoriesScreen
 from jinnverse_tui.theme import NAME
 from jinnverse_tui.view import View
+from tui_support.waits import settle
 
 
 def view(app: JinnverseApp) -> View:
@@ -18,7 +19,7 @@ def view(app: JinnverseApp) -> View:
 
 async def test_the_app_opens_on_the_stories_in_the_one_dark_theme(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         assert app.theme == NAME
         assert app.current_theme.dark
@@ -27,7 +28,7 @@ async def test_the_app_opens_on_the_stories_in_the_one_dark_theme(app: Jinnverse
 
 async def test_the_legend_shows_the_screens_keys_in_order(app: JinnverseApp) -> None:
     async with app.run_test(size=(140, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         text = view(app).legend.text
         assert text.startswith(" Enter Open the story   N New story   M Library")
         assert text.endswith(" Q Quit")
@@ -36,7 +37,7 @@ async def test_the_legend_shows_the_screens_keys_in_order(app: JinnverseApp) -> 
 
 async def test_a_narrow_legend_ends_with_the_pointer(app: JinnverseApp) -> None:
     async with app.run_test(size=(70, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         text = view(app).legend.text
         assert text.startswith(" Enter Open the story")
         assert text.endswith(" ? All keys")
@@ -44,7 +45,7 @@ async def test_a_narrow_legend_ends_with_the_pointer(app: JinnverseApp) -> None:
 
 async def test_help_opens_once_and_esc_closes_it(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("question_mark")
         await pilot.pause()
         assert isinstance(app.screen, HelpScreen)
@@ -60,7 +61,7 @@ async def test_help_opens_once_and_esc_closes_it(app: JinnverseApp) -> None:
 
 async def test_help_lists_every_section(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("f1")
         await pilot.pause()
         shown = [str(s.render()) for s in app.screen.query(".section")]
@@ -69,7 +70,7 @@ async def test_help_lists_every_section(app: JinnverseApp) -> None:
 
 async def test_esc_on_the_last_screen_quits(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("escape")
         await pilot.pause()
     assert app.return_code == 0
@@ -77,7 +78,7 @@ async def test_esc_on_the_last_screen_quits(app: JinnverseApp) -> None:
 
 async def test_q_quits(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("q")
         await pilot.pause()
     assert app.return_code == 0
@@ -85,11 +86,11 @@ async def test_q_quits(app: JinnverseApp) -> None:
 
 async def test_the_status_row_keeps_a_message_until_replaced(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         line = view(app).query_one(StatusLine)
         view(app).status("Refreshed.", Kind.SUCCESS)
         assert (line.text, line.kind) == ("Refreshed.", Kind.SUCCESS)
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert line.text == "Refreshed."
         line.busy("Loading")
         assert line.is_busy
@@ -101,7 +102,7 @@ async def test_the_status_row_keeps_a_message_until_replaced(app: JinnverseApp) 
 
 async def test_ctrl_l_redraws_and_says_so(app: JinnverseApp) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("ctrl+l")
         await pilot.pause()
         assert view(app).status_line.text == "Screen cleared."

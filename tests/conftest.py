@@ -3,7 +3,8 @@
 The database tests run against a real Postgres — the one from docker-compose.yml locally, a
 service container in CI — but never against the data being played with: the session starts by
 creating a throwaway database and ends by dropping it, and every test runs inside a transaction
-that is rolled back.
+that is rolled back. Under pytest-xdist every worker is a session of its own, so each creates
+its own throwaway database beside the others', named at random so they never collide.
 """
 
 import os

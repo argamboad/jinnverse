@@ -44,7 +44,11 @@ sketch, the lessons airp paid for, and the roadmap.
   `openaipublic.blob.core.windows.net` on first use and caches it. A cloud environment with a
   Custom allowlist must include that domain, or the tests cannot count.
 - **The gates, all clean before any commit:** `uv run pytest`, `uv run ruff check`,
-  `uv run ruff format --check`, `uv run pyright` (strict).
+  `uv run ruff format --check`, `uv run pyright` (strict). The tests run on every core
+  (pytest-xdist, a throwaway database per worker); `uv run pytest -n 0` runs them in one
+  process, for a debugger. A terminal-client test waits with `settle(pilot)` (the workers done,
+  the messages handled) or `until(pilot, condition)` (what a timer brings about), from
+  `tui_support.waits` — never with a timed `pilot.pause(seconds)`.
 - **The web app lives in `web/`** (SvelteKit 5, static, a PWA): `npm ci` once, `npm run dev`
   for the dev server against the local API, and its gates — `npm run lint` (prettier),
   `npm run check` (svelte-check), `npm test` (vitest), `npm run build` — all clean before any

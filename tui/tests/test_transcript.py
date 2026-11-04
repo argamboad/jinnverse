@@ -12,6 +12,7 @@ from jinnverse_tui.app import JinnverseApp
 from jinnverse_tui.transcript import Pending, Transcript, first_row, label_of, last_row, layout
 from jinnverse_tui.view import View
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 LONG = "words and *more words* " * 40  # a dozen rows at eighty columns
 
@@ -99,7 +100,7 @@ async def test_opening_lands_on_the_newest_turns_first_row_and_the_arrows_read_t
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         app.push_screen(Bare())
         await pilot.pause()
         t = app.screen.query_one(Transcript)
@@ -132,7 +133,7 @@ async def test_paging_inside_a_tall_turn_is_never_dragged_back_and_the_selection
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         app.push_screen(Bare())
         await pilot.pause()
         t = app.screen.query_one(Transcript)
@@ -164,7 +165,7 @@ async def test_a_streamed_reply_follows_its_tail_then_lands_on_its_first_row(
 ) -> None:
     app = make_app()
     async with app.run_test(size=(80, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         app.push_screen(Bare())
         await pilot.pause()
         t = app.screen.query_one(Transcript)

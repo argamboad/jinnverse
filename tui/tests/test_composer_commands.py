@@ -10,6 +10,7 @@ from jinnverse_tui.panes import AskScreen, TextPaneScreen
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 OPENING = '*The door opens.* "You came," she says.'
 
@@ -21,10 +22,10 @@ def conversation(app: JinnverseApp) -> ConversationScreen:
 
 
 async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     return conversation(app)
 
 
@@ -105,7 +106,7 @@ async def test_a_server_command_typed_before_the_list_is_read_is_refused_not_sen
         )
         assert screen.composer.text == "/ask how old"  # kept, to send again
         assert len(server.paths("POST")) == posts
-        await pilot.pause(0.2)  # the refusal asked again, and this time the server answered
+        await settle(pilot)  # the refusal asked again, and this time the server answered
         assert app.server_commands is not None
         assert screen.slash.find("ask") is not None
 
@@ -117,9 +118,9 @@ async def test_the_command_list_is_read_once_for_the_app(
     async with app.run_test(size=(100, 30)) as pilot:
         await open_story(app, pilot)
         await pilot.press("escape")
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")  # the same story again
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert server.paths("GET").count("/commands") == 1
 
 
@@ -130,7 +131,7 @@ async def test_a_doubled_slash_sends_a_message_that_starts_with_one(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"//dance", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.text for m in screen.messages][1] == "/dance"
 
 
@@ -141,7 +142,7 @@ async def test_ask_opens_the_answer_and_f_pins_it_as_a_fact(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/ask how old is she?", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, AskScreen)
         asked = app.screen
         assert asked.aside.question == "how old is she?"
@@ -150,7 +151,7 @@ async def test_ask_opens_the_answer_and_f_pins_it_as_a_fact(
         assert screen.composer.text == ""  # the draft went once the answer came
         assert len(screen.messages) == 3  # nothing in the story
         await pilot.press("f")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert asked.pinned
         assert asked.status_line.text.startswith("Pinned under Dummy.")
         assert server.facts[told["id"]][0]["text"] == server.answer
@@ -169,7 +170,7 @@ async def test_a_refused_ask_keeps_the_question(app: JinnverseApp, server: fake.
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/ask why", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.status_line.text == (
             "There is no /ask command. Type /help for the list, or //ask to send it as a message."
         )
@@ -196,7 +197,7 @@ async def test_the_reading_commands_open_panes_or_say_why_not(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/card", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.title == "Character"
         assert list(app.screen.lines) == ["You are Dummy.", "A test."]
@@ -204,24 +205,24 @@ async def test_the_reading_commands_open_panes_or_say_why_not(
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("i", *"/facts", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.lines[1] == "  · Is a test."
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("i", *"/trackers", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)  # nothing to show: the status says why
         assert screen.status_line.text.startswith("This story keeps no meters.")
         await pilot.press("i", *"/help", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.title == "Commands"
         assert "  /card" in app.screen.lines
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("i", *"/persona", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert screen.status_line.text == "This story has no persona."
         assert screen.composer.text == ""  # a free command's draft goes at once
@@ -251,17 +252,17 @@ async def test_search_cost_and_audit_from_the_composer(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/search fog", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.status_line.text == "2 message(s) match. n for the next one."
         assert screen.transcript.selected == 0
         await pilot.press("i", *"/cost", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.lines[0] == "$0.0200   over 2 billed call(s)"
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("i", *"/audit", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.lines[0] == "#3   12 in, 3 out   served by Host"
 
@@ -273,24 +274,24 @@ async def test_recap_opens_a_pane_and_the_writes_say_so(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/recap", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, TextPaneScreen)
         assert app.screen.title == "Recap"
         assert app.screen.lines[0] == "Earlier: the fog came in."
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("i", *"/fact She owns the bar.", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ConversationScreen)
         assert screen.status_line.text.startswith("Pinned under Dummy.")
         assert server.facts[told["id"]][0]["text"] == "She owns the bar."
         assert screen.composer.text == ""
         assert len(screen.messages) == 3
         await pilot.press("i", *"/tracker Trust 7", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.text == "Trust is now 7."
         await pilot.press("i", *"/tracker Trust lots", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert screen.status_line.kind == Kind.ERROR
         assert screen.composer.text == "/tracker Trust lots"  # refused: the draft stays
 
@@ -303,8 +304,8 @@ async def test_do_with_a_message_under_it_stores_the_message_only(
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/do skip to the evening", "ctrl+j", "ctrl+j", *"Fine.")
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.text for m in screen.messages] == [OPENING, "Fine.", server.reply]
         await pilot.press("i", *"/focus Marta", "enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.role for m in screen.messages][-2:] == ["assistant", "assistant"]

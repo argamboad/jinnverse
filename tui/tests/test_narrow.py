@@ -17,6 +17,7 @@ from jinnverse_tui.status import StatusLine
 from jinnverse_tui.stories import Preview, StoriesScreen
 from jinnverse_tui.view import NARROW
 from tui_support import fake_server as fake
+from tui_support.waits import settle, until
 
 OPENING = '*The door opens.* "You came," she says.'
 
@@ -47,7 +48,7 @@ async def test_the_frame_is_one_row_top_and_bottom_and_comes_back_when_wider(
     server.add("Tale", OPENING)
     server.add("Other")
     async with app.run_test(size=(50, 24)) as pilot:
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, StoriesScreen)
         assert screen.narrow
@@ -57,6 +58,7 @@ async def test_the_frame_is_one_row_top_and_bottom_and_comes_back_when_wider(
         assert not screen.query_one(Legend).display
         line = screen.query_one(StatusLine)
         assert line.narrow
+        await until(pilot, lambda: not line.text, what="the loaded message to leave the row")
         assert line.render().plain.startswith(" Enter Open the story")  # the legend sits here
         assert not screen.query_one(Preview).display
         assert screen.rows.rows_per_item == 2
@@ -65,17 +67,17 @@ async def test_the_frame_is_one_row_top_and_bottom_and_comes_back_when_wider(
         assert "The door opens. You came, she says." in drawn[1]
         assert drawn[3].strip() == "Nothing said yet."
         await pilot.resize_terminal(100, 30)
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert not screen.narrow
         assert masthead.query_one("#brand-row").display
         assert screen.query_one(Legend).display
         assert screen.query_one(Preview).display
         assert screen.rows.rows_per_item == 1
         await pilot.resize_terminal(59, 30)
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert screen.narrow
         await pilot.resize_terminal(60, 30)
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert not screen.narrow
 
 
@@ -85,12 +87,12 @@ async def test_a_message_borrows_the_phones_row_for_a_few_seconds(
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.2)
     server.add("Tale")
     async with app.run_test(size=(50, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, StoriesScreen)
         line = screen.query_one(StatusLine)
         assert line.render().plain == "1 story loaded."  # the message has the row…
-        await pilot.pause(0.4)
+        await until(pilot, lambda: not line.text, what="the message to leave the row")
         assert line.render().plain.startswith(" Enter Open the story")  # …then the legend
         assert line.render().plain.endswith(" ? All keys")
         screen.status("Hello there.")
@@ -103,9 +105,9 @@ async def test_on_a_phone_the_conversation_takes_the_width_and_enter_is_a_new_li
     told = server.add("Tale", OPENING, "Hi")
     server.spend[told["id"]] = ("0.0123", "0")
     async with app.run_test(size=(50, 24)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, ConversationScreen)
         assert screen.query_one("#column").size.width == 50
@@ -121,10 +123,10 @@ async def test_on_a_phone_the_conversation_takes_the_width_and_enter_is_a_new_li
         assert "POST" not in " ".join(server.paths())
         assert [h.key for h in screen.hints()] == ["Ctrl+J", "Enter", "Esc"]
         await pilot.press("ctrl+j")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert [m.text for m in screen.messages][-2] == "one\ntwo"
         await pilot.resize_terminal(100, 30)
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert not screen.composer.newline_on_enter
         assert screen.transcript.rows[0].body.plain.startswith(" Dummy ")
         assert len(screen.transcript.rows[0].body.plain) > 20  # the chip and the time are back
@@ -137,25 +139,27 @@ async def test_with_the_mouse_on_the_bottom_row_is_buttons_that_press_keys(
     server.add("Tale", OPENING)
     app = make_app(config=Config(server="http://api.test", mouse=True))
     async with app.run_test(size=(50, 24)) as pilot:
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, StoriesScreen)
         line = screen.query_one(StatusLine)
+        await until(pilot, lambda: not line.text, what="the loaded message to leave the row")
         assert line.render().plain == " Open   New   Library   ⋯ "
         await pilot.click(StatusLine, offset=(1, 0))  # Open
-        await pilot.pause(0.3)
+        await settle(pilot)
         conversation = app.screen
         assert isinstance(conversation, ConversationScreen)
         line = conversation.query_one(StatusLine)
-        await pilot.pause(0.3)
+        await until(pilot, lambda: not line.text, what="the loaded message to leave the row")
         assert line.render().plain.startswith(" ‹   Write   Reroll ")
         await pilot.click(StatusLine, offset=(6, 0))  # Write
-        await pilot.pause(0.2)  # the composer's hint lingers on the row, then the buttons return
+        # The composer's hint lingers on the row, then the buttons return.
+        await until(pilot, lambda: not line.text, what="the composer's hint to leave the row")
         assert conversation.composer.display
         assert line.render().plain == " Send   Close   ⋯ "
         await pilot.press(*"Hello")
         await pilot.click(StatusLine, offset=(2, 0))  # Send
-        await pilot.pause(0.5)
+        await settle(pilot)
         assert [m.text for m in conversation.messages][-2] == "Hello"
         await pilot.click(StatusLine, offset=(1, 0))  # ‹ back
         await pilot.pause()
@@ -168,7 +172,10 @@ async def test_without_the_mouse_the_row_stays_a_legend(
     monkeypatch.setattr(StatusLine, "LINGER_SECONDS", 0.05)
     server.add("Tale")
     async with app.run_test(size=(50, 24)) as pilot:
-        await pilot.pause(0.3)
+        await settle(pilot)
         screen = app.screen
         assert isinstance(screen, StoriesScreen)
-        assert "⋯" not in screen.query_one(StatusLine).render().plain
+        line = screen.query_one(StatusLine)
+        await until(pilot, lambda: not line.text, what="the loaded message to leave the row")
+        assert line.render().plain.startswith(" Enter Open the story")
+        assert "⋯" not in line.render().plain

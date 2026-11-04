@@ -12,6 +12,11 @@ from jinnverse_tui.status import StatusLine
 from jinnverse_tui.stories import StoriesScreen
 from jinnverse_tui.waking import WakingScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle, until
+
+
+def knocks(server: fake.FakeServer) -> int:
+    return len([r for r in server.requests if r.url.path == "/health"])
 
 
 async def test_the_lamp_shows_until_the_server_answers_then_the_stories(
@@ -20,13 +25,11 @@ async def test_the_lamp_shows_until_the_server_answers_then_the_stories(
     server.asleep_for = 1000
     app = make_app()
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await until(pilot, lambda: knocks(server) >= 2, what="a second knock")  # it keeps knocking
         assert isinstance(app.screen, WakingScreen)
         assert app.screen.query_one(StatusLine).is_busy
-        knocked = len([r for r in server.requests if r.url.path == "/health"])
-        assert knocked >= 2  # it keeps knocking
         server.asleep_for = 0
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
 
 
@@ -39,12 +42,14 @@ async def test_the_knock_loop_outlives_its_widgets_without_an_error(
     server.asleep_for = 1000
     app = make_app()
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await until(pilot, lambda: knocks(server) >= 1, what="the first knock")
         screen = app.screen
         assert isinstance(screen, WakingScreen)
         for selector in ("#lamp", "#why", "#elapsed"):
             await screen.query_one(selector).remove()
-        await pilot.pause(0.2)  # several knocks, each of which used to draw
+        knocked = knocks(server)
+        # Several knocks, each of which used to draw.
+        await until(pilot, lambda: knocks(server) >= knocked + 3, what="three more knocks")
         knocking = [w for w in app.workers if w.node is screen]
         assert [w.state for w in knocking] == [WorkerState.RUNNING]  # still knocking, no error
 
@@ -54,14 +59,14 @@ async def test_without_a_token_the_reader_signs_in_and_letters_type_into_the_fie
 ) -> None:
     app = make_app(signed_in=False)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, SignInScreen)
         await pilot.press(*"quit")  # q is quit while navigating, but this is a text field
         assert isinstance(app.screen, SignInScreen)
         await pilot.press("backspace", "backspace", "backspace", "backspace")
         await pilot.press(*fake.USERNAME, "enter")
         await pilot.press(*fake.PASSWORD, "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
     assert tokens.read() == fake.TOKEN
 
@@ -71,9 +76,9 @@ async def test_a_wrong_password_stays_on_the_screen_with_the_servers_sentence(
 ) -> None:
     app = make_app(signed_in=False)
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await pilot.press(*fake.USERNAME, "enter", *"wrong", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, SignInScreen)
         assert app.screen.status_line.text == "That is not the username and password."
 
@@ -82,7 +87,7 @@ async def test_a_401_later_sends_the_reader_back_to_sign_in(
     app: JinnverseApp, server: fake.FakeServer, tokens: TokenStore
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
         server.revoke()
         result = await app.call("Refreshing", app.api.stories())
@@ -97,13 +102,13 @@ async def test_a_lost_server_sends_the_reader_back_to_the_lamp(
     app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         server.down = True
         await app.call("Refreshing", app.api.stories())
         await pilot.pause()
         assert isinstance(app.screen, WakingScreen)
         server.down = False
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, StoriesScreen)
 
 
@@ -111,7 +116,7 @@ async def test_a_refusal_lands_in_the_status_row(
     app: JinnverseApp, server: fake.FakeServer
 ) -> None:
     async with app.run_test(size=(100, 30)) as pilot:
-        await pilot.pause(0.1)
+        await settle(pilot)
         await app.call("Opening", app.api.story(fake.uuid.uuid4()))
         await pilot.pause()
         assert isinstance(app.screen, StoriesScreen)

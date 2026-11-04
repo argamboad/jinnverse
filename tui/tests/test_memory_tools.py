@@ -12,15 +12,16 @@ from jinnverse_tui.conversation import ConversationScreen
 from jinnverse_tui.panes import ReviewScreen
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
+from tui_support.waits import settle
 
 OPENING = '*The door opens.* "You came," she says.'
 
 
 async def open_story(app: JinnverseApp, pilot: Pilot[None]) -> ConversationScreen:
-    await pilot.pause(0.1)
+    await settle(pilot)
     assert isinstance(app.screen, StoriesScreen)
     await pilot.press("enter")
-    await pilot.pause(0.2)
+    await settle(pilot)
     screen = app.screen
     assert isinstance(screen, ConversationScreen)
     return screen
@@ -82,7 +83,7 @@ async def test_review_asks_first_with_the_price_and_esc_calls_nothing(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/review", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
 
         assert isinstance(app.screen, ConfirmScreen)
         assert "about $0.0031" in consequences(app)
@@ -91,7 +92,7 @@ async def test_review_asks_first_with_the_price_and_esc_calls_nothing(
         assert [r.url.params.get("dry_run") for r in reviews] == ["true"]  # the estimate only
 
         await pilot.press("escape")
-        await pilot.pause(0.1)
+        await settle(pilot)
         assert app.screen is screen
         assert screen.status_line.text == "Cancelled."
         assert len([r for r in server.requests if r.url.path.endswith("/facts/review")]) == 1
@@ -105,9 +106,9 @@ async def test_the_proposals_are_listed_and_the_kept_ones_applied_as_one(
     async with app.run_test(size=(100, 36)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/review", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("enter")  # yes
-        await pilot.pause(0.3)
+        await settle(pilot)
 
         assert isinstance(app.screen, ReviewScreen)
         shown = proposals_shown(app)
@@ -121,13 +122,13 @@ async def test_the_proposals_are_listed_and_the_kept_ones_applied_as_one(
         assert "paid for a week." in shown[2]
 
         await pilot.press("down", "space")  # drop the retire
-        await pilot.pause(0.1)
+        await settle(pilot)
         shown = proposals_shown(app)
         assert shown[1].startswith("› RETIRE  drop")
         assert shown[0].startswith("  REWRITE  keep")
 
         await pilot.press("a")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert app.screen is screen
         [confirmed] = server.applied
         assert [p["action"] for p in confirmed] == ["rewrite", "merge"]
@@ -147,13 +148,13 @@ async def test_esc_on_the_proposals_applies_nothing(
     async with app.run_test(size=(100, 36)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/review", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
         assert isinstance(app.screen, ReviewScreen)
 
         await pilot.press("escape")
-        await pilot.pause(0.1)
+        await settle(pilot)
 
         assert app.screen is screen
         assert server.applied == []
@@ -169,11 +170,11 @@ async def test_a_review_with_nothing_to_propose_says_so(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/review", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert "about what a reply costs" in consequences(app)  # nothing priced yet
 
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
 
         assert app.screen is screen
         assert screen.status_line.text == "The model proposes no change to the facts."
@@ -187,7 +188,7 @@ async def test_condense_asks_with_what_would_merge_and_then_merges(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/condense", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
 
         assert isinstance(app.screen, ConfirmScreen)
         text = consequences(app)
@@ -196,7 +197,7 @@ async def test_condense_asks_with_what_would_merge_and_then_merges(
         assert "about $0.0003" in text
 
         await pilot.press("enter")
-        await pilot.pause(0.3)
+        await settle(pilot)
 
         assert app.screen is screen
         assert screen.status_line.text == "2 summaries became one: 1,500 tokens are now 1,058."
@@ -211,13 +212,13 @@ async def test_condense_takes_a_count_and_refuses_a_bad_one(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/condense x", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert app.screen is screen
         assert screen.status_line.text.startswith("/condense takes how many")
         assert not any(r.url.path.endswith("/condense") for r in server.requests)
 
         await pilot.press("i", *"/condense 3", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
         assert isinstance(app.screen, ConfirmScreen)
         assert "Merge the oldest 3 summaries into one?" in str(
             app.screen.query_one(".question").render()
@@ -233,7 +234,7 @@ async def test_a_story_with_too_few_summaries_is_told_so(
     async with app.run_test(size=(100, 30)) as pilot:
         screen = await open_story(app, pilot)
         await pilot.press("i", *"/condense", "enter")
-        await pilot.pause(0.2)
+        await settle(pilot)
 
         assert isinstance(app.screen, ConversationScreen)
         assert screen.status_line.text == "This story has fewer than two summaries to merge."

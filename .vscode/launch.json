@@ -40,7 +40,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
-      "args": ["${file}", "-q", "-p", "no:cacheprovider"],
+      "args": ["${file}", "-q", "-p", "no:cacheprovider", "-n", "0"],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "presentation": { "group": "3-test", "order": 1 }
