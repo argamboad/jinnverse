@@ -9,7 +9,9 @@ in, a new character's opening straight after its card; ``Enter`` edits the text,
 ``O`` a character's opening, ``F2`` renames, ``Del`` removes after asking (the server refuses
 while a live story uses it, and says which); ``D`` makes a persona the default. A name
 starting with ``_`` is kept but not listed; ``_`` shows those too, and puts them away again.
-``H`` opens the entry's history (``history.py``), where an old version can be put back.
+``H`` opens the entry's history (``history.py``), where an old version can be put back, and
+``L`` a character's lore (``lore.py``): the entries sent only while one of their keys is in
+the scene.
 
 A save carries the version the editor started from. When the entry moved on in between —
 edited on the phone while the laptop had it open — the API refuses with the entry as it is now,
@@ -20,7 +22,7 @@ and ``ConflictScreen`` shows that text so the reader decides: ``Enter`` saves th
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar, Literal, cast
@@ -44,15 +46,17 @@ from jinnverse_tui.api import (
     Version,
 )
 from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conflict import ConflictScreen
 from jinnverse_tui.editor import editor_name
 from jinnverse_tui.hairline import Hairline
 from jinnverse_tui.history import HistoryScreen
 from jinnverse_tui.legend import Hint
 from jinnverse_tui.listing import Rows
+from jinnverse_tui.lore import LoreScreen
 from jinnverse_tui.palette import PaletteCommand
 from jinnverse_tui.status import Kind
 from jinnverse_tui.textfmt import count, pad
-from jinnverse_tui.theme import HEADING, SELECTION
+from jinnverse_tui.theme import SELECTION
 from jinnverse_tui.view import View
 
 SHELVES: tuple[Shelf, ...] = ("characters", "personas", "snippets")
@@ -86,70 +90,6 @@ def about(entry: Entry, shelf: Shelf) -> str:
     return " · ".join(parts)
 
 
-class ConflictScreen(View):
-    """The entry as the server has it now, beside what the reader was about to save."""
-
-    TITLE = "Changed elsewhere"
-    HINTS: ClassVar[tuple[Hint, ...]] = (
-        Hint("Enter", "Save mine over it"),
-        Hint("PgUp/PgDn", "Read theirs"),
-        Hint("Esc", "Keep theirs"),
-    )
-    AUTO_FOCUS: ClassVar[str | None] = ""
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("enter", "save_mine", "Save mine", show=False),
-        Binding("pageup", "page(-1)", "Up", show=False),
-        Binding("pagedown", "page(1)", "Down", show=False),
-    ]
-
-    DEFAULT_CSS = """
-    ConflictScreen #body { padding: 0 2; }
-    ConflictScreen .heading { margin-top: 1; }
-    ConflictScreen .why { color: $warning; }
-    ConflictScreen VerticalScroll { height: 1fr; }
-    ConflictScreen .theirs { padding-left: 2; color: $muted; }
-    """
-
-    def __init__(
-        self, message: str, theirs: EntryFull, save: Callable[[EntryFull], Awaitable[object]]
-    ) -> None:
-        super().__init__()
-        self.theirs = theirs
-        self._message = message
-        self._save = save
-
-    def body(self) -> ComposeResult:
-        yield Static(
-            Content.from_markup(
-                f"{HEADING}{Content(self.theirs.name).markup}[/]   "
-                f"[$muted]version {self.theirs.version}, as the server has it now[/]"
-            ),
-            classes="heading",
-        )
-        yield Static(self._message, classes="why")
-        yield Hairline()
-        with VerticalScroll():
-            yield Static(self.theirs.text, classes="theirs")
-
-    def action_page(self, direction: int) -> None:
-        scroller = self.query_one(VerticalScroll)
-        if direction > 0:
-            scroller.scroll_page_down(animate=False)
-        else:
-            scroller.scroll_page_up(animate=False)
-
-    async def action_save_mine(self) -> None:
-        app = self.jinnverse
-        app.pop_screen()
-        await app.call("Saving", self._save(self.theirs))
-
-    def action_back(self) -> None:
-        below = self.jinnverse.screen_stack[-2]
-        self.jinnverse.pop_screen()
-        if isinstance(below, View):
-            below.status("Kept the server's text. Yours was not saved.", Kind.WARNING)
-
-
 class LibraryScreen(View):
     TITLE = "Library"
     HINTS: ClassVar[tuple[Hint, ...]] = (
@@ -162,6 +102,7 @@ class LibraryScreen(View):
         Hint("D", "Default persona"),
         Hint("Del", "Remove"),
         Hint("H", "History"),
+        Hint("L", "Lore"),
         Hint("_", "Hidden"),
         Hint("PgUp/PgDn", "Read"),
         Hint("Esc", "Back"),
@@ -195,6 +136,7 @@ class LibraryScreen(View):
         Binding("delete", "remove", "Remove", show=False),
         Binding("underscore", "hidden", "Hidden entries", show=False),
         Binding("h,H", "history", "History", show=False),
+        Binding("l,L", "lore", "Lore", show=False),
         Binding("r,R,ctrl+r", "refresh", "Refresh", show=False),
     ]
 
@@ -276,6 +218,9 @@ class LibraryScreen(View):
             ),
             PaletteCommand(
                 "History", "every saved version; put an old one back", self.action_history
+            ),
+            PaletteCommand(
+                "Lore", "a character's entries, sent only while in the scene", self.action_lore
             ),
         ]
 
@@ -372,6 +317,12 @@ class LibraryScreen(View):
         used = f"used by {', '.join(full.used_by)}" if full.used_by else "used by no live story"
         if self.shelf == "snippets":
             used = "copied into a message when :name is typed"
+        if self.shelf == "characters":
+            try:
+                entries = await self.jinnverse.api.lore(full.id)
+            except ApiError, UnreachableError:
+                entries = []
+            used += f"   ·   {count(len(entries), 'lore entry', 'lore entries')}"
         caption.update(f"{full.name}   ·   version {full.version}   ·   {used}")
         note.display = bool(full.description)
         note.update(full.description or "")
@@ -635,6 +586,8 @@ class LibraryScreen(View):
                 clear_description=clear_description,
             )
         except ConflictError as conflict:
+            if not isinstance(conflict.current, EntryFull):
+                raise  # a lore entry's conflict cannot come from a card's save
 
             async def over(theirs: EntryFull) -> None:
                 saved = await api.save_entry(
@@ -698,6 +651,16 @@ class LibraryScreen(View):
         if self._mode != "list" or entry is None:
             return
         self.jinnverse.push_screen(HistoryScreen(self.shelf, entry, partial(self._put_back, entry)))
+
+    def action_lore(self) -> None:
+        """A character's lorebook, on its own screen (#269)."""
+        entry = self._shown
+        if self._mode != "list" or entry is None:
+            return
+        if self.shelf != "characters":
+            self.status(f"Only a character has lore; a {self.kind} is sent whole.", Kind.WARNING)
+            return
+        self.jinnverse.push_screen(LoreScreen(entry))
 
     async def _put_back(self, entry: EntryFull, old: Version) -> None:
         """Saves an old version as a new one over the version the history was opened on: an

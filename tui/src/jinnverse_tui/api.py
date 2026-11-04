@@ -80,10 +80,11 @@ def _failed_to_connect(error: httpx2.TransportError, server: str) -> Unreachable
 
 
 class ConflictError(ApiError):
-    """A 409 on a library save that carries the entry as it is now, so a screen can show both
-    texts and let the reader decide instead of losing either."""
+    """A 409 on a library save that carries the entry as it is now — a card's, or a lore
+    entry's — so a screen can show both texts and let the reader decide instead of losing
+    either."""
 
-    def __init__(self, detail: str, current: EntryFull) -> None:
+    def __init__(self, detail: str, current: EntryFull | LoreEntry) -> None:
         super().__init__(409, detail)
         self.current = current
 
@@ -153,6 +154,21 @@ class EntryFull(Entry):
     text: str
     opening: str | None = None
     used_by: list[str] = Field(default_factory=list[str])
+
+
+class LoreEntry(BaseModel):
+    """One entry of a character's lorebook: authored text sent only while one of its keys is
+    in the scene. Listed in the order they were made, the order of the card they came from."""
+
+    id: uuid.UUID
+    character_id: uuid.UUID
+    name: str
+    keys: list[str]
+    """Lowercased and trimmed, as the API keeps them; matched as whole words, case aside."""
+    text: str
+    description: str | None = None
+    version: int
+    updated_at: datetime
 
 
 class Version(BaseModel):
@@ -511,6 +527,7 @@ Event = Delta | TurnDone | AsideDone | Said | Failed
 _stories = TypeAdapter(list[Story])
 _entries = TypeAdapter(list[Entry])
 _versions = TypeAdapter(list[Version])
+_lore = TypeAdapter(list[LoreEntry])
 _facts = TypeAdapter(list[Fact])
 _dials = TypeAdapter(list[Dial])
 _story_dials = TypeAdapter(list[StoryDial])
@@ -909,6 +926,50 @@ class Api:
     async def delete_entry(self, shelf: Shelf, entry_id: uuid.UUID) -> None:
         await self._request("DELETE", f"/library/{shelf}/{entry_id}")
 
+    # -- a character's lore --------------------------------------------------------------------
+
+    async def lore(self, character_id: uuid.UUID) -> list[LoreEntry]:
+        """The character's lorebook, whole: the texts come with the list."""
+        return _lore.validate_python(
+            await self._request("GET", f"/library/characters/{character_id}/lore")
+        )
+
+    async def create_lore(
+        self, character_id: uuid.UUID, name: str, keys: Sequence[str], text: str
+    ) -> LoreEntry:
+        body = {"name": name, "keys": list(keys), "text": text}
+        return LoreEntry.model_validate(
+            await self._request("POST", f"/library/characters/{character_id}/lore", json=body)
+        )
+
+    async def save_lore(
+        self,
+        character_id: uuid.UUID,
+        entry_id: uuid.UUID,
+        version: int,
+        *,
+        name: str | None = None,
+        keys: Sequence[str] | None = None,
+        text: str | None = None,
+    ) -> LoreEntry:
+        """Saves what is given over ``version``; a save over a newer one raises
+        ``ConflictError`` with the entry as it is now."""
+        body: dict[str, object] = {"version": version}
+        if name is not None:
+            body["name"] = name
+        if keys is not None:
+            body["keys"] = list(keys)
+        if text is not None:
+            body["text"] = text
+        return LoreEntry.model_validate(
+            await self._request(
+                "PATCH", f"/library/characters/{character_id}/lore/{entry_id}", json=body
+            )
+        )
+
+    async def delete_lore(self, character_id: uuid.UUID, entry_id: uuid.UUID) -> None:
+        await self._request("DELETE", f"/library/characters/{character_id}/lore/{entry_id}")
+
     # -- dials ----------------------------------------------------------------------------------
 
     async def dial_pack(self) -> list[Dial]:
@@ -946,8 +1007,8 @@ class Api:
         return self._stream("POST", f"/stories/{story_id}/reroll", body)
 
 
-def _current(response: httpx2.Response) -> EntryFull | None:
-    """The entry a library 409 carries, when it carries one."""
+def _current(response: httpx2.Response) -> EntryFull | LoreEntry | None:
+    """The entry a library 409 carries, when it carries one: a card's, or a lore entry's."""
     try:
         body: object = response.json()
     except ValueError:
@@ -960,6 +1021,11 @@ def _current(response: httpx2.Response) -> EntryFull | None:
     current = cast(dict[str, object], detail).get("current")
     if not isinstance(current, dict):
         return None
+    if "keys" in current:  # a lore entry's conflict carries its keys; a card's never does
+        try:
+            return LoreEntry.model_validate(current)
+        except ValueError:
+            return None
     try:
         # A conflict may carry no preview, which a list entry needs: it is the text's start.
         text = str(cast(dict[str, object], current).get("text", ""))

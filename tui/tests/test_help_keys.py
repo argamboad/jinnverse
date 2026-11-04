@@ -9,6 +9,7 @@ from jinnverse_tui.help import SECTIONS
 from jinnverse_tui.history import HistoryScreen
 from jinnverse_tui.legend import Hint
 from jinnverse_tui.library import LibraryScreen
+from jinnverse_tui.lore import LoreScreen
 from jinnverse_tui.newstory import NewStoryScreen
 from jinnverse_tui.panes import ReviewScreen
 
@@ -29,6 +30,7 @@ def in_help(section: str) -> set[str]:
     [
         (LibraryScreen.HINTS, "Library"),
         (HistoryScreen.HINTS, "An entry's history"),
+        (LoreScreen.HINTS, "A character's lore"),
         (NewStoryScreen.HINTS, "New story"),
         (ReviewScreen.HINTS, "Review facts (/review)"),
     ],

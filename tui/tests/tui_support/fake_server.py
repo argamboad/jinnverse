@@ -96,6 +96,8 @@ class FakeServer:
             "snippets": [],
         }
         self.default_persona: dict[str, Any] | None = None
+        self.lore: dict[str, list[dict[str, Any]]] = {}
+        """A character's lore entries, by the character's id, in the order they were made."""
         self.history: dict[str, list[dict[str, Any]]] = {}
         """Every saved version of an entry, by its id, oldest first, as `library_history`."""
         self.pack: list[dict[str, Any]] = [
@@ -298,6 +300,23 @@ class FakeServer:
         added = entry(name, text, opening, description)
         self.library[shelf].append(added)
         self._remember(added)
+        return added
+
+    def shelve_lore(
+        self, character_id: str, name: str, keys: list[str], text: str
+    ) -> dict[str, Any]:
+        """An entry of a character's lore, as the API keeps it."""
+        added = {
+            "id": str(uuid.uuid4()),
+            "character_id": character_id,
+            "name": name,
+            "keys": keys,
+            "text": text,
+            "description": None,
+            "version": 1,
+            "updated_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
+        }
+        self.lore.setdefault(character_id, []).append(added)
         return added
 
     def revise(self, found: dict[str, Any], **changes: Any) -> dict[str, Any]:
@@ -627,6 +646,8 @@ class FakeServer:
         if shelf is None:
             return httpx2.Response(404, json={"detail": "There is no such shelf."})
         kind = parts[1][:-1]
+        if parts[1] == "characters" and parts[3:4] == ["lore"]:
+            return self._lore(parts[2], parts[4:], request)
         if len(parts) == 2 and request.method == "GET":
             # A name starting with `_` is kept but listed only when asked for, as the API does.
             hidden = request.url.params.get("hidden") == "true"
@@ -699,6 +720,62 @@ class FakeServer:
             shelf.remove(found)
             return httpx2.Response(204)
         return httpx2.Response(404, json={"detail": f"Nothing answers {request.method} {parts}."})
+
+    def _lore(self, character_id: str, rest: list[str], request: httpx2.Request) -> httpx2.Response:
+        """A character's lore, as the API serves it under the character."""
+        if not any(c["id"] == character_id for c in self.library["characters"]):
+            return httpx2.Response(404, json={"detail": "There is no character with that id."})
+        entries = self.lore.setdefault(character_id, [])
+        if not rest and request.method == "GET":
+            return httpx2.Response(200, json=entries)
+        if not rest and request.method == "POST":
+            body = json.loads(request.content)
+            keys = [k.strip().lower() for k in body["keys"] if k.strip()]
+            if not keys:
+                return httpx2.Response(422, json={"detail": "An entry needs at least one key."})
+            if any(e["name"].lower() == body["name"].lower() for e in entries):
+                return httpx2.Response(
+                    409,
+                    json={
+                        "detail": f"This character already has an entry called '{body['name']}'."
+                    },
+                )
+            return httpx2.Response(
+                201, json=self.shelve_lore(character_id, body["name"], keys, body["text"])
+            )
+        found = next((e for e in entries if e["id"] == rest[0]), None) if rest else None
+        if found is None:
+            return httpx2.Response(
+                404, json={"detail": "This character has no lore entry with that id."}
+            )
+        if len(rest) == 1 and request.method == "GET":
+            return httpx2.Response(200, json=found)
+        if len(rest) == 1 and request.method == "PATCH":
+            body = json.loads(request.content)
+            if body["version"] != found["version"]:
+                return httpx2.Response(
+                    409,
+                    json={
+                        "detail": {
+                            "message": "This entry changed somewhere else since you opened it. "
+                            "Nothing was saved. Here is what it says now; save again to "
+                            "replace it.",
+                            "current": found,
+                        }
+                    },
+                )
+            changed = False
+            for field in ("name", "keys", "text", "description"):
+                if field in body and body[field] != found.get(field):
+                    found[field] = body[field]
+                    changed = True
+            if changed:
+                found["version"] += 1
+            return httpx2.Response(200, json=found)
+        if len(rest) == 1 and request.method == "DELETE":
+            entries.remove(found)
+            return httpx2.Response(204)
+        return httpx2.Response(404, json={"detail": "Not found."})
 
     def _users(self, shelf: str, found: dict[str, Any]) -> list[str]:
         """The live stories that use an entry, by name; none for a snippet, which is copied."""

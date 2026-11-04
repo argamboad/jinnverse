@@ -7,8 +7,9 @@ from textual.pilot import Pilot
 
 from jinnverse_tui.app import JinnverseApp
 from jinnverse_tui.confirm import ConfirmScreen
+from jinnverse_tui.conflict import ConflictScreen
 from jinnverse_tui.history import HistoryScreen
-from jinnverse_tui.library import ConflictScreen, LibraryScreen
+from jinnverse_tui.library import LibraryScreen
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake

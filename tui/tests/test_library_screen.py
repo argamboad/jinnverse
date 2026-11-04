@@ -5,9 +5,11 @@ from collections.abc import Callable
 
 from textual.pilot import Pilot
 
+from jinnverse_tui.api import EntryFull
 from jinnverse_tui.app import JinnverseApp
 from jinnverse_tui.confirm import ConfirmScreen
-from jinnverse_tui.library import ConflictScreen, LibraryScreen
+from jinnverse_tui.conflict import ConflictScreen
+from jinnverse_tui.library import LibraryScreen
 from jinnverse_tui.status import Kind
 from jinnverse_tui.stories import StoriesScreen
 from tui_support import fake_server as fake
@@ -194,7 +196,9 @@ async def test_a_save_over_an_edit_made_elsewhere_shows_theirs_and_asks(
         await pilot.press("enter")
         await pilot.pause(0.3)
         assert isinstance(app.screen, ConflictScreen)
-        assert app.screen.theirs.version == 2
+        theirs = app.screen.theirs
+        assert isinstance(theirs, EntryFull)
+        assert theirs.version == 2
         assert "Theirs, from the phone." in str(app.screen.query_one(".theirs").render())
         await pilot.press("escape")  # keep theirs
         await pilot.pause()
