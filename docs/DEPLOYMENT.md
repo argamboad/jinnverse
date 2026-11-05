@@ -84,6 +84,34 @@ exposure, and their defaults are the deployed ones, so leave them unset on Rende
   database (`sign_in_failures`), so a sleeping service does not forget it. `UV_VERSION` comes from the
 blueprint. After a change, the service restarts on its own; a deploy is not needed.
 
+**Trying another model.** The model is one setting for every story at once (a model per story was
+built in step 7 and taken out, #140), and a trial is judged on real stories, never routed by a
+word in the message. Set these on the Render service, save, and the restart does the rest; change
+them back the same way. `JINNVERSE_TEMPERATURE` reaches the replies only — the summariser and the
+extractor keep their own — and `JINNVERSE_BACKGROUND_MODEL` defaults to the reply model, so a
+finetune must not be left to write the summaries. The candidates, checked against OpenRouter on
+2026-11-05 (prices per million tokens, prompt / completion):
+
+| Model | `JINNVERSE_MODEL` | `JINNVERSE_TEMPERATURE` | `JINNVERSE_BACKGROUND_MODEL` | Why, and the catch |
+|---|---|---|---|---|
+| DeepSeek V4 Flash, the default | `deepseek/deepseek-v4-flash` | leave unset (1.0; holds up to 1.3) | leave unset | Does not refuse. 1M context, $0.09 / $0.18 |
+| DeepSeek V4.1 Flash | `deepseek/deepseek-v4.1-flash` | leave unset | leave unset | The same family, newer; $0.04 / $0.50, so cheaper prompts and dearer replies. Untried on a story |
+| Euryale 70B | `sao10k/l3.1-euryale-70b` | `0.9` | `deepseek/deepseek-v4-flash` | A Llama 3.1 roleplay finetune built not to refuse; 131k context, $0.85 / $0.85. The Llama finetunes turned to token soup above 0.9 in airp's tests |
+| Cydonia 24B v4.1 | `thedrummer/cydonia-24b-v4.1` | `0.9` | `deepseek/deepseek-v4-flash` | A Mistral Small finetune of the same kind, smaller and cheaper; 131k context, $0.30 / $0.50. The same temperature note |
+
+Hosts: OpenRouter spreads a model across providers, and they differ (some cache prompts, some
+return empty replies). `JINNVERSE_PREFER_PROVIDERS=["deepinfra"]` and
+`JINNVERSE_IGNORE_PROVIDERS=["chutes"]` take provider slugs as the model's page on OpenRouter
+lists them, as JSON lists; `JINNVERSE_ALLOW_PROVIDER_FALLBACKS` says whether the others may serve
+when the preferred ones cannot.
+
+Out, with the reason written down: Gemini (`google/gemini-2.5-pro`, `google/gemini-4-argon`) and
+the Claude Sonnets are aligned and refuse what this app is for, and a "jailbreak" prompt to get
+past that is not an option. It breaks the provider's terms, and the key is the owner's; it fails
+without notice when the provider updates, and a refused summary is a hole in a story's memory;
+it is hundreds of tokens at the end of every prompt, where they break the cached prefix; and a
+model told at length to be unhinged performs the instruction instead of the scene.
+
 ### 4. GitHub: secret and variable
 
 GitHub → `argamboad/jinnverse` → **Settings → Secrets and variables → Actions**.
