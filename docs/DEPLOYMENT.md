@@ -99,11 +99,16 @@ finetune must not be left to write the summaries. The candidates, checked agains
 | Euryale 70B | `sao10k/l3.1-euryale-70b` | `0.9` | `deepseek/deepseek-v4-flash` | A Llama 3.1 roleplay finetune built not to refuse; 131k context, $0.85 / $0.85. The Llama finetunes turned to token soup above 0.9 in airp's tests |
 | Cydonia 24B v4.1 | `thedrummer/cydonia-24b-v4.1` | `0.9` | `deepseek/deepseek-v4-flash` | A Mistral Small finetune of the same kind, smaller and cheaper; 131k context, $0.30 / $0.50. The same temperature note |
 
-Hosts: OpenRouter spreads a model across providers, and they differ (some cache prompts, some
-return empty replies). `JINNVERSE_PREFER_PROVIDERS=["deepinfra"]` and
-`JINNVERSE_IGNORE_PROVIDERS=["chutes"]` take provider slugs as the model's page on OpenRouter
+Hosts: OpenRouter spreads a model across providers, and they differ in kind, not only in
+caching. Seen with DeepSeek V4 Flash on 2026-11-05 to 08: **GMICloud** served every reply for a
+month, then drifted into word salad at temperature 1.0 on a 43,000-token prompt; **Baidu** writes
+cleanly and caches the prompt at 88,000 tokens, and refuses explicit scenes; **SiliconFlow** keeps
+no prompt cache, so a reply at that size costs about a cent against a tenth of that. The lever is
+the `provider` routing object: `JINNVERSE_IGNORE_PROVIDERS=["gmicloud"]` and
+`JINNVERSE_PREFER_PROVIDERS=["baidu"]` take provider slugs as the model's page on OpenRouter
 lists them, as JSON lists; `JINNVERSE_ALLOW_PROVIDER_FALLBACKS` says whether the others may serve
-when the preferred ones cannot.
+when the preferred ones cannot. A host is judged on a story, like a model, and the ledger's
+`provider` column says who wrote what.
 
 Out, with the reason written down: Gemini (`google/gemini-2.5-pro`, `google/gemini-4-argon`) and
 the Claude Sonnets are aligned and refuse what this app is for, and a "jailbreak" prompt to get

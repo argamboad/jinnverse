@@ -172,7 +172,9 @@ Each was measured on real stories and cost real time. Do not re-learn them.
   keeps everything up to the first thing that changed; retrieval in the middle would break the
   cache every turn.
 - **A budget far below the model's window** (airp: 32,000 tokens by default). Attention thins out,
-  and every token is paid for on every turn.
+  and every token is paid for on every turn. **The budget is relative to the card:** 90,000 on a
+  27,000-token card is where every host began to fail (2026-11-07, #280); the 32,000 default stands
+  for cards under 10,000 tokens, and a bigger card is a lorebook before it is a bigger budget.
 - **When the budget is tight, the transcript gives way, oldest first** — but **the newest turn is
   always kept**, even over budget. A real story once lost the reader's own message from its prompt.
 - **Recalled memories are capped at a share of the budget** (airp: 10%), not just by count: four
@@ -245,18 +247,28 @@ Each was measured on real stories and cost real time. Do not re-learn them.
 - **Send `reasoning: {enabled: false}` on replies, `/ask` and summaries.** Without it, the default
   came back empty 3 times in 5 at a 400-token ceiling, every token spent thinking; and summaries
   spent up to 1,120 of their 1,200 tokens thinking and were stored cut off (#226).
-- **Temperature depends on the model.** Roleplay finetunes wrote cleanly up to 0.9 and turned to
-  token soup at 1.3; DeepSeek holds at 1.3.
+- **Temperature depends on the model, and on the prompt's length.** Roleplay finetunes wrote
+  cleanly up to 0.9 and turned to token soup at 1.3; DeepSeek held at 1.3 on a 4,000-token card
+  and drifted at 1.2 on a 10,000-token prompt (2026-11-06). On long prompts stay at 1.0 or below,
+  and raise it per story with the Creativity dial, never for every story with the variable.
 - **One model for every story.** airp's choice of six models per story gave nothing back: the
   one billed as the most explicit wrote about like the default, and the larger ones cost several
   times as much for no difference a reader could name. The card, the dials and the host change
   the writing. Lustjinn built the choice in step 7 and took it out (#140); changing the default
   is one setting.
-- **OpenRouter spreads a model across hosts**, and they differ: some cache prompts and some do not,
-  some return empty replies or garbage. Store `provider` per reply, and allow ignoring or
-  preferring hosts by slug.
+- **OpenRouter spreads a model across hosts**, and they differ *in kind*, not only in caching
+  (2026-11-05 to 08, the same model on three hosts): **GMICloud** wrote cleanly for a month, then
+  drifted into word salad at 1.0 on a 43,000-token prompt; **Baidu** refuses explicit scenes with a
+  model that refuses nowhere else; **SiliconFlow** keeps no prompt cache, so an 88,000-token reply
+  costs ten times Baidu's. Store `provider` per reply, ignore and prefer hosts by slug, and when a
+  story changes character overnight, read the ledger's `provider` column before the code.
 - **Every instruction sent to the model must say what it is** — an out-of-character direction — and
   that the reply must be the scene itself. A bare directive gets echoed back as the reply.
+- **What the model reads last is what it answers.** The layers that change with the scene — recalled
+  memories, lore, trackers, the status block, the reminders, a reroll's instruction — go *before*
+  the reader's newest turn, never after it (#280). Sent after it, they were looked past on a short
+  prompt and answered on a long one: at 43,000 tokens the replies became the status rules and the
+  reminders paraphrased, at 88,000 the reroll instruction read back word for word.
 - **Slash commands that are not recognised are refused, never sent.** A typo must never become a
   permanent, billed turn.
 
