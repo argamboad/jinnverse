@@ -32,6 +32,14 @@ thing that never changes to the thing that changes every turn:
 Retrieval goes *after* the history on purpose. Recalled turns change with every message, and
 putting them before the transcript would invalidate the cache from that point down, every turn.
 
+::: note
+One correction from Step 25 (chapter 21): *after the history* does not mean *after the reader's
+newest turn*. Since #280 the layers that follow the history — memories, lore, trackers, status,
+reminders, a reroll's instruction — go in before the reader's last message, and the reader's own
+words close the prompt. A model answers whatever it reads last; on a long prompt it answered the
+notes. The order of the layers and the audit are as this chapter describes.
+:::
+
 ## The shape: dataclasses in, dataclasses out
 
 `src/jinnverse/context.py` has one input type and one output type:
