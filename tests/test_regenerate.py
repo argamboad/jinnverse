@@ -62,8 +62,8 @@ async def test_a_reroll_sends_its_reason_as_the_last_layer_and_the_old_reply_is_
 
     assert streamed.done["reply"]["text"] == "Second version."
     sent = model.last["messages"]
-    assert sent[-1] == {"role": "system", "content": directive(Reason.LOOPING)}
-    assert sent[-2] == {"role": "user", "content": "Hello."}
+    assert sent[-2] == {"role": "system", "content": directive(Reason.LOOPING)}
+    assert sent[-1] == {"role": "user", "content": "Hello."}  # the reader's turn closes it
     assert all("First version." not in m["content"] for m in sent)
     visible = [m.text for m in await messages(session, story)]
     assert visible[1:] == ["Hello.", "Second version."]
@@ -79,8 +79,8 @@ async def test_the_typed_guidance_is_a_direction_never_the_latest_message(
     await reroll(client, story.id, reason="steer", instructions="have her refuse the money")
 
     sent = model.last["messages"]
-    assert sent[-1]["content"].endswith("Also, from the reader: have her refuse the money")
-    assert sent[-1]["role"] == "system"
+    assert sent[-2]["content"].endswith("Also, from the reader: have her refuse the money")
+    assert sent[-2]["role"] == "system"
     assert [m["content"] for m in sent if m["role"] == "user"] == ["Hello."]
     stored = await messages(session, story, hidden=True)
     assert not any("refuse the money" in m.text for m in stored)
@@ -95,7 +95,7 @@ async def test_a_bare_reroll_still_asks_for_the_turn_afresh(
 
     await reroll(client, story.id)
 
-    assert model.last["messages"][-1]["content"] == directive(Reason.NONE)
+    assert model.last["messages"][-2]["content"] == directive(Reason.NONE)
 
 
 async def test_an_unknown_reason_is_refused_before_anything_is_hidden(

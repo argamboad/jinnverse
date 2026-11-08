@@ -5,6 +5,11 @@ recalled memories, lore, trackers, status, reminders, instruction — because a 
 cache keeps everything up to the first byte that changed. The card never changes; the instruction
 changes every turn. Put retrieval in the middle and the cache would break on every turn.
 
+One exception to that order, at the very end: the prompt ends on the reader's turn (#280). The
+layers that change with the scene go in before the reader's newest message, never after it. A
+model answers whatever it reads last, and at 45,000 tokens one started answering the status rules
+and the reminders instead of the reader, word for word.
+
 Pure functions over dataclasses: nothing here touches the database or the network, so every rule
 is tested with a real-size card in a few milliseconds.
 """
@@ -263,6 +268,13 @@ def build(
     The instruction goes as `user` when the transcript ends on a reply and as `system` when it
     ends on the reader's own turn — a model given two user turns in a row tends to answer the
     second and forget the first.
+
+    The prompt ends on the reader's side (#280). When the transcript ends on the reader's turn,
+    the layers after the history — memories, lore, trackers, status, reminders — and the
+    instruction go in before that turn, so the last thing the model reads is the reader: sent
+    after it, on a long prompt, they were what got answered. When the transcript ends on a reply
+    (carry on), the instruction is the reader's turn and closes the prompt itself. `ORDER` and
+    the audit are unchanged: this is where the messages sit, not what they cost.
     """
     spent: dict[str, Spent] = {}
 
@@ -307,8 +319,14 @@ def build(
         )
 
     messages = [m for m in before if m is not None]
-    messages += [ChatMessage(turn.role.value, turn.text) for turn in history]
-    messages += [m for m in after if m is not None]
+    transcript = [ChatMessage(turn.role.value, turn.text) for turn in history]
+    trailing = [m for m in after if m is not None]
     if instruction is not None:
-        messages.append(instruction)
+        trailing.append(instruction)
+    if transcript and transcript[-1].role == "user":
+        # The reader's newest message closes the prompt; what changes with the scene goes before
+        # it, so the model answers the reader and not the notes.
+        messages += [*transcript[:-1], *trailing, transcript[-1]]
+    else:
+        messages += [*transcript, *trailing]
     return Built(messages, {name: spent[name] for name in ORDER if name in spent}, budget)

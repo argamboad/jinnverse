@@ -259,7 +259,8 @@ async def test_a_turn_carries_the_meter_in_and_reads_it_back_out(
     layer = next(m for m in sent if m["content"].startswith(HEADER))
     assert layer["role"] == "system"
     assert "[Trust] ####...... 40/100 | Δ 0 | —" in layer["content"]
-    assert sent.index(layer) == len(sent) - 1  # after the history, nothing else after it
+    assert sent.index(layer) == len(sent) - 2  # after the history, before the reader's turn
+    assert sent[-1] == {"role": "user", "content": "I ask her name."}
     [trust] = await stored(session, story)
     reply = streamed.done["reply"]
     assert (trust.value, trust.delta, trust.note) == (43, 3, "answered")

@@ -17,8 +17,10 @@ async def carry_on(client: httpx2.AsyncClient, story_id: object) -> Streamed:
 
 
 def instruction_sent(model: ScriptedModel) -> dict[str, str]:
-    """The prompt's last message: where a direction goes."""
-    return model.last["messages"][-1]
+    """Where a direction goes: the prompt's last message when it is the reader's turn (carry on,
+    a direction alone), else just before the reader's newest message, which closes the prompt."""
+    sent = model.last["messages"]
+    return sent[-2] if sent[-1]["role"] == "user" and sent[-2]["role"] == "system" else sent[-1]
 
 
 # --- carry on -------------------------------------------------------------------------------------
@@ -132,12 +134,12 @@ async def test_a_direction_over_a_message_sends_the_message_and_stores_only_that
     stored = await messages(session, story)
     assert [m.text for m in stored][1:] == ['"How much for the week?"', "She names a price."]
     assert not any("twice the usual" in m.text for m in stored)
-    # The history ends on the reader's turn, so the direction goes as `system`.
+    # The history ends on the reader's turn, so the direction goes as `system`, before that turn.
     assert instruction_sent(model) == {
         "role": "system",
         "content": directions.DIRECTION_FRAME + "she asks for twice the usual",
     }
-    assert model.last["messages"][-2] == {"role": "user", "content": '"How much for the week?"'}
+    assert model.last["messages"][-1] == {"role": "user", "content": '"How much for the week?"'}
 
 
 async def test_a_direction_may_run_to_several_lines_before_the_blank_one(
