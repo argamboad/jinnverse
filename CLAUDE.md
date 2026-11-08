@@ -99,7 +99,8 @@ sketch, the lessons airp paid for, and the roadmap.
   the old URL redirects.
 - **`develop` is the default branch: branch from it, and every PR merges into it. `main` is for
   releases only.**
-- **Actions minutes are billed.** CI runs on PRs and on `main` pushes, never on a `develop` push.
-  Say what a run costs before triggering one by hand.
+- **Actions minutes are free here** (the repository is public since 2026-10-15; November's billed
+  minutes were 0 on 2026-11-04), but the habit stays: CI runs on PRs and on `main` pushes, never
+  on a `develop` push, and a run started by hand is named with its cost in job-minutes first.
 - Old commit messages cite issue numbers from the retired Forgejo tracker; a migrated issue's
   footer names its Forgejo number.

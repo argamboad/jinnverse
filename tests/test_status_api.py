@@ -284,7 +284,7 @@ async def test_a_value_set_by_hand_is_kept_marked_and_sent_with_the_next_prompt(
     )
     model.says("*Hi.*")
     await send(client, story_id, "One.")
-    assert "- Outfit: a trench coat" in model.last["messages"][-1]["content"]
+    assert "- Outfit: a trench coat" in model.last["messages"][-2]["content"]
 
 
 async def test_the_wrong_kind_of_value_is_refused(

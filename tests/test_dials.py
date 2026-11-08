@@ -463,10 +463,11 @@ async def test_a_reminder_travels_after_the_history_and_only_while_the_toggle_is
     await send(client, story.id, "I come in.")
 
     sent = model.last["messages"]
-    assert sent[-1]["role"] == "system"
-    assert sent[-1]["content"].startswith(REMINDERS_FRAME)
-    assert "inner thoughts" in sent[-1]["content"]
-    assert sent[-2] == {"role": "user", "content": "I come in."}  # after the history, not before
+    assert sent[-2]["role"] == "system"
+    assert sent[-2]["content"].startswith(REMINDERS_FRAME)
+    assert "inner thoughts" in sent[-2]["content"]
+    assert sent[-3]["role"] == "assistant"  # after the history, not before
+    assert sent[-1] == {"role": "user", "content": "I come in."}  # the reader's turn closes it
 
     await client.put(f"/stories/{story.id}/dials/inner-thoughts", json={"value": "false"})
     model.says("She smiles.")

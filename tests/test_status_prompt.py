@@ -124,10 +124,11 @@ def test_the_layer_sits_after_the_trackers_and_before_the_reminders_and_the_inst
     )
 
     contents = [m.content for m in built.messages]
-    assert contents[-4] == "[TRUST] ##........ 20/100"
-    assert contents[-3] == "STATUS"
-    assert contents[-2].endswith("Remind.")
-    assert contents[-1] == "Now."
+    assert contents[-5] == "[TRUST] ##........ 20/100"
+    assert contents[-4] == "STATUS"
+    assert contents[-3].endswith("Remind.")
+    assert contents[-2] == "Now."
+    assert contents[-1] == "Hi."  # the reader's turn closes the prompt (#280)
     assert "status" in built.spent
 
 
@@ -145,10 +146,10 @@ async def test_a_story_with_fields_is_sent_the_format_and_then_the_state(
     await send(client, story.id, "Two.")
 
     sent = model.last["messages"]
-    assert sent[-2] == {"role": "user", "content": "Two."}
-    assert sent[-1]["role"] == "system"
-    assert sent[-1]["content"].startswith(FRAME)
-    assert sent[-1]["content"].endswith(
+    assert sent[-1] == {"role": "user", "content": "Two."}  # the reader's turn closes the prompt
+    assert sent[-2]["role"] == "system"
+    assert sent[-2]["content"].startswith(FRAME)
+    assert sent[-2]["content"].endswith(
         STANDS + "\nScene\n- Place: the bar\nPeach\n- Outfit: a robe"
     )
 
@@ -161,9 +162,9 @@ async def test_the_first_turn_is_asked_for_the_block_with_nothing_yet_to_report(
 
     await send(client, story.id, "One.")
 
-    last = model.last["messages"][-1]["content"]
-    assert last.startswith(FRAME)
-    assert STANDS not in last
+    layer = model.last["messages"][-2]["content"]  # before the reader's turn
+    assert layer.startswith(FRAME)
+    assert STANDS not in layer
 
 
 async def test_a_story_without_fields_is_sent_no_layer(

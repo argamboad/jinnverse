@@ -158,7 +158,8 @@ async def test_a_turn_sends_the_entries_its_scene_calls_for_and_audits_them(
     assert dummy.lore[0].text.strip() in lore[0]  # Isaure, named in the opening still in scene
     assert dummy.lore[4].text.strip() not in lore[0]  # the captain is at berth six
     transcript = [m for m in sent if m[0] in ("user", "assistant")]
-    assert sent.index(("system", lore[0])) > sent.index(transcript[-1])  # after the transcript
+    # After the transcript, before the reader's newest turn, which closes the prompt (#280).
+    assert sent.index(transcript[-2]) < sent.index(("system", lore[0])) < sent.index(transcript[-1])
     reply = await session.scalar(
         select(Message)
         .where(Message.story_id == story.id, Message.role == Role.ASSISTANT)

@@ -111,9 +111,68 @@ def test_everything_but_the_transcript_and_the_instruction_is_a_system_message(
         "system",
         "user",
         "assistant",
+        "system",  # the memories, before the reader's newest turn
         "user",
-        "system",
     ]
+
+
+def test_the_prompt_ends_on_the_readers_turn(dummy: Dummy) -> None:
+    """Everything that changes with the scene goes before the reader's newest message, in the
+    order of the layers; the reader's own words are the last thing the model reads. Sent after
+    them, on a long prompt, the status rules and the reminders were what the model answered."""
+    built = build(
+        Layers(
+            character=heron(dummy),
+            history=turns("One.", "Two.", "Three."),
+            memories=[Recalled(1, Role.USER, "Earlier.")],
+            lore=[Lore(0, "Blake sits where he can see the door.", 2)],
+            trackers="[Trust] 40/100",
+            status="Where things stand now:\nScene\n- Place: the bar",
+            reminders="Inner thoughts, one line each.",
+            instruction="Keep it short.",
+        )
+    )
+
+    sent = [(m.role, m.content) for m in built.messages]
+    assert sent[-1] == ("user", "Three.")
+    assert sent[1:3] == [("user", "One."), ("assistant", "Two.")]
+    between = [content for _, content in sent[3:-1]]
+    assert [role for role, _ in sent[3:-1]] == ["system"] * 6
+    assert between[0].startswith(MEMORIES_FRAME)
+    assert between[1].startswith(LORE_FRAME)
+    assert between[2] == "[Trust] 40/100"
+    assert between[3].startswith("Where things stand now:")
+    assert between[4] == REMINDERS_FRAME + "Inner thoughts, one line each."
+    assert between[5] == "Keep it short."
+    assert list(built.spent) == [
+        "character",
+        "history",
+        "memories",
+        "lore",
+        "trackers",
+        "status",
+        "reminders",
+        "instruction",
+    ]
+
+
+def test_after_a_reply_the_instruction_closes_the_prompt(dummy: Dummy) -> None:
+    """Carry on: the transcript ends on the character, the instruction is the reader's turn, and
+    the scene layers sit between the last reply and it."""
+    built = build(
+        Layers(
+            character=heron(dummy),
+            history=turns("One.", "Two."),
+            status="Where things stand now:\nScene\n- Place: the bar",
+            instruction="Carry on.",
+        )
+    )
+
+    sent = [(m.role, m.content) for m in built.messages]
+    assert sent[-1] == ("user", "Carry on.")
+    assert sent[-2][0] == "system"
+    assert sent[-2][1].startswith("Where things stand now:")
+    assert sent[-3] == ("assistant", "Two.")
 
 
 def test_a_persona_is_framed_as_the_user_rather_than_sent_raw(dummy: Dummy) -> None:
@@ -163,8 +222,8 @@ def test_an_instruction_after_the_readers_own_turn_stays_a_system_note(dummy: Du
     )
     empty = build(Layers(character=heron(dummy), instruction="x"))
 
-    assert [m.role for m in built.messages] == ["system", "user", "system"]
-    assert built.messages[-1].content == "Keep it short."
+    assert [m.role for m in built.messages] == ["system", "system", "user"]
+    assert built.messages[-2].content == "Keep it short."  # before the reader's turn, not after
     assert empty.messages[-1].role == "system"
 
 
@@ -289,7 +348,7 @@ def test_the_instruction_is_counted_before_the_history_is_fitted(dummy: Dummy) -
     )
     without = build(Layers(character=heron(dummy), history=long_story(50)), budget=budget)
 
-    assert with_note.messages[-1].content == note
+    assert with_note.messages[-1].content == note  # after a reply, the note is the reader's turn
     assert with_note.spent["history"].dropped > without.spent["history"].dropped
 
 
