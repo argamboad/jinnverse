@@ -124,10 +124,11 @@ def test_the_layer_sits_after_the_trackers_and_before_the_reminders_and_the_inst
     )
 
     contents = [m.content for m in built.messages]
-    assert contents[-4] == "[TRUST] ##........ 20/100"
-    assert contents[-3] == "STATUS"
-    assert contents[-2].endswith("Remind.")
-    assert contents[-1] == "Now."
+    assert contents[-5] == "[TRUST] ##........ 20/100"
+    assert contents[-4] == "STATUS"
+    assert contents[-3].endswith("Remind.")
+    assert contents[-2] == "Now."
+    assert contents[-1] == "Hi."  # the reader's turn closes the prompt (#280)
     assert "status" in built.spent
 
 
